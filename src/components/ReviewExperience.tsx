@@ -787,11 +787,11 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                           <span className="text-xs font-bold text-[#6C3BFF] flex items-center gap-1">
                             <Sparkles className="w-3.5 h-3.5" />
                             <span>
-                              {language === 'hi'
-                                ? `सुझाव ${idx + 1}`
-                                : language === 'gu'
-                                ? `સૂચન ${idx + 1}`
-                                : `Suggestion ${idx + 1}`}
+                              {idx === 0
+                                ? (language === 'hi' ? '✨ दोस्ताना और सच्चा अनुभव' : language === 'gu' ? '✨ સ્નેહપૂર્ણ અનુભવ' : '✨ Friendly & Enthusiastic')
+                                : idx === 1
+                                ? (language === 'hi' ? '⭐ सर्विस और क्वालिटी' : language === 'gu' ? '⭐ સર્વિસ અને ક્વોલિટી' : '⭐ Quality & Experience')
+                                : (language === 'hi' ? '⚡ संक्षिप्त और सटीक' : language === 'gu' ? '⚡ ટૂંકું અને સરળ' : '⚡ Short & Sweet')}
                             </span>
                           </span>
 

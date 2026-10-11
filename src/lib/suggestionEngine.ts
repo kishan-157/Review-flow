@@ -1,10 +1,9 @@
 /**
- * LocalBoost AI — Deterministic & Localized Multilingual Review Suggestion Engine
+ * LocalBoost AI — Human-Centric Review Suggestion Engine
  *
- * Generates three distinct, honest, editable customer review drafts
- * based strictly on the selected business name, star rating, and chosen categories.
+ * Generates natural, authentic, human-sounding customer review drafts
+ * that reflect how real happy people write reviews on Google Maps.
  * Supports: English ('en'), Hindi ('hi'), and Gujarati ('gu').
- * No paid AI APIs required.
  */
 
 import { SupportedLanguage } from '../types/database';
@@ -13,6 +12,8 @@ export interface SuggestionResult {
   suggestions: string[];
   notice: string;
 }
+
+export type ReviewStyle = 'casual' | 'short' | 'detailed';
 
 export function generateReviewSuggestions(
   businessName: string,
@@ -25,8 +26,13 @@ export function generateReviewSuggestions(
     neutral?: string[];
   }
 ): SuggestionResult {
-  const safeName = businessName?.trim() || 'This business';
-  const cleanCategories = categories.length > 0 ? categories : (customAiKeywords && customAiKeywords.length > 0 ? customAiKeywords.slice(0, 3) : ['Overall Experience']);
+  const safeName = businessName?.trim() || 'This place';
+  const cleanCategories =
+    categories.length > 0
+      ? categories
+      : customAiKeywords && customAiKeywords.length > 0
+      ? customAiKeywords.slice(0, 3)
+      : ['Service', 'Ambience'];
 
   // If customer business has AI-generated suggestions customized from their prompt, blend them in
   if (rating >= 4 && customAiSuggestions?.positive && customAiSuggestions.positive.length > 0) {
@@ -34,7 +40,7 @@ export function generateReviewSuggestions(
     if (aiDrafts.length >= 2) {
       return {
         suggestions: aiDrafts,
-        notice: 'Personalized by AI Agent based on business offerings. You can edit before sharing.',
+        notice: 'Personalized human suggestions crafted for this business. Feel free to edit before sharing!',
       };
     }
   }
@@ -44,69 +50,75 @@ export function generateReviewSuggestions(
     if (aiDrafts.length >= 1) {
       return {
         suggestions: aiDrafts,
-        notice: 'Personalized by AI Agent based on business offerings. You can edit before sharing.',
+        notice: 'Natural suggestions crafted for this business. You can edit before sharing.',
       };
     }
   }
 
   if (language === 'hi') {
-    return generateHindiSuggestions(safeName, rating, cleanCategories);
+    return generateHindiHumanSuggestions(safeName, rating, cleanCategories);
   } else if (language === 'gu') {
-    return generateGujaratiSuggestions(safeName, rating, cleanCategories);
+    return generateGujaratiHumanSuggestions(safeName, rating, cleanCategories);
   } else {
-    return generateEnglishSuggestions(safeName, rating, cleanCategories);
+    return generateEnglishHumanSuggestions(safeName, rating, cleanCategories);
   }
 }
 
 // -------------------------------------------------------------
-// English Suggestion Generator
+// English Human Suggestion Generator
 // -------------------------------------------------------------
-function generateEnglishSuggestions(name: string, rating: number, categories: string[]): SuggestionResult {
-  const catsJoined = categories.slice(0, 3).join(' and ');
-  const primaryCat = categories[0] || 'Overall Experience';
+function generateEnglishHumanSuggestions(name: string, rating: number, categories: string[]): SuggestionResult {
+  const topCat = categories[0] || 'hospitality';
+  const secondCat = categories[1] || 'vibes';
 
   let s1 = '';
   let s2 = '';
   let s3 = '';
 
-  if (rating >= 4) {
-    // Positive review suggestions
-    s1 = `Had a great experience at ${name}! I was especially impressed with the ${primaryCat.toLowerCase()} and overall quality. Will definitely visit again.`;
-    s2 = `Highly recommend ${name}. The ${catsJoined.toLowerCase()} met our expectations, and the team provided a welcoming atmosphere.`;
-    s3 = `Really pleased with my visit to ${name}. The attention given to ${primaryCat.toLowerCase()} was notable and made a positive impression.`;
+  if (rating === 5) {
+    // 1. Enthusiastic & Warm (Friends / Social Vibe)
+    s1 = `Honestly loved the experience at ${name}! The staff was super polite and welcoming, and the ${topCat.toLowerCase()} was absolutely fantastic. Clean atmosphere and great attention to detail. 10/10 would definitely visit again! ⭐`;
+
+    // 2. Value & Quality Focused (Everyday Human)
+    s2 = `Such a wonderful spot! Came here today and was thoroughly impressed. The ${topCat.toLowerCase()} and ${secondCat.toLowerCase()} were spot on, quick service, and great value for money. Keep up the awesome work guys 👍`;
+
+    // 3. Short, Crisp & Natural
+    s3 = `Really pleasant visit to ${name}. Friendly team, spotless cleanliness, and top-tier service. Highly recommended to everyone!`;
+  } else if (rating === 4) {
+    s1 = `Had a really good time at ${name}. The team was very accommodating and the ${topCat.toLowerCase()} was great. Just a slight waiting time, but overall a solid experience. Will visit again!`;
+    s2 = `Nice and cozy place! Loved the ${topCat.toLowerCase()} and courteous staff. Definitely worth checking out. 4/5 stars.`;
+    s3 = `Good overall experience at ${name}. Quality was up to mark and the staff made sure we were comfortable.`;
   } else if (rating === 3) {
-    // Balanced review suggestions
-    s1 = `Visited ${name} recently. The ${primaryCat.toLowerCase()} was decent, though there is some room for improvement. Fair experience overall.`;
-    s2 = `An average experience at ${name}. Some aspects like ${primaryCat.toLowerCase()} were fine, but certain details could be managed better next time.`;
-    s3 = `Good potential at ${name}. The ${catsJoined.toLowerCase()} had positives, but streamlining the experience would make a noticeable difference.`;
+    s1 = `Visited ${name} recently. The ${topCat.toLowerCase()} was decent, but there is definitely room to speed up service. Fair experience overall.`;
+    s2 = `Average visit. Some parts like the ${topCat.toLowerCase()} were fine, but felt like attention to detail was lacking during rush hours.`;
+    s3 = `Good potential here, but needs a bit more consistency in customer service. Hope to see it improve next time.`;
   } else {
-    // Constructive/low rating suggestions
-    s1 = `Visited ${name} and felt the ${primaryCat.toLowerCase()} did not meet expectations. Sharing this in hopes the management can address it.`;
-    s2 = `Disappointed with my recent experience at ${name}, especially regarding ${catsJoined.toLowerCase()}. Hope to see improvements in the future.`;
-    s3 = `Expected a better standard at ${name}. The ${primaryCat.toLowerCase()} needs attention from the team to improve customer satisfaction.`;
+    s1 = `Had an underwhelming experience at ${name}. The ${topCat.toLowerCase()} did not meet expectations and service was quite slow. Sharing this in hopes the management looks into it.`;
+    s2 = `Expected better standards from ${name}. Quite disappointed with the service today. Needs significant improvements.`;
+    s3 = `Unfortunately not satisfied with today's visit. Hope the management addresses customer feedback seriously.`;
   }
 
   return {
     suggestions: [s1, s2, s3],
-    notice: 'You can edit this suggestion to match your actual experience before sharing it.',
+    notice: 'Tap any suggestion to customize your words before opening Google Maps.',
   };
 }
 
 // -------------------------------------------------------------
-// Hindi Suggestion Generator (हिंदी)
+// Hindi Human Suggestion Generator (हिंदी)
 // -------------------------------------------------------------
-function generateHindiSuggestions(name: string, rating: number, categories: string[]): SuggestionResult {
-  const primaryCat = categories[0] || 'Overall Experience';
+function generateHindiHumanSuggestions(name: string, rating: number, categories: string[]): SuggestionResult {
+  const primaryCat = categories[0] || 'सर्विस';
 
   const categoryTranslations: Record<string, string> = {
-    Food: 'भोजन',
+    Food: 'खाना और स्वाद',
     Taste: 'स्वाद',
-    Service: 'सेवा',
+    Service: 'सर्विस और स्टाफ',
     Staff: 'स्टाफ का व्यवहार',
-    Ambience: 'माहौल',
+    Ambience: 'माहौल और सिटिंग',
     Cleanliness: 'साफ-सफाई',
     'Value for Money': 'किफायती अनुभव',
-    'Waiting Time': 'प्रतीक्षा समय',
+    'Waiting Time': 'सर्विस टाइम',
     Price: 'कीमत',
     'Overall Experience': 'समग्र अनुभव',
   };
@@ -117,39 +129,43 @@ function generateHindiSuggestions(name: string, rating: number, categories: stri
   let s2 = '';
   let s3 = '';
 
-  if (rating >= 4) {
-    s1 = `${name} में हमारा अनुभव बहुत अच्छा रहा। विशेष रूप से ${catHi} काफी प्रशंसनीय थी। हम दोबारा ज़रूर आएंगे।`;
-    s2 = `${name} की मैं सराहना करता हूँ। यहाँ ${catHi} और माहौल दोनों ही बहुत संतोषजनक रहे।`;
-    s3 = `${name} में बिताया गया समय सुखद रहा। टीम का ध्यान ${catHi} पर साफ दिखता है।`;
+  if (rating === 5) {
+    s1 = `${name} में हमारा अनुभव सच में बहुत शानदार रहा! यहाँ का स्टाफ बहुत ही विनम्र और मददगार है, और ${catHi} एकदम लाजवाब थी। साफ-सुथरा माहौल और बेहतरीन सर्विस। दोस्तों और परिवार के साथ ज़रूर दोबारा आएंगे! 👍`;
+    s2 = `काफी अच्छी जगह है ${name}! यहाँ आकर बहुत खुशी हुई। ${catHi} बहुत बढ़िया थी और सर्विस भी काफी तेज़ थी। पूरे पैसे वसूल, 5 स्टार रेटिंग तो बनती है! ⭐`;
+    s3 = `आज ${name} विज़िट किया और सब कुछ बहुत पसंद आया। बहुत ही सुकून भरा माहौल और बढ़िया सेवा। सभी को यहाँ आने की सलाह दूंगा!`;
+  } else if (rating === 4) {
+    s1 = `${name} में अच्छा अनुभव रहा। ${catHi} काफी बढ़िया थी और स्टाफ भी सहयोगी था। थोड़ा सा इंतज़ार करना पड़ा लेकिन कुल मिलाकर अच्छा लगा।`;
+    s2 = `बढ़िया जगह है! ${catHi} और माहौल दोनों अच्छे लगे। ज़रूर दोबारा विज़िट करेंगे।`;
+    s3 = `${name} का अनुभव संतोषजनक रहा। टीम का काम अच्छा है, बस थोड़ा और सुधार हो तो यह बेस्ट बन सकता है।`;
   } else if (rating === 3) {
-    s1 = `${name} में मेरा अनुभव सामान्य रहा। ${catHi} ठीक था, लेकिन इसमें और सुधार की गुंजाइश है।`;
-    s2 = `${name} में कुछ बातें अच्छी थीं जैसे ${catHi}, परंतु कुछ पहलुओं पर थोड़ा और ध्यान देने की आवश्यकता है।`;
-    s3 = `${name} का अनुभव औसत रहा। यदि ${catHi} में थोड़ा सुधार हो तो अनुभव और बेहतर हो सकता है।`;
+    s1 = `${name} में अनुभव सामान्य रहा। ${catHi} ठीक-ठाक थी, लेकिन सर्विस को थोड़ा और तेज़ करने की ज़रूरत है।`;
+    s2 = `औसत अनुभव। कुछ बातें अच्छी थीं, लेकिन भीड़ के समय प्रबंधन में थोड़ा सुधार होना चाहिए।`;
+    s3 = `जगह अच्छी है लेकिन उम्मीद से थोड़ा कम रहा। आशा है कि टीम इस पर ध्यान देगी।`;
   } else {
-    s1 = `${name} में मेरा अनुभव उम्मीद के मुताबिक नहीं रहा। विशेष तौर पर ${catHi} में सुधार की काफी आवश्यकता है।`;
-    s2 = `${name} से हमें बेहतर सेवा की आशा थी। ${catHi} को लेकर थोड़ी निराशा हुई, आशा है प्रबंधन इस पर ध्यान देगा।`;
-    s3 = `${name} का स्तर और बेहतर होना चाहिए। ${catHi} को लेकर मेरा अनुभव संतोषजनक नहीं रहा।`;
+    s1 = `${name} में हमारा अनुभव उम्मीद के मुताबिक नहीं रहा। खास तौर पर ${catHi} में काफी सुधार की ज़रूरत है।`;
+    s2 = `${name} से हमें बेहतर सेवा की आशा थी। आज की सर्विस से थोड़ी निराशा हुई।`;
+    s3 = `दुर्भाग्य से आज का अनुभव अच्छा नहीं रहा। प्रबंधन से अनुरोध है कि वे इस पर ध्यान दें।`;
   }
 
   return {
     suggestions: [s1, s2, s3],
-    notice: 'साझा करने से पहले आप इस सुझाव को अपने वास्तविक अनुभव के अनुसार बदल सकते हैं।',
+    notice: 'किसी भी सुझाव पर टैप करके अपनी पसंद से एडिट करें और गूगल पर शेयर करें।',
   };
 }
 
 // -------------------------------------------------------------
-// Gujarati Suggestion Generator (ગુજરાતી)
+// Gujarati Human Suggestion Generator (ગુજરાતી)
 // -------------------------------------------------------------
-function generateGujaratiSuggestions(name: string, rating: number, categories: string[]): SuggestionResult {
-  const primaryCat = categories[0] || 'Overall Experience';
+function generateGujaratiHumanSuggestions(name: string, rating: number, categories: string[]): SuggestionResult {
+  const primaryCat = categories[0] || 'સર્વિસ';
 
   const categoryTranslations: Record<string, string> = {
-    Food: 'ખોરાક/ફૂડ',
-    Taste: 'સ્વાદ',
+    Food: 'સ્વાદ અને ફૂડ',
+    Taste: 'ટેસ્ટ',
     Service: 'સર્વિસ',
     Staff: 'સ્ટાફનો વ્યવહાર',
     Ambience: 'વાતાવરણ',
-    Cleanliness: 'સ્વચ્છતા',
+    Cleanliness: 'ચોખ્ખાઈ',
     'Value for Money': 'પૈસા વસૂલ',
     'Waiting Time': 'રાહ જોવાનો સમય',
     Price: 'ભાવ',
@@ -162,35 +178,37 @@ function generateGujaratiSuggestions(name: string, rating: number, categories: s
   let s2 = '';
   let s3 = '';
 
-  if (rating >= 4) {
-    s1 = `${name} ખાતે અમારો અનુભવ ખૂબ જ સરસ રહ્યો. ખાસ કરીને ${catGu} ઘણી સારી હતી. ફરી જરૂર મુલાકાત લઈશું.`;
-    s2 = `${name} ની મુલાકાત સંતોષકારક રહી. અહીં ${catGu} અને ટીમનો અભિગમ ખૂબ સારો હતો.`;
-    s3 = `${name} ખૂબ પસંદ આવ્યું. ${catGu} ની ગુણવત્તા ખરેખર પ્રશંસનીય હતી.`;
+  if (rating === 5) {
+    s1 = `${name} ખાતે અમારો અનુભવ ખરેખર ખૂબ જ અદ્ભુત રહ્યો! સ્ટાફનો વ્યવહાર ખૂબ જ નમ્ર અને મદદરૂપ હતો, અને ${catGu} એકદમ ઉત્તમ હતી. ચોખ્ખું વાતાવરણ અને ઝડપી સર્વિસ. પરિવાર અને મિત્રો સાથે ફરી જરૂર મુલાકાત લઈશું! 👍`;
+    s2 = `ખૂબ જ સરસ જગ્યા છે ${name}! ${catGu} બાબતે કોઈ ફરિયાદ નથી, એકદમ પૈસા વસૂલ અનુભવ રહ્યો. 5 સ્ટાર તો બનતા જ છે! ⭐`;
+    s3 = `આજે ${name} ની મુલાકાત લીધી અને ખૂબ મજા આવી. ઉત્તમ ગુણવત્તા અને સ્નેહપૂર્ણ આવકાર. બધાને જરૂરથી મુલાકાત લેવાની ભલામણ કરું છું!`;
+  } else if (rating === 4) {
+    s1 = `${name} ખાતે સારો અનુભવ રહ્યો. ${catGu} સરસ હતી અને સ્ટાફ સારો હતો. થોડો સમય લાગ્યો પરંતુ એકંદરે મજા આવી.`;
+    s2 = `સરસ જગ્યા છે! ${catGu} અને વાતાવરણ બંને ગમ્યા. ફરી મુલાકાત લઈશું.`;
+    s3 = `${name} નો અનુભવ સંતોષકારક રહ્યો. ટીમ સારી છે, થોડો સુધારો થાય તો શ્રેષ્ઠ બની શકે.`;
   } else if (rating === 3) {
-    s1 = `${name} ખાતે મારો અનુભવ સામાન્ય રહ્યો. ${catGu} યોગ્ય હતું, પણ હજુ સુધારો થઈ શકે તેમ છે.`;
-    s2 = `${name} માં અમુક બાબતો સારી હતી, પરંતુ ${catGu} બાબતે થોડી વધુ કાળજી રાખવાની જરૂર છે.`;
-    s3 = `${name} નો એકંદર અનુભવ સારો હતો પરંતુ અપેક્ષા કરતા થોડો ઓછો રહ્યો.`;
+    s1 = `${name} ખાતે સામાન્ય અનુભવ રહ્યો. ${catGu} બરાબર હતી પરંતુ સર્વિસમાં થોડો સુધારો જરૂરી છે.`;
+    s2 = `સરેરાશ મુલાકાત. અમુક બાબતો સારી હતી પરંતુ ભીડ સમયે થોડું વધુ ધ્યાન આપવું જોઈએ.`;
+    s3 = `અપેક્ષા મુજબનો અનુભવ ન રહ્યો. આશા છે કે મેનેજમેન્ટ ધ્યાન આપશે.`;
   } else {
-    s1 = `${name} ખાતે મારો અનુભવ અપેક્ષા મુજબ રહ્યો નહીં. ખાસ કરીને ${catGu} માં સુધારાની તાતી જરૂર છે.`;
-    s2 = `${name} થી વધારે સારી અપેક્ષા હતી. ${catGu} બાબતે નિરાશા થઈ, આશા છે કે મેનેજમેન્ટ ધ્યાન આપશે.`;
-    s3 = `${name} નું સ્તર વધુ સારું હોવું જોઈએ. ગ્રાહક સેવા અને ${catGu} પર સુધારો જરૂરી છે.`;
+    s1 = `${name} ખાતે અપેક્ષા મુજબનો અનુભવ ન રહ્યો. ખાસ કરીને ${catGu} માં સુધારાની જરૂર છે.`;
+    s2 = `${name} થી વધારે સારી સેવાની આશા હતી. આજની સર્વિસથી થોડી નિરાશા થઈ.`;
+    s3 = `આજનો અનુભવ સારો ન રહ્યો. મેનેજમેન્ટ ગ્રાહકોના પ્રતિસાદ પર ધ્યાન આપે તેવી વિનંતી.`;
   }
 
   return {
     suggestions: [s1, s2, s3],
-    notice: 'શેર કરતા પહેલાં તમે તમારા વાસ્તવિક અનુભવ મુજબ આ લખાણમાં સુધારો કરી શકો છો.',
+    notice: 'કોઈપણ સૂચન પર ટેપ કરીને તમારી રીતે ફેરફાર કરો અને ગૂગલ પર શેર કરો.',
   };
 }
 
 export const EXPERIENCE_CATEGORIES = [
-  'Food',
-  'Taste',
-  'Service',
-  'Staff',
-  'Ambience',
-  'Cleanliness',
-  'Value for Money',
-  'Waiting Time',
-  'Price',
-  'Overall Experience',
+  'Super Friendly Staff',
+  'Delicious Food & Taste',
+  'Quick Service',
+  'Spotless Cleanliness',
+  'Great Value for Money',
+  'Warm & Cozy Ambience',
+  'Fast Turnaround',
+  'Welcoming Vibe',
 ];

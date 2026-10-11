@@ -85,6 +85,7 @@ import {
 } from '../lib/db';
 import { QRCodeView } from './QRCodeView';
 import { DigitalLoyaltyCard } from './DigitalLoyaltyCard';
+import { DailyReviewAccessTrend } from './DailyReviewAccessTrend';
 
 interface CustomerDashboardProps {
   session: AuthSession;
@@ -2274,6 +2275,14 @@ Please generate:
                   </div>
                 </div>
 
+                {/* Daily Review Landing Page Access Trend Visualizer (Recharts) */}
+                {business && (
+                  <DailyReviewAccessTrend
+                    businessId={business.id}
+                    businessName={business.business_name}
+                  />
+                )}
+
                 {/* Loyalty Program Quick Status Banner */}
                 <div className="bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
                   <div className="flex items-center gap-3">
@@ -2436,6 +2445,13 @@ Please generate:
             {/* TAB: ANALYTICS */}
             {activeTab === 'analytics' && (
               <div className="space-y-6">
+                {business && (
+                  <DailyReviewAccessTrend
+                    businessId={business.id}
+                    businessName={business.business_name}
+                  />
+                )}
+
                 <div className="bg-white rounded-2xl p-6 border border-neutral-200 shadow-xs space-y-4">
                   <h3 className="text-sm font-bold text-neutral-900">System Interaction Metrics</h3>
                   <p className="text-xs text-neutral-500">

@@ -236,9 +236,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <div>
                       <span className="font-bold text-neutral-900">👑 Super Admin:</span>
                       <div className="font-mono text-[10px] text-purple-900 mt-0.5">
-                        Email: <strong className="text-neutral-900">ladanikishan8@gmail.com</strong> or <strong>admin@localboost.ai</strong>
+                        Email: <strong className="text-neutral-900">ladanikishan8@gmail.com</strong>
                         <br />
-                        Password: <strong className="text-neutral-900">SuperAdmin2026!</strong>
+                        Password: <strong className="text-neutral-900">12345678</strong>
                       </div>
                     </div>
                     <div className="pt-1.5 border-t border-purple-200/60">
