@@ -32,6 +32,9 @@ export const isSupabaseConfigured = (): boolean => {
     Boolean(SUPABASE_URL) &&
     Boolean(SUPABASE_ANON_KEY) &&
     !SUPABASE_URL.includes('your-project-id') &&
+    !SUPABASE_URL.includes('example') &&
+    SUPABASE_ANON_KEY !== 'your-anon-public-key' &&
+    SUPABASE_ANON_KEY.length > 20 &&
     SUPABASE_URL.startsWith('https://')
   );
 };

@@ -266,6 +266,25 @@ export const DailyReviewAccessTrend: React.FC<DailyReviewAccessTrendProps> = ({
         </div>
       </div>
 
+      {/* Real tracking note when brand new */}
+      {totalAccesses === 0 && !loading && (
+        <div className="p-3 bg-purple-50/50 border border-purple-200/70 rounded-xl text-xs text-neutral-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-[#6C3BFF] shrink-0" />
+            <span>
+              <strong className="text-neutral-900 font-semibold">100% Real Live Tracking:</strong> Zero fake data. Pichhle {daysRange} dino me real scans 0 hain. Jaise hi koi customer standee ya QR scan karega, yahan live data display ho jayega.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={loadTrendData}
+            className="px-3 py-1 text-xs font-semibold text-[#6C3BFF] bg-white rounded-lg border border-purple-200 hover:bg-purple-50 shrink-0 self-start sm:self-auto cursor-pointer"
+          >
+            Refresh Data
+          </button>
+        </div>
+      )}
+
       {/* Main Recharts Visualization */}
       <div className="w-full h-72 sm:h-80 pt-2">
         {loading ? (

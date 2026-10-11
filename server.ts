@@ -36,6 +36,8 @@ app.get('/api/sync/bootstrap', (_req, res) => {
       announcements: db.announcements,
       adminSettings: db.adminSettings,
       loyaltyConfigs: db.loyaltyConfigs,
+      analyticsEvents: db.analyticsEvents || [],
+      feedbacks: db.feedbacks || [],
     });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'Bootstrap failed' });

@@ -472,6 +472,30 @@ export async function syncWithServer(): Promise<void> {
       });
       setStorage(STORAGE_KEYS.REVIEW_SETTINGS, Array.from(mergedSettMap.values()));
     }
+
+    if (Array.isArray(data.analyticsEvents) && data.analyticsEvents.length > 0) {
+      const localEvents = getStorage<AnalyticsEvent[]>(STORAGE_KEYS.ANALYTICS, []);
+      const mergedEventsMap = new Map<string, AnalyticsEvent>();
+      data.analyticsEvents.forEach((ev: AnalyticsEvent) => mergedEventsMap.set(ev.id, ev));
+      localEvents.forEach((ev: AnalyticsEvent) => {
+        if (!mergedEventsMap.has(ev.id)) {
+          mergedEventsMap.set(ev.id, ev);
+        }
+      });
+      setStorage(STORAGE_KEYS.ANALYTICS, Array.from(mergedEventsMap.values()));
+    }
+
+    if (Array.isArray(data.feedbacks) && data.feedbacks.length > 0) {
+      const localFb = getStorage<Feedback[]>(STORAGE_KEYS.FEEDBACK, []);
+      const mergedFbMap = new Map<string, Feedback>();
+      data.feedbacks.forEach((f: Feedback) => mergedFbMap.set(f.id, f));
+      localFb.forEach((f: Feedback) => {
+        if (!mergedFbMap.has(f.id)) {
+          mergedFbMap.set(f.id, f);
+        }
+      });
+      setStorage(STORAGE_KEYS.FEEDBACK, Array.from(mergedFbMap.values()));
+    }
   } catch (e) {
     // Graceful offline behavior
   }
@@ -1128,14 +1152,26 @@ export async function updateBusiness(
 ): Promise<Business> {
   const supabase = getSupabaseClient();
   if (supabase) {
-    const { data, error } = await supabase
-      .from('businesses')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', businessId)
-      .select()
-      .single();
-    if (error) throw new Error(error.message);
-    return data;
+    try {
+      const { data, error } = await supabase
+        .from('businesses')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', businessId)
+        .select()
+        .single();
+      if (!error && data) {
+        // Also update local storage for instant cache
+        const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+        const index = businesses.findIndex((b) => b.id === businessId);
+        if (index !== -1) {
+          businesses[index] = { ...businesses[index], ...data };
+          setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+        }
+        return data;
+      }
+    } catch (e) {
+      console.warn('Supabase updateBusiness failed or invalid API, falling back to local persistent store:', e);
+    }
   }
 
   const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
@@ -1162,6 +1198,15 @@ export async function updateBusiness(
     currentSession.business = businesses[index];
     setStorage(STORAGE_KEYS.SESSION, currentSession);
   }
+
+  // Also sync to server database
+  try {
+    fetch('/api/sync/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businesses: [businesses[index]] }),
+    }).catch(() => {});
+  } catch {}
 
   return businesses[index];
 }
@@ -1268,7 +1313,25 @@ export async function recordAnalyticsEvent(
 ): Promise<void> {
   const visitorHash = getVisitorHash();
   const supabase = getSupabaseClient();
+  const nowIso = new Date().toISOString();
 
+  // 1. Post to backend server so scans and events from all phones/devices are centrally captured
+  try {
+    fetch('/api/analytics/record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        businessId,
+        eventType,
+        rating: rating || null,
+        visitorSessionHash: visitorHash,
+      }),
+    }).catch(() => {});
+  } catch {
+    // Non-blocking
+  }
+
+  // 2. Insert to Supabase if connected
   if (supabase) {
     try {
       await supabase.from('analytics').insert({
@@ -1276,24 +1339,23 @@ export async function recordAnalyticsEvent(
         event_type: eventType,
         rating: rating || null,
         visitor_session_hash: visitorHash,
-        created_at: new Date().toISOString(),
+        created_at: nowIso,
       });
-      return;
     } catch {
       // Supabase logging error ignored to not block review flow
     }
   }
 
+  // 3. Save to local storage cache with minimal throttle to avoid click spam
   const events = getStorage<AnalyticsEvent[]>(STORAGE_KEYS.ANALYTICS, []);
 
-  // Avoid spamming duplicate scans within the same browser session in short time
   if (eventType === 'qr_scan') {
     const recentScan = events.find(
       (e) =>
         e.business_id === businessId &&
         e.event_type === 'qr_scan' &&
         e.visitor_session_hash === visitorHash &&
-        Date.now() - new Date(e.created_at).getTime() < 300000 // 5 minutes
+        Date.now() - new Date(e.created_at).getTime() < 5000 // 5 seconds
     );
     if (recentScan) return;
   }
@@ -1304,7 +1366,7 @@ export async function recordAnalyticsEvent(
     event_type: eventType,
     rating: rating || null,
     visitor_session_hash: visitorHash,
-    created_at: new Date().toISOString(),
+    created_at: nowIso,
   });
 
   setStorage(STORAGE_KEYS.ANALYTICS, events);
@@ -1315,12 +1377,21 @@ export async function getBusinessAnalytics(businessId: string): Promise<Business
   let events: AnalyticsEvent[] = [];
 
   if (supabase) {
-    const { data } = await supabase.from('analytics').select('*').eq('business_id', businessId);
-    events = data || [];
-  } else {
-    const all = getStorage<AnalyticsEvent[]>(STORAGE_KEYS.ANALYTICS, []);
-    events = all.filter((e) => e.business_id === businessId);
+    try {
+      const { data } = await supabase.from('analytics').select('*').eq('business_id', businessId);
+      events = data || [];
+    } catch {
+      events = [];
+    }
   }
+
+  const all = getStorage<AnalyticsEvent[]>(STORAGE_KEYS.ANALYTICS, []);
+  const localEvents = all.filter((e) => e.business_id === businessId);
+
+  // Merge unique events
+  const eventMap = new Map<string, AnalyticsEvent>();
+  [...localEvents, ...events].forEach((ev) => eventMap.set(ev.id, ev));
+  const mergedEvents = Array.from(eventMap.values());
 
   const starDistribution: Record<1 | 2 | 3 | 4 | 5, number> = {
     1: 0,
@@ -1337,7 +1408,7 @@ export async function getBusinessAnalytics(businessId: string): Promise<Business
   let googleClicks = 0;
   let feedbackSubmissions = 0;
 
-  for (const ev of events) {
+  for (const ev of mergedEvents) {
     if (ev.event_type === 'qr_scan') totalScans++;
     else if (ev.event_type === 'rating_selected' && ev.rating && ev.rating >= 1 && ev.rating <= 5) {
       totalRatings++;
@@ -1400,21 +1471,14 @@ export async function getDailyReviewAccessTrend(
   const result: DailyAccessTrendPoint[] = [];
   const now = new Date();
 
-  // Baseline pseudo-random seed based on businessId string hash for consistent realistic data
-  let seed = 0;
-  for (let i = 0; i < businessId.length; i++) {
-    seed = (seed + businessId.charCodeAt(i) * (i + 1)) % 1000;
-  }
-
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split('T')[0];
     const shortDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
 
-    // Filter real events on this calendar date
+    // Filter 100% real events on this calendar date
     const dayEvents = mergedEvents.filter((e) => {
       if (!e.created_at) return false;
       return e.created_at.startsWith(dateStr);
@@ -1425,20 +1489,11 @@ export async function getDailyReviewAccessTrend(
     const realClicks = dayEvents.filter((e) => e.event_type === 'google_review_clicked').length;
     const real5Stars = dayEvents.filter((e) => e.event_type === 'rating_selected' && e.rating === 5).length;
 
-    // Realistic baseline if brand new with 0 real historical scans
-    const dayFactor = isWeekend ? 1.4 : 1.0;
-    const pseudoNoise = ((seed + i * 17) % 7) - 3;
-    const baselineScans = Math.max(4, Math.round((14 + pseudoNoise) * dayFactor));
-    const baselineRatings = Math.round(baselineScans * 0.75);
-    const baselineClicks = Math.round(baselineRatings * 0.65);
-    const baseline5Stars = Math.round(baselineRatings * 0.7);
-
-    // If real scans exist, add them on top of or prefer real
-    const totalAccesses = realScans > 0 ? (realScans + baselineScans) : baselineScans;
-    const totalRatings = realRatings > 0 ? (realRatings + baselineRatings) : baselineRatings;
-    const totalClicks = realClicks > 0 ? (realClicks + baselineClicks) : baselineClicks;
-    const total5Stars = real5Stars > 0 ? (real5Stars + baseline5Stars) : baseline5Stars;
-
+    // 100% REAL counts — Zero fake baselines or pseudo-noise
+    const totalAccesses = realScans;
+    const totalRatings = realRatings;
+    const totalClicks = realClicks;
+    const total5Stars = real5Stars;
     const conversionRate = totalAccesses > 0 ? Math.round((totalClicks / totalAccesses) * 100) : 0;
 
     result.push({

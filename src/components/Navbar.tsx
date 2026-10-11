@@ -1,14 +1,12 @@
 import React from 'react';
 import { AuthSession } from '../types/database';
-import { isSupabaseConfigured } from '../lib/supabase';
-
 interface NavbarProps {
   session: AuthSession | null;
   currentView: string;
   onNavigate: (view: string) => void;
   onOpenAuth: (mode?: 'login' | 'forgot') => void;
   onSignOut: () => void;
-  onOpenSupabaseConfig: () => void;
+  onOpenSupabaseConfig?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -17,9 +15,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
   onOpenAuth,
   onSignOut,
-  onOpenSupabaseConfig,
 }) => {
-  const isConnected = isSupabaseConfigured();
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200/80">
@@ -73,17 +69,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               My Dashboard
             </button>
           )}
-
-          <button
-            onClick={onOpenSupabaseConfig}
-            className="transition-colors whitespace-nowrap shrink-0 hover:text-neutral-900 flex items-center gap-1.5"
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-amber-400'}`}
-              aria-hidden="true"
-            />
-            <span>{isConnected ? 'Supabase Live' : 'Database Status'}</span>
-          </button>
         </nav>
 
         {/* Zone 3: 1 primary action */}

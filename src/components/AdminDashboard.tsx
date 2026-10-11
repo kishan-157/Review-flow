@@ -1672,15 +1672,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </div>
                         </div>
 
-                        <div className="p-3 bg-white rounded-xl border border-emerald-100 space-y-2">
-                          <span className="text-[11px] text-neutral-500 block font-semibold">
-                            Login Credentials for Customer:
+                        <div className="p-3 bg-white rounded-xl border border-emerald-100 space-y-2.5">
+                          <span className="text-[11px] text-neutral-600 block font-bold uppercase tracking-wider">
+                            Customer Login Credentials (Any device se login kar sakte hain):
                           </span>
-                          <div className="flex items-center justify-between text-neutral-800 font-mono">
-                            <span>Email: {newCustResult.user.email}</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                            <div className="p-2 bg-neutral-50 rounded-lg border border-neutral-200">
+                              <span className="text-[10px] text-neutral-500 block">Login ID (Option 1 - Email):</span>
+                              <span className="font-mono font-bold text-neutral-900 select-all">{newCustResult.user.email}</span>
+                            </div>
+                            <div className="p-2 bg-purple-50 rounded-lg border border-purple-200">
+                              <span className="text-[10px] text-[#6C3BFF] font-semibold block">Login ID (Option 2 - Customer ID):</span>
+                              <span className="font-mono font-bold text-[#6C3BFF] select-all">{newCustResult.user.unique_customer_code}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between text-neutral-800 font-mono">
-                            <span>Password: {newCustResult.tempPassword}</span>
+                          <div className="p-2 bg-neutral-50 rounded-lg border border-neutral-200 text-xs">
+                            <span className="text-[10px] text-neutral-500 block">Password:</span>
+                            <span className="font-mono font-bold text-neutral-900 select-all">{newCustResult.tempPassword}</span>
+                          </div>
+                          <div className="text-[11px] text-emerald-800 bg-emerald-100/50 p-2 rounded-lg">
+                            ✅ Customer kisi bhi mobile/laptop ke Login page par jakar apne Email ya Customer ID aur is Password se direct login kar sakta hai.
                           </div>
                         </div>
 
@@ -1698,29 +1709,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const creds = `Customer ID: ${newCustResult.user.unique_customer_code}\nEmail: ${newCustResult.user.email}\nPassword: ${newCustResult.tempPassword}\nBusiness: ${newCustResult.business.business_name}`;
-                            navigator.clipboard.writeText(creds);
-                            setCopiedNewCustInfo(true);
-                            setTimeout(() => setCopiedNewCustInfo(false), 2500);
-                          }}
-                          className="px-3.5 py-2 text-xs font-semibold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors flex items-center gap-1.5"
-                        >
-                          {copiedNewCustInfo ? (
-                            <>
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              <span className="text-emerald-700">Copied to Clipboard!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5 text-neutral-600" />
-                              <span>Copy Credentials</span>
-                            </>
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-200">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const loginUrl = window.location.origin + '#login';
+                              const creds = `🌟 *LocalBoost Customer Login Details*\n\n🏢 Business: ${newCustResult.business.business_name}\n👤 Customer ID: ${newCustResult.user.unique_customer_code}\n📧 Login Email: ${newCustResult.user.email}\n🔑 Password: ${newCustResult.tempPassword}\n\n🌐 Login Link: ${loginUrl}\n\nAap kisi bhi mobile ya computer browser mein ye link open karke login kar sakte hain!`;
+                              navigator.clipboard.writeText(creds);
+                              setCopiedNewCustInfo(true);
+                              setTimeout(() => setCopiedNewCustInfo(false), 2500);
+                            }}
+                            className="px-3.5 py-2 text-xs font-semibold text-neutral-800 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors flex items-center gap-1.5"
+                          >
+                            {copiedNewCustInfo ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="text-emerald-700">Copied Full Details!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5 text-neutral-600" />
+                                <span>Copy Details &amp; Link</span>
+                              </>
+                            )}
+                          </button>
+
+                          {newCustResult.business.phone && (
+                            <a
+                              href={`https://wa.me/${newCustResult.business.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                                `🌟 *LocalBoost Customer Login Details*\n\n🏢 Business: ${newCustResult.business.business_name}\n👤 Customer ID: ${newCustResult.user.unique_customer_code}\n📧 Login Email: ${newCustResult.user.email}\n🔑 Password: ${newCustResult.tempPassword}\n\n🌐 Login Link: ${window.location.origin}#login`
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors flex items-center gap-1.5"
+                            >
+                              <span>Send on WhatsApp</span>
+                            </a>
                           )}
-                        </button>
+                        </div>
 
                         <div className="flex items-center gap-2">
                           <button

@@ -36,7 +36,7 @@ import {
 } from '../lib/db';
 import {
   generateReviewSuggestions,
-  EXPERIENCE_CATEGORIES,
+  getDefaultCategoriesForCategory,
 } from '../lib/suggestionEngine';
 import { DigitalLoyaltyCard } from './DigitalLoyaltyCard';
 
@@ -171,7 +171,8 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
         selectedCategories,
         language,
         business.ai_keywords,
-        business.ai_suggestions_preview
+        business.ai_suggestions_preview,
+        business.category
       );
       setEditableSuggestions(result.suggestions);
       if (result.suggestions.length > 0 && !selectedReviewText) {
@@ -653,47 +654,26 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                   </p>
                 </div>
 
-                {/* Categories Grid (Merged with AI Agent business keywords if present) */}
+                {/* Categories Grid: Only the customer's real keywords or category-specific highlights */}
                 <div className="flex flex-wrap gap-2 justify-center">
-                  {/* Dynamic AI keywords from business agent prompt */}
-                  {business.ai_keywords && business.ai_keywords.length > 0 && (
-                    <>
-                      {business.ai_keywords.map((kw) => {
-                        const isSelected = selectedCategories.includes(kw);
-                        return (
-                          <button
-                            key={`ai-${kw}`}
-                            type="button"
-                            onClick={() => handleToggleCategory(kw)}
-                            className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl border transition-all flex items-center gap-1 cursor-pointer ${
-                              isSelected
-                                ? 'bg-[#6C3BFF] text-white border-[#6C3BFF] shadow-xs'
-                                : 'bg-purple-50 text-[#6C3BFF] border-purple-200 hover:bg-purple-100/70'
-                            }`}
-                          >
-                            <Sparkles className="w-3 h-3 text-[#6C3BFF] shrink-0" />
-                            <span>{kw}</span>
-                          </button>
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {/* Standard categories */}
-                  {EXPERIENCE_CATEGORIES.filter((cat) => !(business.ai_keywords || []).includes(cat)).map((cat) => {
-                    const isSelected = selectedCategories.includes(cat);
+                  {((business.ai_keywords && business.ai_keywords.length > 0)
+                    ? business.ai_keywords
+                    : getDefaultCategoriesForCategory(business.category)
+                  ).map((kw) => {
+                    const isSelected = selectedCategories.includes(kw);
                     return (
                       <button
-                        key={cat}
+                        key={kw}
                         type="button"
-                        onClick={() => handleToggleCategory(cat)}
-                        className={`px-3.5 py-1.5 text-xs font-medium rounded-xl border transition-all cursor-pointer ${
+                        onClick={() => handleToggleCategory(kw)}
+                        className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
                           isSelected
                             ? 'bg-[#6C3BFF] text-white border-[#6C3BFF] shadow-xs'
-                            : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                            : 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100 hover:border-neutral-300'
                         }`}
                       >
-                        {cat}
+                        <Sparkles className={`w-3 h-3 ${isSelected ? 'text-white' : 'text-[#6C3BFF]'}`} />
+                        <span>{kw}</span>
                       </button>
                     );
                   })}

@@ -10,6 +10,9 @@ import {
   CheckCircle2,
   KeyRound,
   ShieldCheck,
+  Smartphone,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { AuthSession } from '../types/database';
 import { signInUser, changeUserPassword } from '../lib/db';
@@ -35,6 +38,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleCopyMobileLink = () => {
+    const url = window.location.origin + '#login';
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +116,25 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </span>
         </div>
 
-        <div className="w-24 hidden sm:block" />
+        <button
+          type="button"
+          onClick={handleCopyMobileLink}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 transition-colors cursor-pointer"
+          title="Dusre mobile mein kholne ke liye ye link copy karke send karein"
+        >
+          {copiedLink ? (
+            <>
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-emerald-300">Link Copied!</span>
+            </>
+          ) : (
+            <>
+              <Smartphone className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">Dusre Mobile Ka Link</span>
+              <span className="sm:hidden">Share Link</span>
+            </>
+          )}
+        </button>
       </header>
 
       {/* Main Centered Login Card */}
@@ -121,7 +150,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </h1>
             <p className="text-xs text-neutral-400 max-w-xs mx-auto">
               {mode === 'login'
-                ? 'Enter your registered email and password to access your dashboard'
+                ? 'Super Admin ya Customer: Apne Email ya Customer ID aur Password se sign in karein.'
                 : 'Enter your account email and create a new password to regain access'}
             </p>
           </div>
@@ -280,17 +309,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
-          {/* Discreet sign-in credentials reference */}
+          {/* Customer sign-in reference note */}
           {mode === 'login' && (
             <div className="pt-1 text-center">
-              <div className="inline-flex flex-wrap items-center justify-center gap-1 text-[11px] text-neutral-400 bg-neutral-900/60 px-3 py-1.5 rounded-lg border border-neutral-700/60">
-                <Sparkles className="w-3 h-3 text-[#9D7AFF]" />
-                <span>Admin Login:</span>
-                <span className="font-mono text-neutral-200">ladanikishan8@gmail.com</span>
-                <span className="text-neutral-500">·</span>
-                <span className="text-neutral-400">Pass:</span>
-                <span className="font-mono text-neutral-200">12345678</span>
-              </div>
+              <p className="text-[11px] text-neutral-400 leading-relaxed px-2">
+                💡 <span className="text-purple-300 font-medium">Customer:</span> Admin dwara banaye gaye <span className="text-white">Email</span> ya <span className="text-[#9D7AFF]">Customer ID</span> aur Password se direct login karein.
+              </p>
             </div>
           )}
 

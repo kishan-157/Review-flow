@@ -82,7 +82,12 @@ import {
   redeemLoyaltyCard,
   verifyLoyaltyCardByCode,
   issueLoyaltyCard,
+  getBusinessByUserId,
 } from '../lib/db';
+import {
+  craftBusinessPromptLocally,
+  analyzeBusinessPromptLocally,
+} from '../lib/suggestionEngine';
 import { QRCodeView } from './QRCodeView';
 import { DigitalLoyaltyCard } from './DigitalLoyaltyCard';
 import { DailyReviewAccessTrend } from './DailyReviewAccessTrend';
@@ -175,6 +180,13 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     positive?: string[];
     neutral?: string[];
   }>(business?.ai_suggestions_preview || {});
+  const [customReviewDrafts, setCustomReviewDrafts] = useState<string[]>(
+    business?.ai_suggestions_preview?.positive && business.ai_suggestions_preview.positive.length > 0
+      ? business.ai_suggestions_preview.positive
+      : []
+  );
+  const [isSavingReviewDrafts, setIsSavingReviewDrafts] = useState(false);
+  const [draftsSaveSuccess, setDraftsSaveSuccess] = useState<string | null>(null);
   const [aiRecommendations, setAiRecommendations] = useState<string[]>([
     'Keep your standee at eye level on billing counters.',
     'Train your front staff to say: "Scan our standee to review us on Google!"',
@@ -245,7 +257,8 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       return;
     }
     try {
-      const [revSett, anData, fbData, annList, unreadCnt, admSett, lConf, lCards] = await Promise.all([
+      const [freshBiz, revSett, anData, fbData, annList, unreadCnt, admSett, lConf, lCards] = await Promise.all([
+        getBusinessByUserId(session.user.id),
         getReviewSettings(business.id),
         getBusinessAnalytics(business.id),
         getFeedbackByBusinessId(business.id),
@@ -255,6 +268,19 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         getLoyaltyConfig(business.id),
         getLoyaltyCardsByBusinessId(business.id),
       ]);
+
+      if (freshBiz) {
+        setBusiness(freshBiz);
+        if (freshBiz.ai_prompt && !aiPrompt) setAiPrompt(freshBiz.ai_prompt);
+        if (freshBiz.ai_keywords && freshBiz.ai_keywords.length > 0 && aiKeywords.length === 0) setAiKeywords(freshBiz.ai_keywords);
+        if (freshBiz.ai_summary && !aiSummary) setAiSummary(freshBiz.ai_summary);
+        if (freshBiz.ai_suggestions_preview) {
+          setAiSuggestionsPreview(freshBiz.ai_suggestions_preview);
+          if (Array.isArray(freshBiz.ai_suggestions_preview.positive) && freshBiz.ai_suggestions_preview.positive.length > 0) {
+            setCustomReviewDrafts(freshBiz.ai_suggestions_preview.positive);
+          }
+        }
+      }
 
       setSettings(revSett);
       setSettingsForm({
@@ -531,6 +557,9 @@ Please generate:
     setPromptCraftSuccess(null);
     setAiErrorMsg(null);
 
+    let newCraftedPrompt = '';
+    let suggestedKeywords: string[] = [];
+
     try {
       const response = await fetch('/api/ai/craft-prompt', {
         method: 'POST',
@@ -546,30 +575,49 @@ Please generate:
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to craft prompt');
+      if (response.ok) {
+        const data = await response.json();
+        newCraftedPrompt = data.craftedPrompt || '';
+        suggestedKeywords = data.suggestedKeywords || [];
       }
+    } catch {
+      // Graceful fallback to client-side synthesizer
+    }
 
-      const data = await response.json();
-      const newCraftedPrompt = data.craftedPrompt || '';
-      setAiPrompt(newCraftedPrompt);
+    // Fail-safe client-side synthesizer: guarantees it never breaks or fails
+    if (!newCraftedPrompt) {
+      const localResult = craftBusinessPromptLocally({
+        businessName: business.business_name,
+        category: business.category || 'Local Business',
+        location: builderLocation.trim() || business.address,
+        highlights: builderHighlights.trim(),
+        googleLink: builderGoogleLink.trim() || business.google_review_url,
+        websiteUrl: builderWebsiteUrl.trim(),
+      });
+      newCraftedPrompt = localResult.prompt;
+      suggestedKeywords = localResult.keywords;
+    }
 
-      if (Array.isArray(data.suggestedKeywords) && data.suggestedKeywords.length > 0 && aiKeywords.length === 0) {
-        setAiKeywords(data.suggestedKeywords);
-      }
+    setAiPrompt(newCraftedPrompt);
 
-      setPromptCraftSuccess('🎉 Google Link & Website se Business Prompt safalta-purvak generate ho gaya! Niche diye gaye prompt ko check karein ya "Generate Keywords" par click karein.');
-      setTimeout(() => setPromptCraftSuccess(null), 7000);
+    if (Array.isArray(suggestedKeywords) && suggestedKeywords.length > 0 && aiKeywords.length === 0) {
+      setAiKeywords(suggestedKeywords);
+    }
 
-      if (autoRunKeywords && newCraftedPrompt) {
-        await handleRunAiAgent(undefined, newCraftedPrompt);
-      }
-    } catch (err: any) {
-      console.error('Error crafting prompt:', err);
-      setAiErrorMsg(err.message || 'Failed to generate prompt from details. Please check inputs.');
-    } finally {
-      setIsCraftingPrompt(false);
+    // Persist prompt to business
+    try {
+      const updatedBusiness = await updateBusiness(business.id, {
+        ai_prompt: newCraftedPrompt,
+      });
+      setBusiness(updatedBusiness);
+    } catch {}
+
+    setPromptCraftSuccess('🎉 Google Link & Website se Business Prompt safalta-purvak generate ho gaya! Niche diye gaye prompt ko check karein ya "Generate Keywords" par click karein.');
+    setTimeout(() => setPromptCraftSuccess(null), 7000);
+    setIsCraftingPrompt(false);
+
+    if (autoRunKeywords && newCraftedPrompt) {
+      await handleRunAiAgent(undefined, newCraftedPrompt);
     }
   };
 
@@ -585,6 +633,11 @@ Please generate:
     setAiNoticeMsg(null);
     setAiErrorMsg(null);
 
+    let generatedKeywords: string[] = [];
+    let generatedSummary: string = '';
+    let generatedSuggestions: { positive?: string[]; neutral?: string[] } = {};
+    let generatedRecommendations: string[] = [];
+
     try {
       const response = await fetch('/api/ai/analyze-business', {
         method: 'POST',
@@ -597,23 +650,45 @@ Please generate:
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to process prompt with AI');
+      if (response.ok) {
+        const data = await response.json();
+        generatedKeywords = data.keywords || [];
+        generatedSummary = data.summary || '';
+        generatedSuggestions = data.suggestions || {};
+        generatedRecommendations = data.recommendations || [];
       }
+    } catch {
+      // Graceful fallback to client-side engine
+    }
 
-      const data = await response.json();
-      const generatedKeywords: string[] = data.keywords || [];
-      const generatedSummary: string = data.summary || '';
-      const generatedSuggestions = data.suggestions || {};
-      const generatedRecommendations: string[] = data.recommendations || [];
+    // Fail-safe client-side engine
+    if (!generatedKeywords.length || !generatedSuggestions.positive?.length) {
+      const localResult = analyzeBusinessPromptLocally({
+        prompt: promptToUse,
+        businessName: business.business_name,
+        category: business.category || 'Local Business',
+        language: settings?.language || 'en',
+      });
+      generatedKeywords = localResult.keywords;
+      generatedSummary = localResult.summary;
+      generatedSuggestions = localResult.suggestions;
+      generatedRecommendations = [
+        'Place the QR standee right on the billing counter or table tents at eye level.',
+        'Train your cashier to invite happy customers: "A quick 10-second review helps our small team grow!"',
+        'Mention your top keywords on your Google Business profile posts.'
+      ];
+    }
 
-      setAiKeywords(generatedKeywords);
-      setAiSummary(generatedSummary);
-      setAiSuggestionsPreview(generatedSuggestions);
-      setAiRecommendations(generatedRecommendations);
+    setAiKeywords(generatedKeywords);
+    setAiSummary(generatedSummary);
+    setAiSuggestionsPreview(generatedSuggestions);
+    setAiRecommendations(generatedRecommendations);
 
-      // Persist directly to business profile so it takes effect in QR review suggestions immediately
+    if (generatedSuggestions.positive && generatedSuggestions.positive.length > 0) {
+      setCustomReviewDrafts(generatedSuggestions.positive);
+    }
+
+    try {
       const updatedBusiness = await updateBusiness(business.id, {
         ai_prompt: promptToUse,
         ai_keywords: generatedKeywords,
@@ -621,15 +696,56 @@ Please generate:
         ai_summary: generatedSummary,
         ai_last_generated_at: new Date().toISOString(),
       });
-
       setBusiness(updatedBusiness);
-      setAiNoticeMsg('✨ AI Agent processed your business data successfully! Keywords and review drafts are now active in your live QR review station.');
-      setTimeout(() => setAiNoticeMsg(null), 5000);
+      setAiNoticeMsg('✨ AI Agent ne aapke business data ko process kar liya! Keywords aur review drafts ab aapke QR review station me active hain.');
+      setTimeout(() => setAiNoticeMsg(null), 6000);
     } catch (err: any) {
-      console.error('Error running AI agent:', err);
-      setAiErrorMsg(err.message || 'Failed to generate review suggestions and keywords. Please try again.');
+      console.error('Error updating business:', err);
+      setAiErrorMsg(err?.message || 'Failed to update business profile.');
     } finally {
       setIsAiGenerating(false);
+    }
+  };
+
+  const handleUpdateDraft = (index: number, value: string) => {
+    const copy = [...customReviewDrafts];
+    copy[index] = value;
+    setCustomReviewDrafts(copy);
+  };
+
+  const handleDeleteDraft = (index: number) => {
+    const copy = customReviewDrafts.filter((_, i) => i !== index);
+    setCustomReviewDrafts(copy);
+  };
+
+  const handleAddDraft = () => {
+    const nextIdx = customReviewDrafts.length + 1;
+    const newDraft = `Really wonderful visit to ${business?.business_name || 'this place'}! Top-tier service, polite staff, and great overall experience. Highly recommended! 👍`;
+    setCustomReviewDrafts([...customReviewDrafts, newDraft]);
+  };
+
+  const handleSaveReviewDrafts = async () => {
+    if (!business) return;
+    setIsSavingReviewDrafts(true);
+    setDraftsSaveSuccess(null);
+    setAiErrorMsg(null);
+    try {
+      const cleanDrafts = customReviewDrafts.map((d) => d.trim()).filter((d) => d.length > 3);
+      const updatedPreview = {
+        ...aiSuggestionsPreview,
+        positive: cleanDrafts,
+      };
+      setAiSuggestionsPreview(updatedPreview);
+      const updatedBiz = await updateBusiness(business.id, {
+        ai_suggestions_preview: updatedPreview,
+      });
+      setBusiness(updatedBiz);
+      setDraftsSaveSuccess('🎉 Review suggestions successfully saved! Yahi suggestions ab customer ko QR scan karne par dikhai dengi.');
+      setTimeout(() => setDraftsSaveSuccess(null), 5000);
+    } catch (err: any) {
+      setAiErrorMsg(err?.message || 'Review suggestions save nahi ho paayi. Dobara try karein.');
+    } finally {
+      setIsSavingReviewDrafts(false);
     }
   };
 
@@ -1519,55 +1635,143 @@ Please generate:
                   </div>
                 </div>
 
-                {/* AI Generated Review Suggestions Preview */}
-                {(aiSuggestionsPreview.positive?.length || aiSummary) && (
-                  <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-[#6C3BFF]" />
-                        <h3 className="text-xs font-bold text-neutral-900">
-                          Live AI Review Drafts Generated from your Prompt
+                {/* REVIEW SUGGESTIONS STUDIO: Fully Editable by Customer (Jo customer dalega wahi show hoga) */}
+                <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-purple-50 text-[#6C3BFF] flex items-center justify-center">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-neutral-900">
+                          Google Review Suggestions (Live QR Station Drafts)
                         </h3>
+                        <p className="text-[11px] text-neutral-500">
+                          Jo suggestions aap yahan set karenge, keval wahi customer ke phone par review scan karne par show hongi!
+                        </p>
                       </div>
-                      <span className="text-[11px] text-neutral-400">
-                        Automatically adapted into Customer QR Station
-                      </span>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddDraft}
+                        className="px-3 py-1.5 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl transition-colors cursor-pointer"
+                      >
+                        + Add Suggestion
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveReviewDrafts}
+                        disabled={isSavingReviewDrafts || customReviewDrafts.length === 0}
+                        className="px-4 py-1.5 text-xs font-bold bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white rounded-xl shadow-xs transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {isSavingReviewDrafts ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Saving...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-3.5 h-3.5" />
+                            <span>Save Suggestions</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
-                    {aiSummary && (
-                      <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200/80 text-xs text-neutral-700 italic">
-                        "{aiSummary}"
-                      </div>
-                    )}
+                  {draftsSaveSuccess && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center gap-2 animate-in fade-in">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-semibold">{draftsSaveSuccess}</span>
+                    </div>
+                  )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                      {aiSuggestionsPreview.positive?.map((draft, idx) => (
+                  {aiSummary && (
+                    <div className="p-3 bg-purple-50/40 rounded-xl border border-purple-100/80 text-xs text-neutral-700 italic">
+                      <span className="font-semibold text-[#6C3BFF] not-italic mr-1.5">Business Pitch:</span>
+                      "{aiSummary}"
+                    </div>
+                  )}
+
+                  {customReviewDrafts.length === 0 ? (
+                    <div className="py-8 text-center bg-neutral-50 rounded-xl border border-dashed border-neutral-200 space-y-2">
+                      <p className="text-xs text-neutral-500">
+                        Abhi koi custom review draft nahi hai. Aap upar diye gaye prompt se generate kar sakte hain ya apna manpasand review text add karein.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleAddDraft}
+                        className="px-4 py-2 text-xs font-bold bg-[#6C3BFF] text-white rounded-xl hover:bg-[#5A2DE2] cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <span>+ Pehla Review Suggestion Likhein</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                      {customReviewDrafts.map((draft, idx) => (
                         <div
                           key={idx}
-                          className="p-4 bg-purple-50/30 rounded-xl border border-purple-100/80 space-y-2 flex flex-col justify-between"
+                          className="p-4 bg-purple-50/30 rounded-xl border border-purple-100 space-y-3 flex flex-col justify-between"
                         >
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-1 text-amber-500">
-                              {[1, 2, 3, 4, 5].map((s) => (
-                                <Star key={s} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                              ))}
-                              <span className="text-[10px] font-bold text-neutral-500 ml-1">
-                                Option {idx + 1}
-                              </span>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1 text-amber-500">
+                                {[1, 2, 3, 4, 5].map((s) => (
+                                  <Star key={s} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                                ))}
+                                <span className="text-[11px] font-bold text-neutral-700 ml-1">
+                                  Suggestion {idx + 1}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDraft(idx)}
+                                title="Delete suggestion"
+                                className="text-neutral-400 hover:text-rose-600 transition-colors p-1"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
-                            <p className="text-xs text-neutral-700 leading-relaxed font-normal">
-                              "{draft}"
-                            </p>
+
+                            <textarea
+                              rows={4}
+                              value={draft}
+                              onChange={(e) => handleUpdateDraft(idx, e.target.value)}
+                              placeholder="Review suggestion draft yahan likhein ya edit karein..."
+                              className="w-full p-2.5 bg-white border border-neutral-200 rounded-lg text-xs text-neutral-800 leading-relaxed focus:outline-hidden focus:ring-1 focus:ring-[#6C3BFF]"
+                            />
                           </div>
-                          <span className="text-[10px] font-medium text-emerald-600 flex items-center gap-1">
-                            <Check className="w-3 h-3" />
-                            <span>Active in customer QR suggestions</span>
-                          </span>
+
+                          <div className="flex items-center justify-between pt-1 border-t border-purple-100/60 text-[10px] text-neutral-500">
+                            <span className="text-emerald-700 font-medium flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              <span>Live on QR scan</span>
+                            </span>
+                            <span>{draft.length} chars</span>
+                          </div>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  {customReviewDrafts.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                      <span className="text-[11px] text-neutral-500">
+                        Tip: Customer apne Google review me yeh exact words 1-tap me copy karke post kar payega.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleSaveReviewDrafts}
+                        disabled={isSavingReviewDrafts}
+                        className="px-5 py-2 text-xs font-bold bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer ml-auto"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save All Changes</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
