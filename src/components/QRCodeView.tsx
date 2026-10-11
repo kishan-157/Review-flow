@@ -21,6 +21,8 @@ import {
 import { Business, ReviewSettings, QRLogoBorderStyle } from '../types/database';
 import { updateReviewSettings } from '../lib/db';
 
+import { getPublicBaseUrl } from '../lib/urlHelper';
+
 interface QRCodeViewProps {
   business: Business;
   settings?: ReviewSettings;
@@ -57,8 +59,8 @@ export const QRCodeView: React.FC<QRCodeViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
 
-  // Compute full review URL
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://localboost.ai';
+  // Compute full review URL (pointing to public shareable domain)
+  const baseUrl = getPublicBaseUrl();
   const reviewUrl = `${baseUrl}/#review/${business.unique_slug}`;
   const accentColor = settings?.accent_color || '#6C3BFF';
 
