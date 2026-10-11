@@ -38,6 +38,7 @@ import {
   ClipboardPaste,
   ShieldCheck,
   Flame,
+  Smartphone,
 } from 'lucide-react';
 import { testFirestoreConnection } from '../lib/firebase';
 import {
@@ -121,6 +122,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedCustomerDetail, setSelectedCustomerDetail] = useState<AdminCustomerRow | null>(null);
 
   // Create Customer Modal State
+  const [copiedMobileLink, setCopiedMobileLink] = useState(false);
+
+  const handleCopyMobileLink = async () => {
+    const publicUrl = 'https://ais-pre-cfypgr2kdhshzwivn37vbm-773343347245.asia-southeast1.run.app';
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopiedMobileLink(true);
+      setNotice('Public Mobile Link copied to clipboard! Share this link with any customer or open on any phone.');
+      setTimeout(() => setCopiedMobileLink(false), 3000);
+    } catch {
+      prompt('Copy this link to open on another phone:', publicUrl);
+    }
+  };
+
   const [createCustomerModalOpen, setCreateCustomerModalOpen] = useState(false);
   const [newCustForm, setNewCustForm] = useState({
     fullName: '',
@@ -963,6 +978,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopyMobileLink}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#6C3BFF] hover:bg-[#5A2DE2] rounded-lg transition-colors shadow-xs cursor-pointer"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>{copiedMobileLink ? '✓ Copied Link!' : 'Share Mobile Link'}</span>
+            </button>
             <button
               onClick={loadAll}
               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors"

@@ -1,6 +1,11 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
+import {
+  loadServerDb,
+  saveServerDb,
+  authenticateUser,
+} from './src/server/dbStore';
 
 dotenv.config({ override: true });
 
@@ -8,6 +13,375 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// Server health check for mobile and cross-device testing
+app.get('/api/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    serverTime: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    service: 'LocalBoost AI Backend Server',
+  });
+});
+
+// Universal bootstrap data for all devices
+app.get('/api/sync/bootstrap', (_req, res) => {
+  try {
+    const db = loadServerDb();
+    return res.json({
+      success: true,
+      profiles: db.profiles,
+      businesses: db.businesses,
+      reviewSettings: db.reviewSettings,
+      announcements: db.announcements,
+      adminSettings: db.adminSettings,
+      loyaltyConfigs: db.loyaltyConfigs,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Bootstrap failed' });
+  }
+});
+
+// Universal cross-device login
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { credential, password } = req.body;
+    if (!credential || !password) {
+      return res.status(400).json({ error: 'Email, Customer Code, or Phone, and Password are required.' });
+    }
+    const session = authenticateUser(credential, password);
+    return res.json({ success: true, session });
+  } catch (err: any) {
+    return res.status(401).json({ error: err.message || 'Authentication failed.' });
+  }
+});
+
+// Admin creates customer - instant global synchronization across all devices
+app.post('/api/admin/create-customer', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const {
+      fullName,
+      email,
+      password,
+      businessName,
+      googleReviewUrl,
+      phone = '',
+      category = 'Restaurant & Hospitality',
+      address = '',
+      accessValidityType = '1_year',
+      customDurationDays = 365,
+      customExpiryDate,
+    } = req.body;
+
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !fullName || !businessName) {
+      return res.status(400).json({ error: 'Full name, email, and business name are required.' });
+    }
+
+    const existing = db.profiles.find((p) => p.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      return res.status(400).json({ error: 'An account with this email address already exists.' });
+    }
+
+    const generatedPassword = (password || '').trim() || `LBPass${Math.floor(100000 + Math.random() * 900000)}!`;
+    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const customerCode = `LB-CUS-${randomSuffix}`;
+
+    const now = new Date();
+    let expiresAt: string | null = null;
+    let durationDays = 365;
+
+    if (accessValidityType === '1_month') {
+      const d = new Date(now);
+      d.setDate(d.getDate() + 30);
+      expiresAt = d.toISOString();
+      durationDays = 30;
+    } else if (accessValidityType === '3_months') {
+      const d = new Date(now);
+      d.setDate(d.getDate() + 90);
+      expiresAt = d.toISOString();
+      durationDays = 90;
+    } else if (accessValidityType === '6_months') {
+      const d = new Date(now);
+      d.setDate(d.getDate() + 180);
+      expiresAt = d.toISOString();
+      durationDays = 180;
+    } else if (accessValidityType === 'lifetime') {
+      expiresAt = null;
+      durationDays = 36500;
+    } else if (accessValidityType === 'custom' && customExpiryDate) {
+      const target = new Date(customExpiryDate);
+      durationDays = Math.max(1, Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+      expiresAt = target.toISOString();
+    } else {
+      const d = new Date(now);
+      d.setDate(d.getDate() + (customDurationDays || 365));
+      expiresAt = d.toISOString();
+      durationDays = customDurationDays || 365;
+    }
+
+    const newProfile = {
+      id: userId,
+      full_name: fullName.trim(),
+      email: cleanEmail,
+      unique_customer_code: customerCode,
+      role: 'customer' as const,
+      status: 'active' as const,
+      access_validity_type: accessValidityType,
+      access_duration_days: durationDays,
+      access_expires_at: expiresAt,
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      last_login_at: now.toISOString(),
+    };
+
+    const businessId = `biz_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const slug =
+      businessName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '') +
+      '-' +
+      Math.random().toString(36).substring(2, 6);
+
+    const newBusiness = {
+      id: businessId,
+      user_id: userId,
+      business_name: businessName.trim(),
+      unique_slug: slug,
+      google_review_url: (googleReviewUrl || '').trim(),
+      phone: (phone || '').trim(),
+      address: (address || '').trim(),
+      category: category || 'Restaurant & Hospitality',
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    };
+
+    const newSettings = {
+      id: `rs_${Date.now()}`,
+      business_id: businessId,
+      language: 'en' as const,
+      welcome_text: 'How was your dining experience with us today?',
+      thank_you_text: 'Thank you for supporting our local business! ❤️',
+      enabled: true,
+      accent_color: '#6C3BFF',
+      qr_show_logo: true,
+      qr_logo_border_style: 'circular' as const,
+      qr_color: '#1F1735',
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    };
+
+    db.profiles.unshift(newProfile);
+    db.businesses.unshift(newBusiness);
+    db.reviewSettings.unshift(newSettings);
+    db.passwords[cleanEmail] = generatedPassword;
+    db.passwords[customerCode.toLowerCase()] = generatedPassword;
+    if (phone) {
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      if (cleanPhone) db.passwords[cleanPhone] = generatedPassword;
+    }
+
+    saveServerDb(db);
+
+    return res.json({
+      success: true,
+      user: newProfile,
+      business: newBusiness,
+      tempPassword: generatedPassword,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to create customer.' });
+  }
+});
+
+// Update customer by admin
+app.post('/api/admin/update-customer', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const {
+      profileId,
+      fullName,
+      email,
+      businessName,
+      googleReviewUrl,
+      phone,
+      status,
+      accessValidityType,
+      customDurationDays,
+      customExpiryDate,
+    } = req.body;
+    const idx = db.profiles.findIndex((p) => p.id === profileId);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Customer not found.' });
+    }
+
+    if (fullName) db.profiles[idx].full_name = fullName.trim();
+    if (email) db.profiles[idx].email = email.trim().toLowerCase();
+    if (status) db.profiles[idx].status = status;
+    if (accessValidityType) db.profiles[idx].access_validity_type = accessValidityType;
+    if (customDurationDays !== undefined) db.profiles[idx].access_duration_days = customDurationDays;
+    if (customExpiryDate !== undefined) db.profiles[idx].access_expires_at = customExpiryDate;
+    db.profiles[idx].updated_at = new Date().toISOString();
+
+    const bizIdx = db.businesses.findIndex((b) => b.user_id === profileId);
+    if (bizIdx !== -1) {
+      if (businessName) db.businesses[bizIdx].business_name = businessName.trim();
+      if (googleReviewUrl) db.businesses[bizIdx].google_review_url = googleReviewUrl.trim();
+      if (phone !== undefined) db.businesses[bizIdx].phone = phone.trim();
+      db.businesses[bizIdx].updated_at = new Date().toISOString();
+    }
+
+    saveServerDb(db);
+    return res.json({
+      success: true,
+      profile: db.profiles[idx],
+      business: bizIdx !== -1 ? db.businesses[bizIdx] : null,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to update customer.' });
+  }
+});
+
+// Delete customer by admin
+app.post('/api/admin/delete-customer', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { profileId } = req.body;
+    db.profiles = db.profiles.filter((p) => p.id !== profileId);
+    const deletedBiz = db.businesses.find((b) => b.user_id === profileId);
+    if (deletedBiz) {
+      db.businesses = db.businesses.filter((b) => b.id !== deletedBiz.id);
+      db.reviewSettings = db.reviewSettings.filter((s) => s.business_id !== deletedBiz.id);
+      db.feedbacks = db.feedbacks.filter((f) => f.business_id !== deletedBiz.id);
+      db.analyticsEvents = db.analyticsEvents.filter((a) => a.business_id !== deletedBiz.id);
+    }
+    saveServerDb(db);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to delete customer.' });
+  }
+});
+
+// Password change & admin reset
+app.post('/api/auth/change-password', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { email, newPassword, currentPassword, isAdminReset } = req.body;
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !newPassword || newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+
+    if (!isAdminReset && currentPassword) {
+      const stored = db.passwords[cleanEmail];
+      if (stored && stored !== currentPassword) {
+        return res.status(401).json({ error: 'Current password is incorrect.' });
+      }
+    }
+
+    db.passwords[cleanEmail] = newPassword;
+    const prof = db.profiles.find((p) => p.email.toLowerCase() === cleanEmail);
+    if (prof) {
+      db.passwords[prof.unique_customer_code.toLowerCase()] = newPassword;
+    }
+
+    saveServerDb(db);
+    return res.json({ success: true, message: 'Password updated successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to update password.' });
+  }
+});
+
+// Feedback submission
+app.post('/api/feedback/submit', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId, rating, feedbackText, customerName, customerPhone } = req.body;
+    if (!businessId || !feedbackText) {
+      return res.status(400).json({ error: 'Business ID and feedback text are required.' });
+    }
+
+    const nowStr = new Date().toISOString();
+    const newFeedback = {
+      id: `fb_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      business_id: businessId,
+      rating: Number(rating) || 1,
+      feedback_text: feedbackText.trim(),
+      customer_name: (customerName || '').trim(),
+      customer_contact: (customerPhone || '').trim(),
+      status: 'new' as const,
+      created_at: nowStr,
+      updated_at: nowStr,
+    };
+
+    db.feedbacks.unshift(newFeedback);
+    saveServerDb(db);
+    return res.json({ success: true, feedback: newFeedback });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to save feedback.' });
+  }
+});
+
+// Analytics record
+app.post('/api/analytics/record', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId, eventType, rating, visitorSessionHash } = req.body;
+    if (!businessId || !eventType) {
+      return res.status(400).json({ error: 'Business ID and event type are required.' });
+    }
+
+    const newEv = {
+      id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      business_id: businessId,
+      event_type: eventType,
+      rating: rating !== undefined ? Number(rating) : undefined,
+      visitor_session_hash: visitorSessionHash || '',
+      created_at: new Date().toISOString(),
+    };
+
+    db.analyticsEvents.push(newEv);
+    saveServerDb(db);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to record analytics.' });
+  }
+});
+
+// Full client-to-server data reconciliation (keeps everything synced)
+app.post('/api/sync/push', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { profiles = [], businesses = [], passwords = {} } = req.body;
+
+    profiles.forEach((p: any) => {
+      if (!db.profiles.some((ep) => ep.id === p.id || ep.email.toLowerCase() === p.email.toLowerCase())) {
+        db.profiles.push(p);
+      }
+    });
+
+    businesses.forEach((b: any) => {
+      if (!db.businesses.some((eb) => eb.id === b.id)) {
+        db.businesses.push(b);
+      }
+    });
+
+    Object.entries(passwords).forEach(([k, v]) => {
+      if (!db.passwords[k.toLowerCase()] && typeof v === 'string') {
+        db.passwords[k.toLowerCase()] = v;
+      }
+    });
+
+    saveServerDb(db);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Reconciliation failed.' });
+  }
+});
 
 // Server-side health and Supabase Secret Key status check (Zero secret leakage)
 app.get('/api/supabase/status', (_req, res) => {

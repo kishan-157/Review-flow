@@ -1,0 +1,161 @@
+{
+  "profiles": [
+    {
+      "id": "usr_1791726816264_4hm5bq",
+      "full_name": "Amit Verma",
+      "email": "amit.hotel@gmail.com",
+      "unique_customer_code": "LB-CUS-EAM670",
+      "role": "customer",
+      "status": "active",
+      "access_validity_type": "1_year",
+      "access_duration_days": 365,
+      "access_expires_at": "2027-10-11T13:53:36.264Z",
+      "created_at": "2026-10-11T13:53:36.264Z",
+      "updated_at": "2026-10-11T13:53:36.264Z",
+      "last_login_at": "2026-10-11T13:53:40.803Z"
+    },
+    {
+      "id": "admin_kishan_1",
+      "full_name": "Kishan Ladani",
+      "email": "ladanikishan8@gmail.com",
+      "unique_customer_code": "LB-ADM-KISHAN",
+      "role": "admin",
+      "status": "active",
+      "access_validity_type": "lifetime",
+      "created_at": "2026-10-11T13:53:07.512Z",
+      "updated_at": "2026-10-11T13:53:07.512Z",
+      "last_login_at": "2026-10-11T13:53:18.046Z"
+    },
+    {
+      "id": "admin_master_1",
+      "full_name": "Platform Super Admin",
+      "email": "admin@localboost.ai",
+      "unique_customer_code": "LB-ADM-MASTER",
+      "role": "admin",
+      "status": "active",
+      "access_validity_type": "lifetime",
+      "created_at": "2026-10-11T13:53:07.512Z",
+      "updated_at": "2026-10-11T13:53:07.512Z",
+      "last_login_at": "2026-10-11T13:53:07.512Z"
+    },
+    {
+      "id": "usr_foodbites_demo",
+      "full_name": "Rahul Patel",
+      "email": "cafe@foodbites.com",
+      "unique_customer_code": "LB-CUS-8F42K9",
+      "role": "customer",
+      "status": "active",
+      "access_validity_type": "1_year",
+      "access_duration_days": 365,
+      "created_at": "2026-10-11T13:53:07.512Z",
+      "updated_at": "2026-10-11T13:53:07.512Z",
+      "last_login_at": "2026-10-11T13:53:32.797Z"
+    }
+  ],
+  "businesses": [
+    {
+      "id": "biz_1791726816264_0gsmn7",
+      "user_id": "usr_1791726816264_4hm5bq",
+      "business_name": "Grand Royal Hotel",
+      "unique_slug": "grand-royal-hotel-pugh",
+      "google_review_url": "https://maps.google.com/test",
+      "phone": "",
+      "address": "",
+      "category": "Restaurant & Hospitality",
+      "created_at": "2026-10-11T13:53:36.264Z",
+      "updated_at": "2026-10-11T13:53:36.264Z"
+    },
+    {
+      "id": "biz_foodbites_demo",
+      "user_id": "usr_foodbites_demo",
+      "business_name": "Food Bites Cafe & Grill",
+      "unique_slug": "food-bites-demo",
+      "google_review_url": "https://g.page/r/sample/review",
+      "phone": "+1 555-0199",
+      "address": "142 Market Street, Downtown",
+      "category": "Restaurant & Hospitality",
+      "created_at": "2026-10-11T13:53:07.512Z",
+      "updated_at": "2026-10-11T13:53:07.512Z"
+    }
+  ],
+  "passwords": {
+    "15550199": "DemoPass123!",
+    "ladanikishan8@gmail.com": "12345678",
+    "admin@localboost.ai": "SuperAdmin2026!",
+    "cafe@foodbites.com": "DemoPass123!",
+    "lb-cus-8f42k9": "DemoPass123!",
+    "+15550199": "DemoPass123!",
+    "amit.hotel@gmail.com": "MySecretPass123!",
+    "lb-cus-eam670": "MySecretPass123!"
+  },
+  "reviewSettings": [
+    {
+      "id": "rs_1791726816264",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "language": "en",
+      "welcome_text": "How was your dining experience with us today?",
+      "thank_you_text": "Thank you for supporting our local business! ❤️",
+      "enabled": true,
+      "accent_color": "#6C3BFF",
+      "qr_show_logo": true,
+      "qr_logo_border_style": "circular",
+      "qr_color": "#1F1735",
+      "created_at": "2026-10-11T13:53:36.264Z",
+      "updated_at": "2026-10-11T13:53:36.264Z"
+    },
+    {
+      "id": "rs_foodbites_demo",
+      "business_id": "biz_foodbites_demo",
+      "language": "en",
+      "welcome_text": "How was your dining experience with us today?",
+      "thank_you_text": "Thank you for supporting our local business! ❤️",
+      "enabled": true,
+      "accent_color": "#6C3BFF",
+      "qr_show_logo": true,
+      "qr_logo_border_style": "circular",
+      "qr_color": "#1F1735",
+      "created_at": "2026-10-11T13:53:07.512Z",
+      "updated_at": "2026-10-11T13:53:07.512Z"
+    }
+  ],
+  "feedbacks": [],
+  "analyticsEvents": [],
+  "announcements": [
+    {
+      "id": "ann-init-1",
+      "title": "Welcome to LocalBoost AI 🚀",
+      "message": "Display your Google Review standees at your billing counter to boost your reviews instantly.",
+      "type": "info",
+      "is_active": true,
+      "created_at": "2026-10-11T13:53:07.512Z",
+      "updated_at": "2026-10-11T13:53:07.512Z"
+    }
+  ],
+  "adminSettings": [
+    {
+      "id": "set-1",
+      "setting_key": "app_name",
+      "setting_value": "LocalBoost AI",
+      "updated_at": "2026-10-11T13:53:07.512Z"
+    },
+    {
+      "id": "set-2",
+      "setting_key": "whatsapp_support_number",
+      "setting_value": "+15550198234",
+      "updated_at": "2026-10-11T13:53:07.512Z"
+    },
+    {
+      "id": "set-3",
+      "setting_key": "whatsapp_support_message",
+      "setting_value": "Hello LocalBoost AI Support, I need assistance with my account.",
+      "updated_at": "2026-10-11T13:53:07.512Z"
+    },
+    {
+      "id": "set-4",
+      "setting_key": "default_accent_color",
+      "setting_value": "#6C3BFF",
+      "updated_at": "2026-10-11T13:53:07.512Z"
+    }
+  ],
+  "loyaltyConfigs": []
+}

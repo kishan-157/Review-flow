@@ -420,6 +420,61 @@ export function initDefaultData() {
   setStorage(STORAGE_KEYS.PASSWORDS, passwords);
   setStorage(STORAGE_KEYS.BUSINESSES, businesses);
   setStorage(STORAGE_KEYS.REVIEW_SETTINGS, reviewSettings);
+
+  // Background synchronize with universal server database
+  if (typeof window !== 'undefined') {
+    syncWithServer().catch(() => {});
+  }
+}
+
+// Universal cross-device data synchronizer
+export async function syncWithServer(): Promise<void> {
+  try {
+    const res = await fetch('/api/sync/bootstrap');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.success) return;
+
+    if (Array.isArray(data.profiles) && data.profiles.length > 0) {
+      const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+      const mergedProfilesMap = new Map<string, Profile>();
+      // First put server profiles
+      data.profiles.forEach((p: Profile) => mergedProfilesMap.set(p.id, p));
+      // Then keep any local profile not yet in server
+      localProfiles.forEach((p: Profile) => {
+        if (!mergedProfilesMap.has(p.id)) {
+          mergedProfilesMap.set(p.id, p);
+        }
+      });
+      setStorage(STORAGE_KEYS.PROFILES, Array.from(mergedProfilesMap.values()));
+    }
+
+    if (Array.isArray(data.businesses) && data.businesses.length > 0) {
+      const localBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+      const mergedBizMap = new Map<string, Business>();
+      data.businesses.forEach((b: Business) => mergedBizMap.set(b.id, b));
+      localBiz.forEach((b: Business) => {
+        if (!mergedBizMap.has(b.id)) {
+          mergedBizMap.set(b.id, b);
+        }
+      });
+      setStorage(STORAGE_KEYS.BUSINESSES, Array.from(mergedBizMap.values()));
+    }
+
+    if (Array.isArray(data.reviewSettings) && data.reviewSettings.length > 0) {
+      const localSett = getStorage<ReviewSettings[]>(STORAGE_KEYS.REVIEW_SETTINGS, []);
+      const mergedSettMap = new Map<string, ReviewSettings>();
+      data.reviewSettings.forEach((s: ReviewSettings) => mergedSettMap.set(s.id, s));
+      localSett.forEach((s: ReviewSettings) => {
+        if (!mergedSettMap.has(s.id)) {
+          mergedSettMap.set(s.id, s);
+        }
+      });
+      setStorage(STORAGE_KEYS.REVIEW_SETTINGS, Array.from(mergedSettMap.values()));
+    }
+  } catch (e) {
+    // Graceful offline behavior
+  }
 }
 
 // Call on startup
@@ -583,7 +638,7 @@ export async function createCustomerByAdmin(params: {
   const validityType = params.accessValidityType || '1_year';
   const { expiresAt, durationDays } = calculateExpiry(validityType, params.customDurationDays, params.customExpiryDate);
 
-  const newProfile: Profile = {
+  let newProfile: Profile = {
     id: userId,
     full_name: params.fullName.trim(),
     email,
@@ -601,7 +656,7 @@ export async function createCustomerByAdmin(params: {
   const businessId = `biz_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   const slug = slugify(params.businessName);
 
-  const newBusiness: Business = {
+  let newBusiness: Business = {
     id: businessId,
     user_id: userId,
     business_name: params.businessName.trim(),
@@ -642,7 +697,38 @@ export async function createCustomerByAdmin(params: {
 
   const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
   passwords[email] = generatedPassword;
+  passwords[customerCode.toLowerCase()] = generatedPassword;
   setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+
+  // Sync to universal server database so ANY other phone can login instantly
+  try {
+    const res = await fetch('/api/admin/create-customer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: params.fullName,
+        email: params.email,
+        password: generatedPassword,
+        businessName: params.businessName,
+        googleReviewUrl: params.googleReviewUrl,
+        phone: params.phone,
+        category: params.category,
+        address: params.address,
+        accessValidityType: validityType,
+        customDurationDays: durationDays,
+        customExpiryDate: expiresAt,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.user) {
+        newProfile = data.user;
+        if (data.business) newBusiness = data.business;
+      }
+    }
+  } catch (e) {
+    console.warn('Server sync during customer creation:', e);
+  }
 
   // If Supabase is connected, insert record into Supabase safely
   const supabase = getSupabaseClient();
@@ -718,15 +804,71 @@ export async function updateCustomerAccessDuration(
   return profiles[idx];
 }
 
-export async function signInUser(emailInput: string, passwordInput: string): Promise<AuthSession> {
+export async function signInUser(credentialInput: string, passwordInput: string): Promise<AuthSession> {
   initDefaultData();
-  const email = emailInput.trim().toLowerCase();
-  const supabase = getSupabaseClient();
+  const credential = credentialInput.trim();
+  const cleanEmail = credential.toLowerCase();
 
+  // 1. Try server-side authentication (enables instant cross-device login)
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential, password: passwordInput }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.session) {
+        setStorage(STORAGE_KEYS.SESSION, data.session);
+
+        // Update local profiles cache
+        const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+        const idx = localProfiles.findIndex((p) => p.id === data.session.user.id);
+        if (idx !== -1) {
+          localProfiles[idx] = data.session.user;
+        } else {
+          localProfiles.unshift(data.session.user);
+        }
+        setStorage(STORAGE_KEYS.PROFILES, localProfiles);
+
+        // Update local businesses cache
+        if (data.session.business) {
+          const localBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+          const bIdx = localBiz.findIndex((b) => b.id === data.session.business.id);
+          if (bIdx !== -1) {
+            localBiz[bIdx] = data.session.business;
+          } else {
+            localBiz.unshift(data.session.business);
+          }
+          setStorage(STORAGE_KEYS.BUSINESSES, localBiz);
+        }
+
+        return data.session;
+      }
+    } else {
+      const errData = await res.json().catch(() => null);
+      if (errData?.error) {
+        throw new Error(errData.error);
+      }
+    }
+  } catch (err: any) {
+    if (
+      err.message &&
+      !err.message.includes('fetch') &&
+      !err.message.includes('NetworkError') &&
+      !err.message.includes('Failed to fetch')
+    ) {
+      throw err;
+    }
+  }
+
+  // 2. Supabase check fallback
+  const supabase = getSupabaseClient();
   if (supabase) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: cleanEmail,
         password: passwordInput,
       });
       if (!error && data?.user) {
@@ -758,29 +900,46 @@ export async function signInUser(emailInput: string, passwordInput: string): Pro
       }
     } catch (e: any) {
       if (e?.message?.includes('disabled')) throw e;
-      // Continue to local storage engine check for demo accounts
     }
   }
 
-  // Local Storage Engine Check
+  // 3. Local Storage Engine Check (supports Email, Customer ID, or Phone)
   const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
   const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+  const cleanNumeric = cleanEmail.replace(/[^0-9]/g, '');
 
-  const profile = profiles.find((p) => p.email.toLowerCase() === email);
+  const profile = profiles.find((p) => {
+    if (p.email.toLowerCase() === cleanEmail) return true;
+    if (p.unique_customer_code.toLowerCase() === cleanEmail) return true;
+    const biz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []).find((b) => b.user_id === p.id);
+    if (biz?.phone) {
+      const bizNumeric = biz.phone.replace(/[^0-9]/g, '');
+      if (bizNumeric && cleanNumeric && bizNumeric.includes(cleanNumeric)) return true;
+    }
+    return false;
+  });
+
   if (!profile) {
-    throw new Error('Invalid email or password.');
+    throw new Error('Account not found. Please verify your email, Customer ID, or phone number.');
   }
 
   if (profile.status === 'disabled') {
     throw new Error('Your account is currently disabled. Please contact support.');
   }
 
-  // Check password if stored
-  if (email === 'ladanikishan8@gmail.com' && passwordInput === '12345678') {
-    passwords[email] = '12345678';
+  // Check password
+  const userEmail = profile.email.toLowerCase();
+  const userCode = profile.unique_customer_code.toLowerCase();
+
+  if (userEmail === 'ladanikishan8@gmail.com' && passwordInput === '12345678') {
+    passwords[userEmail] = '12345678';
     setStorage(STORAGE_KEYS.PASSWORDS, passwords);
   } else {
-    const storedPassword = passwords[email];
+    const storedPassword =
+      passwords[userEmail] ||
+      passwords[userCode] ||
+      (userEmail === 'cafe@foodbites.com' ? 'DemoPass123!' : null);
+
     if (storedPassword && storedPassword !== passwordInput) {
       throw new Error('Invalid email or password. Please verify your credentials.');
     }
@@ -828,6 +987,22 @@ export async function changeUserPassword(
   passwords[cleanEmail] = newPassword;
   setStorage(STORAGE_KEYS.PASSWORDS, passwords);
 
+  // Sync to universal server database
+  try {
+    await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        newPassword,
+        currentPassword,
+        isAdminReset: !requireCurrentPasswordCheck,
+      }),
+    });
+  } catch (e) {
+    console.warn('Server password sync failed:', e);
+  }
+
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
@@ -849,6 +1024,21 @@ export async function adminResetCustomerPassword(
   const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
   passwords[cleanEmail] = newPassword;
   setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+
+  // Sync to universal server database
+  try {
+    await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        newPassword,
+        isAdminReset: true,
+      }),
+    });
+  } catch (e) {
+    console.warn('Server password reset sync failed:', e);
+  }
 }
 
 export function getCurrentSession(): AuthSession | null {
@@ -1886,7 +2076,25 @@ export async function updateCustomerSettingsByAdmin(params: {
     }
   }
 
-  // 5. Firestore Sync (if connected)
+  // 5. Server Database Sync
+  try {
+    await fetch('/api/admin/update-customer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profileId: params.profileId,
+        fullName: params.fullName,
+        email: params.email,
+        businessName: params.businessName,
+        googleReviewUrl: params.googleReviewUrl,
+        phone: params.phone,
+      }),
+    });
+  } catch (e) {
+    console.warn('Server sync updateCustomerSettings error:', e);
+  }
+
+  // 6. Firestore Sync (if connected)
   try {
     const { doc, setDoc } = await import('firebase/firestore');
     const { db } = await import('./firebase');
@@ -1910,6 +2118,15 @@ export async function toggleCustomerStatus(profileId: string, currentStatus: Use
     profiles[idx].updated_at = new Date().toISOString();
     setStorage(STORAGE_KEYS.PROFILES, profiles);
   }
+
+  // Server Database Sync
+  try {
+    fetch('/api/admin/update-customer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profileId, status: nextStatus }),
+    }).catch(() => {});
+  } catch {}
 
   const supabase = getSupabaseClient();
   if (supabase) {
@@ -1950,6 +2167,15 @@ export async function deleteCustomerAccount(profileId: string): Promise<void> {
 
   const feedbacks = getStorage<Feedback[]>(STORAGE_KEYS.FEEDBACK, []);
   setStorage(STORAGE_KEYS.FEEDBACK, feedbacks.filter((f) => !bizIds.has(f.business_id)));
+
+  // Server Database Sync
+  try {
+    fetch('/api/admin/delete-customer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profileId }),
+    }).catch(() => {});
+  } catch {}
 
   const supabase = getSupabaseClient();
   if (supabase) {
