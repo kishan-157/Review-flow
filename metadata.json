@@ -1,0 +1,6 @@
+{
+  "name": "LocalBoost AI — Google Review QR SaaS",
+  "description": "Multi-tenant Google Review QR and private feedback SaaS platform for local businesses with multilingual suggestions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

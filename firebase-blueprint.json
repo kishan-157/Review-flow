@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with role, customer code, and access validity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "full_name": { "type": "string" },
+        "unique_customer_code": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "customer"] },
+        "status": { "type": "string", "enum": ["active", "disabled"] },
+        "access_validity_type": { "type": "string" },
+        "access_expires_at": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["id", "email", "role", "status"]
+    },
+    "Business": {
+      "title": "Business",
+      "description": "Registered business entity linked to a user account",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "business_name": { "type": "string" },
+        "unique_slug": { "type": "string" },
+        "google_review_url": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "category": { "type": "string" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["id", "user_id", "business_name", "unique_slug"]
+    },
+    "ReviewSettings": {
+      "title": "Review Settings",
+      "description": "QR and review landing page settings for a business",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "business_id": { "type": "string" },
+        "language": { "type": "string" },
+        "welcome_text": { "type": "string" },
+        "thank_you_text": { "type": "string" },
+        "accent_color": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "created_at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["id", "business_id"]
+    },
+    "Feedback": {
+      "title": "Customer Feedback",
+      "description": "Private customer feedback submitted on review page",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "business_id": { "type": "string" },
+        "rating": { "type": "number" },
+        "feedback_text": { "type": "string" },
+        "customer_name": { "type": "string" },
+        "customer_phone": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "business_id", "rating", "feedback_text"]
+    },
+    "AnalyticsEvent": {
+      "title": "Analytics Event",
+      "description": "Logged interaction on QR scan and review submission",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "business_id": { "type": "string" },
+        "event_type": { "type": "string" },
+        "rating": { "type": "number" },
+        "visitor_session_hash": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "business_id", "event_type"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles collection"
+    },
+    "/businesses/{businessId}": {
+      "schema": { "$ref": "#/entities/Business" },
+      "description": "Businesses collection"
+    },
+    "/reviewSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/ReviewSettings" },
+      "description": "Review and QR settings per business"
+    },
+    "/feedbacks/{feedbackId}": {
+      "schema": { "$ref": "#/entities/Feedback" },
+      "description": "Private negative/direct feedback"
+    },
+    "/analyticsEvents/{eventId}": {
+      "schema": { "$ref": "#/entities/AnalyticsEvent" },
+      "description": "Logged analytics events"
+    }
+  }
+}
