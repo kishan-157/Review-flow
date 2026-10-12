@@ -41,6 +41,11 @@ export interface Business {
   };
   ai_summary?: string;
   ai_last_generated_at?: string;
+  // Free Live GPS Verification (HTML5 device geolocation - 100% Free)
+  gps_verification_enabled?: boolean;
+  latitude?: number;
+  longitude?: number;
+  gps_radius_meters?: number; // e.g., 200 (meters)
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +65,7 @@ export interface ReviewSettings {
   qr_logo_url?: string;
   qr_logo_border_style?: QRLogoBorderStyle;
   qr_color?: string;
+  require_gps?: boolean;
   created_at: string;
   updated_at: string;
 }

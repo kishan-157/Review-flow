@@ -154,6 +154,13 @@ export default function App() {
     setCurrentView('preview_review');
   };
 
+  const handleOpenLiveReview = (slug: string) => {
+    const cleanSlug = slug.trim().toLowerCase().replace(/[\/\?\#].*$/, '');
+    setActiveReviewSlug(cleanSlug);
+    window.location.hash = `#review/${cleanSlug}`;
+    setCurrentView('review');
+  };
+
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans selection:bg-[#6C3BFF] selection:text-white">
       {/* Top Navbar */}
@@ -239,6 +246,7 @@ export default function App() {
           onSignOut={handleSignOut}
           onSessionUpdated={(updated) => setSession(updated)}
           onPreviewReviewFlow={(b, s) => handlePreviewFlow(b, s)}
+          onOpenLiveReview={handleOpenLiveReview}
         />
       )}
 
@@ -251,6 +259,7 @@ export default function App() {
             setCurrentView('dashboard');
           }}
           onSignOut={handleSignOut}
+          onOpenLiveReview={handleOpenLiveReview}
         />
       )}
 

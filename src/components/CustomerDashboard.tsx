@@ -47,6 +47,8 @@ import {
   Save,
   CheckCircle,
   ShieldCheck,
+  MapPin,
+  Navigation,
 } from 'lucide-react';
 import {
   AuthSession,
@@ -99,6 +101,7 @@ interface CustomerDashboardProps {
   onSignOut: () => void;
   onSessionUpdated: (session: AuthSession) => void;
   onPreviewReviewFlow: (business: Business, settings: ReviewSettings) => void;
+  onOpenLiveReview?: (slug: string) => void;
 }
 
 export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
@@ -106,6 +109,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onSignOut,
   onSessionUpdated,
   onPreviewReviewFlow,
+  onOpenLiveReview,
 }) => {
   const [activeTab, setActiveTab] = useState<
     'dashboard' | 'loyalty' | 'ai_agent' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
@@ -134,6 +138,10 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null);
 
+  // GPS detection state
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
+  const [gpsDetectMsg, setGpsDetectMsg] = useState<string | null>(null);
+
   // Business form state
   const [bizForm, setBizForm] = useState({
     business_name: business?.business_name || '',
@@ -143,6 +151,10 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     address: business?.address || '',
     category: business?.category || 'Restaurant & Hospitality',
     unique_slug: business?.unique_slug || '',
+    gps_verification_enabled: business?.gps_verification_enabled ?? false,
+    latitude: business?.latitude ? String(business.latitude) : '',
+    longitude: business?.longitude ? String(business.longitude) : '',
+    gps_radius_meters: business?.gps_radius_meters ? String(business.gps_radius_meters) : '200',
   });
 
   // Settings form state
@@ -277,7 +289,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const loadData = async () => {
     let activeBiz = business;
     try {
-      if (!activeBiz) {
+      if (!activeBiz || activeBiz.user_id !== session.user.id) {
         activeBiz = await getBusinessByUserId(session.user.id);
         if (activeBiz) {
           setBusiness(activeBiz);
@@ -302,6 +314,19 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
       if (freshBiz) {
         setBusiness(freshBiz);
+        setBizForm({
+          business_name: freshBiz.business_name || '',
+          google_review_url: freshBiz.google_review_url || '',
+          logo_url: freshBiz.logo_url || '',
+          phone: freshBiz.phone || '',
+          address: freshBiz.address || '',
+          category: freshBiz.category || 'Restaurant & Hospitality',
+          unique_slug: freshBiz.unique_slug || '',
+          gps_verification_enabled: freshBiz.gps_verification_enabled ?? false,
+          latitude: freshBiz.latitude ? String(freshBiz.latitude) : '',
+          longitude: freshBiz.longitude ? String(freshBiz.longitude) : '',
+          gps_radius_meters: freshBiz.gps_radius_meters ? String(freshBiz.gps_radius_meters) : '200',
+        });
         if (freshBiz.ai_prompt && !aiPrompt) setAiPrompt(freshBiz.ai_prompt);
         if (freshBiz.ai_keywords && freshBiz.ai_keywords.length > 0 && aiKeywords.length === 0) setAiKeywords(freshBiz.ai_keywords);
         if (freshBiz.ai_summary && !aiSummary) setAiSummary(freshBiz.ai_summary);
@@ -350,7 +375,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   useEffect(() => {
     loadData();
-  }, [business?.id]);
+  }, [session.user.id]);
 
   // When opening announcements tab, mark them as read
   useEffect(() => {
@@ -382,6 +407,34 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
   };
 
+  const handleDetectGps = () => {
+    if (!navigator.geolocation) {
+      setGpsDetectMsg('HTML5 Geolocation is not supported on this browser.');
+      return;
+    }
+    setIsDetectingGps(true);
+    setGpsDetectMsg(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsDetectingGps(false);
+        const lat = Number(pos.coords.latitude.toFixed(6));
+        const lng = Number(pos.coords.longitude.toFixed(6));
+        setBizForm((prev) => ({
+          ...prev,
+          latitude: String(lat),
+          longitude: String(lng),
+          gps_verification_enabled: true,
+        }));
+        setGpsDetectMsg(`✅ Store location detected: ${lat}, ${lng} (Accuracy: ±${Math.round(pos.coords.accuracy)}m)`);
+      },
+      (err) => {
+        setIsDetectingGps(false);
+        setGpsDetectMsg(`Location detection notice: ${err.message}. You can manually enter latitude and longitude.`);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const handleSaveBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!business) return;
@@ -406,6 +459,10 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         address: bizForm.address.trim() || undefined,
         category: bizForm.category,
         unique_slug: bizForm.unique_slug.trim().toLowerCase(),
+        gps_verification_enabled: bizForm.gps_verification_enabled,
+        latitude: bizForm.latitude ? parseFloat(bizForm.latitude) : undefined,
+        longitude: bizForm.longitude ? parseFloat(bizForm.longitude) : undefined,
+        gps_radius_meters: bizForm.gps_radius_meters ? parseInt(bizForm.gps_radius_meters, 10) : 200,
       });
       setBusiness(updated);
       setSaveSuccessMsg('Business details updated successfully!');
@@ -3298,6 +3355,7 @@ Please generate:
                   onPreviewReviewFlow(business, safeSettings);
                 }}
                 onSettingsUpdated={(updated) => setSettings(updated)}
+                onOpenLiveReview={onOpenLiveReview}
               />
             )}
 
@@ -3560,6 +3618,117 @@ Please generate:
                         className="w-full px-3.5 py-2 bg-neutral-50 border border-neutral-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#6C3BFF]"
                       />
                     </div>
+                  </div>
+
+                  {/* Free Live GPS Verification Settings */}
+                  <div className="p-4 bg-purple-50/60 border border-purple-200/80 rounded-2xl space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-200/60 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-[#6C3BFF] text-white flex items-center justify-center shrink-0">
+                          <MapPin className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-neutral-900">Live GPS On-Premise Radius Verification</h4>
+                            <span className="px-2 py-0.5 text-[10px] font-bold text-emerald-700 bg-emerald-100 rounded-full border border-emerald-300">
+                              100% Free (0₹ Cost)
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-neutral-500">
+                            Ensures only genuine customers physically in your store/restaurant can review. Uses native phone HTML5 GPS without any paid Google Maps API.
+                          </p>
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 cursor-pointer self-start sm:self-auto shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={bizForm.gps_verification_enabled}
+                          onChange={(e) => setBizForm({ ...bizForm, gps_verification_enabled: e.target.checked })}
+                          className="w-4 h-4 text-[#6C3BFF] rounded focus:ring-[#6C3BFF]"
+                        />
+                        <span className="text-xs font-bold text-neutral-800">Enable GPS Shield</span>
+                      </label>
+                    </div>
+
+                    {bizForm.gps_verification_enabled && (
+                      <div className="space-y-3 pt-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleDetectGps}
+                            disabled={isDetectingGps}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#6C3BFF] hover:bg-[#5A2DE2] rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                          >
+                            <Navigation className={`w-3.5 h-3.5 ${isDetectingGps ? 'animate-spin' : ''}`} />
+                            <span>{isDetectingGps ? 'Detecting Store Location...' : '📍 Auto-Detect Store Coordinates (Free)'}</span>
+                          </button>
+                          <span className="text-[11px] text-neutral-500">
+                            (Stand inside your shop/restaurant and click to auto-detect current GPS coordinates)
+                          </span>
+                        </div>
+
+                        {gpsDetectMsg && (
+                          <div className="text-xs p-2.5 bg-white border border-purple-200 rounded-xl text-purple-900 font-medium">
+                            {gpsDetectMsg}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block font-semibold text-neutral-700 mb-1">
+                              Store Latitude
+                            </label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={bizForm.latitude}
+                              onChange={(e) => setBizForm({ ...bizForm, latitude: e.target.value })}
+                              placeholder="e.g. 21.1702"
+                              className="w-full px-3 py-1.5 bg-white border border-neutral-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-[#6C3BFF]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-neutral-700 mb-1">
+                              Store Longitude
+                            </label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={bizForm.longitude}
+                              onChange={(e) => setBizForm({ ...bizForm, longitude: e.target.value })}
+                              placeholder="e.g. 72.8311"
+                              className="w-full px-3 py-1.5 bg-white border border-neutral-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-[#6C3BFF]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-neutral-700 mb-1">
+                              Allowed Radius (Meters)
+                            </label>
+                            <select
+                              value={bizForm.gps_radius_meters}
+                              onChange={(e) => setBizForm({ ...bizForm, gps_radius_meters: e.target.value })}
+                              className="w-full px-3 py-1.5 bg-white border border-neutral-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#6C3BFF]"
+                            >
+                              <option value="100">100 meters (Within store)</option>
+                              <option value="200">200 meters (Recommended)</option>
+                              <option value="500">500 meters (Store & parking)</option>
+                              <option value="1000">1 km (Neighborhood)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 bg-white/80 rounded-xl border border-purple-100 text-[11px] text-neutral-600 space-y-1">
+                          <p className="font-bold text-neutral-800 flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                            Why Live GPS gives higher Google ranking for free:
+                          </p>
+                          <p>
+                            Google's local algorithm penalizes bot reviews from remote IP addresses. When a customer confirms they are physically on your premises, it verifies authentic footfall, prevents competitor slander, and guarantees 100% genuine reviews!
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-2 flex justify-end">

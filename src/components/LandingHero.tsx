@@ -26,6 +26,8 @@ import {
   Receipt,
   FileText,
   BadgeCheck,
+  MapPin,
+  Navigation,
 } from 'lucide-react';
 
 interface LandingHeroProps {
@@ -216,85 +218,105 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
           </p>
         </div>
 
-        {/* 4 Steps Interactive Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* 5 Steps Interactive Workflow Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Step 1 */}
-          <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-xs space-y-3 text-left hover:border-purple-300 transition-all">
+          <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 shadow-xs space-y-2.5 text-left hover:border-purple-300 transition-all">
             <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold text-sm">
+              <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold text-xs">
                 01
               </div>
               <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md">
-                Table or Counter
+                Tabletop Standee
               </span>
             </div>
-            <h3 className="text-base font-bold text-neutral-900">1. Customer Scans QR</h3>
-            <p className="text-xs text-neutral-600 leading-relaxed">
-              Customer opens phone camera and scans the tabletop QR standee. No app installation needed; opens instantly on all mobile browsers.
+            <h3 className="text-sm font-bold text-neutral-900">1. Customer Scans QR</h3>
+            <p className="text-[11px] text-neutral-600 leading-relaxed">
+              Customer points their phone camera at the customized tabletop Smart QR standee. No app installation needed; opens instantly on all Android and iPhone browsers with 1 tap.
             </p>
-            <div className="pt-2 text-[11px] text-neutral-500 font-medium flex items-center gap-1">
-              <Globe className="w-3.5 h-3.5 text-[#6C3BFF]" />
-              <span>Language: English, हिंदी, ગુજરાતી</span>
+            <div className="pt-1.5 text-[10px] text-neutral-500 font-medium flex items-center gap-1">
+              <Globe className="w-3 h-3 text-[#6C3BFF]" />
+              <span>English, हिंदी, ગુજરાતી</span>
             </div>
           </div>
 
-          {/* Step 2 */}
-          <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-xs space-y-3 text-left hover:border-purple-300 transition-all">
+          {/* Step 2: Free Live GPS */}
+          <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 shadow-xs space-y-2.5 text-left hover:border-emerald-300 transition-all">
             <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold text-sm">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs">
                 02
+              </div>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
+                100% Free GPS
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-neutral-900">2. Live GPS Store Radius</h3>
+            <p className="text-[11px] text-neutral-600 leading-relaxed">
+              Browser verifies customer is physically inside your store via free HTML5 GPS. Blocks remote fake reviews &amp; gives top ranking on Google Maps!
+            </p>
+            <div className="pt-1.5 text-[10px] text-emerald-700 font-medium flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-emerald-600" />
+              <span>Zero Google API Billing</span>
+            </div>
+          </div>
+
+          {/* Step 3 */}
+          <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 shadow-xs space-y-2.5 text-left hover:border-purple-300 transition-all">
+            <div className="flex items-center justify-between">
+              <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold text-xs">
+                03
               </div>
               <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md">
                 Smart Star Router
               </span>
             </div>
-            <h3 className="text-base font-bold text-neutral-900">2. Smart Star Rating</h3>
-            <p className="text-xs text-neutral-600 leading-relaxed">
-              Customer taps their star rating. <strong className="text-neutral-900">4 &amp; 5 Stars</strong> unlocks 12 AI review drafts. <strong className="text-rose-700">1–3 Stars</strong> routes to Private Feedback Shield!
+            <h3 className="text-sm font-bold text-neutral-900">3. Star Rating Route</h3>
+            <p className="text-[11px] text-neutral-600 leading-relaxed">
+              Customer taps star rating. <strong className="text-neutral-900">4 &amp; 5 Stars</strong> unlocks 12 AI review drafts. <strong className="text-rose-700">1–3 Stars</strong> routes to Private Manager Shield!
             </p>
-            <div className="pt-2 text-[11px] text-emerald-700 font-medium flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <div className="pt-1.5 text-[10px] text-emerald-700 font-medium flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-emerald-600" />
               <span>1-3 Stars Never Go To Google</span>
             </div>
           </div>
 
-          {/* Step 3 */}
-          <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-xs space-y-3 text-left hover:border-purple-300 transition-all">
+          {/* Step 4 */}
+          <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 shadow-xs space-y-2.5 text-left hover:border-purple-300 transition-all">
             <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold text-sm">
-                03
+              <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold text-xs">
+                04
               </div>
               <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md">
                 1-Click Direct
               </span>
             </div>
-            <h3 className="text-base font-bold text-neutral-900">3. 1-Click Google Review</h3>
-            <p className="text-xs text-neutral-600 leading-relaxed">
-              Customer selects their preferred AI-drafted review, clicks copy, and the system automatically opens their Google Maps review box to paste and publish!
+            <h3 className="text-sm font-bold text-neutral-900">4. 1-Click Google Post</h3>
+            <p className="text-[11px] text-neutral-600 leading-relaxed">
+              Customer taps copy on an AI-crafted review draft, and the system opens their Google Maps review box to paste and publish in seconds!
             </p>
-            <div className="pt-2 text-[11px] text-purple-700 font-medium flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-[#6C3BFF]" />
-              <span>12 Keyword-Targeted Drafts</span>
+            <div className="pt-1.5 text-[10px] text-purple-700 font-medium flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-[#6C3BFF]" />
+              <span>12 Custom Keyword Drafts</span>
             </div>
           </div>
 
-          {/* Step 4 */}
-          <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-xs space-y-3 text-left hover:border-purple-300 transition-all">
+          {/* Step 5 */}
+          <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 shadow-xs space-y-2.5 text-left hover:border-purple-300 transition-all">
             <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold text-sm">
-                04
+              <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold text-xs">
+                05
               </div>
               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">
-                Counter Redemption
+                Cashier Desk
               </span>
             </div>
-            <h3 className="text-base font-bold text-neutral-900">4. VIP Reward &amp; Bill Off</h3>
-            <p className="text-xs text-neutral-600 leading-relaxed">
-              Customer instantly receives a digital VIP discount voucher. Cashier easily verifies and redeems it by <strong className="text-neutral-900">Mobile No or Name</strong> at billing!
+            <h3 className="text-sm font-bold text-neutral-900">5. VIP Voucher &amp; Bill Off</h3>
+            <p className="text-[11px] text-neutral-600 leading-relaxed">
+              Customer gets instant digital discount voucher. Cashier searches customer by <strong className="text-neutral-900">Mobile No or Name</strong> to apply bill discount!
             </p>
-            <div className="pt-2 text-[11px] text-emerald-700 font-medium flex items-center gap-1">
-              <Gift className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Mobile / Name Quick Search</span>
+            <div className="pt-1.5 text-[10px] text-emerald-700 font-medium flex items-center gap-1">
+              <Gift className="w-3 h-3 text-emerald-600" />
+              <span>2-Second Counter Search</span>
             </div>
           </div>
         </div>
@@ -467,6 +489,80 @@ export const LandingHero: React.FC<LandingHeroProps> = ({
             <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] text-neutral-500">
               <span>Enterprise Ready</span>
               <span className="text-neutral-900 font-bold">Admin Suite</span>
+            </div>
+          </div>
+
+          {/* Feature 10: 100% Free Live GPS On-Premise Store Verification */}
+          <div className="bg-white p-6 rounded-2xl border border-neutral-200/90 shadow-xs space-y-3 text-left">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold text-neutral-900">
+              100% Free Live GPS Radius Shield
+            </h3>
+            <p className="text-xs text-neutral-600 leading-relaxed">
+              Native browser HTML5 geolocation verifies that the customer is physically standing or seated inside your store or restaurant. 100% Free with 0₹ Google API cost, stops remote competitor bot reviews, and triggers Google's verified on-site ranking bonus!
+            </p>
+            <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] text-neutral-500">
+              <span>Zero Google Cloud API Keys</span>
+              <span className="text-emerald-600 font-bold">100% Free</span>
+            </div>
+          </div>
+        </div>
+
+        {/* =========================================================================
+            DEDICATED INFORMATION SECTION: LIVE GPS IN GOOGLE REVIEWS (FREE)
+           ========================================================================= */}
+        <div className="p-8 bg-gradient-to-r from-emerald-50 via-teal-50/60 to-purple-50 rounded-3xl border border-emerald-200/90 shadow-sm space-y-6 text-left">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200/70 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shrink-0">
+                <Navigation className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                  Feature Spotlight &amp; FAQ
+                </span>
+                <h3 className="text-lg sm:text-xl font-black text-neutral-900 mt-1">
+                  Live GPS Google Review Main Use Kar Sakte Hai Free?
+                </h3>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-white rounded-full border border-emerald-300 shadow-2xs text-xs font-bold text-emerald-700">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              <span>हाँ, बिल्कुल मुफ़्त (100% FREE)!</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs text-neutral-700">
+            <div className="p-4 bg-white/90 rounded-2xl border border-emerald-100 space-y-2">
+              <div className="font-bold text-neutral-900 flex items-center gap-1.5 text-sm">
+                <span className="text-emerald-600">01.</span>
+                Zero Google Maps Billing
+              </div>
+              <p className="leading-relaxed text-neutral-600">
+                You do <strong>NOT</strong> need any paid Google Cloud billing account or credit card. It uses the phone browser's built-in <code>navigator.geolocation</code> HTML5 hardware API directly.
+              </p>
+            </div>
+
+            <div className="p-4 bg-white/90 rounded-2xl border border-emerald-100 space-y-2">
+              <div className="font-bold text-neutral-900 flex items-center gap-1.5 text-sm">
+                <span className="text-emerald-600">02.</span>
+                Boosts Google Local SEO
+              </div>
+              <p className="leading-relaxed text-neutral-600">
+                Google's search algorithm heavily values reviews from accounts verified to be physically present at the business venue. Footfall-backed reviews rank your shop higher on Google Maps!
+              </p>
+            </div>
+
+            <div className="p-4 bg-white/90 rounded-2xl border border-emerald-100 space-y-2">
+              <div className="font-bold text-neutral-900 flex items-center gap-1.5 text-sm">
+                <span className="text-emerald-600">03.</span>
+                Custom Store Radius Control
+              </div>
+              <p className="leading-relaxed text-neutral-600">
+                In your business settings, tap <em>"Auto-Detect My Store GPS"</em> in 1 click and set your preferred radius (e.g. 100m, 200m, 500m). Reviewers at tables are instantly verified with a proud green badge!
+              </p>
             </div>
           </div>
         </div>

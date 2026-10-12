@@ -28,6 +28,7 @@ interface QRCodeViewProps {
   settings?: ReviewSettings;
   onPreviewFlow?: () => void;
   onSettingsUpdated?: (updated: ReviewSettings) => void;
+  onOpenLiveReview?: (slug: string) => void;
 }
 
 export const QRCodeView: React.FC<QRCodeViewProps> = ({
@@ -35,6 +36,7 @@ export const QRCodeView: React.FC<QRCodeViewProps> = ({
   settings,
   onPreviewFlow,
   onSettingsUpdated,
+  onOpenLiveReview,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -59,9 +61,21 @@ export const QRCodeView: React.FC<QRCodeViewProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
 
-  // Compute full review URL (pointing to public shareable domain)
+  // QR Mode: Smart Review Station VS Direct Google Maps Review URL
+  const [qrMode, setQrMode] = useState<'smart' | 'google'>('smart');
+
+  // Compute target URLs
   const baseUrl = getPublicBaseUrl();
-  const reviewUrl = `${baseUrl}/#review/${business.unique_slug}`;
+  const cleanBusinessSlug =
+    business.unique_slug?.trim() ||
+    (business.id ? business.id.replace(/^biz_/, '') : 'store');
+  const smartReviewUrl = `${baseUrl}/#review/${cleanBusinessSlug}`;
+  const directGoogleUrl = business.google_review_url?.startsWith('http')
+    ? business.google_review_url
+    : `https://${business.google_review_url || 'maps.google.com'}`;
+  const activeQrUrl = qrMode === 'google' ? directGoogleUrl : smartReviewUrl;
+  const reviewUrl = activeQrUrl;
+
   const accentColor = settings?.accent_color || '#6C3BFF';
 
   // Helper to draw logo onto a given QR canvas
@@ -181,7 +195,7 @@ export const QRCodeView: React.FC<QRCodeViewProps> = ({
     // First generate the base QR code with High Error Correction ('H')
     QRCode.toCanvas(
       canvas,
-      reviewUrl,
+      activeQrUrl,
       {
         width: 280,
         margin: 2,
@@ -441,7 +455,13 @@ export const QRCodeView: React.FC<QRCodeViewProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
-              window.location.hash = `#review/${business.unique_slug}`;
+              if (qrMode === 'google') {
+                window.open(directGoogleUrl, '_blank', 'noopener,noreferrer');
+              } else if (onOpenLiveReview) {
+                onOpenLiveReview(cleanBusinessSlug);
+              } else {
+                window.location.hash = `#review/${cleanBusinessSlug}`;
+              }
             }}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-neutral-800 bg-neutral-100 hover:bg-neutral-200 border border-neutral-300 rounded-lg transition-colors shadow-2xs cursor-pointer"
           >
@@ -508,15 +528,33 @@ export const QRCodeView: React.FC<QRCodeViewProps> = ({
                 </p>
               </div>
 
-              {/* QR Container Canvas */}
-              <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-2xl inline-block shadow-inner relative">
+              {/* QR Container Canvas (Clickable preview) */}
+              <div
+                onClick={() => {
+                  if (qrMode === 'google') {
+                    window.open(directGoogleUrl, '_blank', 'noopener,noreferrer');
+                  } else if (onOpenLiveReview) {
+                    onOpenLiveReview(cleanBusinessSlug);
+                  } else {
+                    window.location.hash = `#review/${cleanBusinessSlug}`;
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                title="Click QR to open live Review Station"
+                className="p-4 bg-neutral-50 hover:bg-purple-50/50 border border-neutral-200 hover:border-[#6C3BFF]/40 rounded-2xl inline-block shadow-inner relative cursor-pointer group transition-all"
+              >
                 <canvas ref={canvasRef} className="rounded-lg mx-auto" />
+                <div className="mt-2 text-[10px] font-semibold text-neutral-500 group-hover:text-[#6C3BFF] flex items-center justify-center gap-1 transition-colors">
+                  <ExternalLink className="w-3 h-3 text-[#6C3BFF]" />
+                  <span>Tap QR to test live review</span>
+                </div>
               </div>
 
               <div className="space-y-1">
                 <p className="text-xs font-bold text-neutral-800 flex items-center justify-center gap-1.5">
                   <Smartphone className="w-4 h-4 text-[#6C3BFF]" />
-                  Scan with your phone camera
+                  Scan with your phone camera or click above
                 </p>
                 <p className="text-[11px] text-neutral-500">
                   Select rating · Get personalized drafts · Publish in seconds
@@ -527,7 +565,13 @@ export const QRCodeView: React.FC<QRCodeViewProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    window.location.hash = `#review/${business.unique_slug}`;
+                    if (qrMode === 'google') {
+                      window.open(directGoogleUrl, '_blank', 'noopener,noreferrer');
+                    } else if (onOpenLiveReview) {
+                      onOpenLiveReview(cleanBusinessSlug);
+                    } else {
+                      window.location.hash = `#review/${cleanBusinessSlug}`;
+                    }
                   }}
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#6C3BFF] hover:bg-[#5A2DE2] rounded-xl transition-all shadow-xs cursor-pointer"
                 >
@@ -834,7 +878,7 @@ export const QRCodeView: React.FC<QRCodeViewProps> = ({
               <div>
                 <span className="text-neutral-500 block mb-1">Unique QR Slug:</span>
                 <div className="inline-block px-2.5 py-1 bg-purple-50 text-[#6C3BFF] font-semibold rounded-md font-mono text-xs">
-                  {business.unique_slug}
+                  {cleanBusinessSlug}
                 </div>
               </div>
             </div>
