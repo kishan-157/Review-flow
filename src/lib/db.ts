@@ -1307,31 +1307,236 @@ export function bootstrapAdminAccount(fullName: string, email: string, password:
 // ==============================================================================
 
 export async function getBusinessByUserId(userId: string): Promise<Business | null> {
+  if (!userId) return null;
+
+  // 1. Check local storage cache
+  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+  const localMatch = businesses.find((b) => b.user_id === userId);
+  if (localMatch) return localMatch;
+
+  // 2. Check Supabase
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
       const { data, error } = await supabase.from('businesses').select('*').eq('user_id', userId).single();
-      if (!error && data) return data;
+      if (!error && data) {
+        businesses.unshift(data);
+        setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+        return data;
+      }
     } catch {
-      // Supabase disconnected or query failed -> fallback smoothly to local store
+      // Supabase disconnected
     }
   }
-  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
-  return businesses.find((b) => b.user_id === userId) || null;
+
+  // 3. Check Cloud Firestore
+  try {
+    const { getDocs, collection, query, where } = await import('firebase/firestore');
+    const { db } = await import('./firebase');
+    const q = query(collection(db, 'businesses'), where('user_id', '==', userId));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const biz = snap.docs[0].data() as Business;
+      businesses.unshift(biz);
+      setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+      return biz;
+    }
+  } catch {}
+
+  // 4. Check server bootstrap
+  try {
+    await initDefaultData();
+    const freshBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+    const match = freshBiz.find((b) => b.user_id === userId);
+    if (match) return match;
+  } catch {}
+
+  // 5. Check current session business
+  const session = getCurrentSession();
+  if (session?.business && session.business.user_id === userId) {
+    return session.business;
+  }
+
+  // 6. Guarantee auto-creation of business profile if customer exists but no business was linked yet
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const userProf = profiles.find((p) => p.id === userId);
+  if (userProf && userProf.role === 'customer') {
+    const defaultBiz: Business = {
+      id: `biz_${userId}`,
+      user_id: userId,
+      business_name: userProf.full_name ? `${userProf.full_name}'s Business` : 'My Local Business',
+      unique_slug: slugify(userProf.full_name || 'business'),
+      google_review_url: 'https://maps.google.com',
+      category: 'Restaurant & Hospitality',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const curBizList = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+    curBizList.unshift(defaultBiz);
+    setStorage(STORAGE_KEYS.BUSINESSES, curBizList);
+
+    // Also guarantee default review settings
+    const curSettings = getStorage<ReviewSettings[]>(STORAGE_KEYS.REVIEW_SETTINGS, []);
+    if (!curSettings.some((s) => s.business_id === defaultBiz.id)) {
+      curSettings.unshift({
+        id: `rs_${defaultBiz.id}`,
+        business_id: defaultBiz.id,
+        language: 'en',
+        welcome_text: 'How was your experience today?',
+        thank_you_text: 'Thank you for supporting our local business! ❤️',
+        enabled: true,
+        accent_color: '#6C3BFF',
+        qr_show_logo: true,
+        qr_logo_border_style: 'circular',
+        qr_color: '#1F1735',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      setStorage(STORAGE_KEYS.REVIEW_SETTINGS, curSettings);
+    }
+    return defaultBiz;
+  }
+
+  return null;
 }
 
 export async function getBusinessBySlug(slug: string): Promise<Business | null> {
+  if (!slug) return null;
+  const cleanSlug = slug.trim().toLowerCase().replace(/[\/\?\#].*$/, '');
+  const cleanAlphaNumeric = cleanSlug.replace(/[^a-z0-9]/g, '');
+
+  // 1. Check local storage cache
+  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+  const localMatch = businesses.find(
+    (b) =>
+      (b.unique_slug && b.unique_slug.toLowerCase() === cleanSlug) ||
+      b.id.toLowerCase() === cleanSlug ||
+      (b.user_id && b.user_id.toLowerCase() === cleanSlug) ||
+      (cleanAlphaNumeric && b.unique_slug && b.unique_slug.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlphaNumeric)
+  );
+  if (localMatch) {
+    return localMatch;
+  }
+
+  // 1b. Check by customer profile code in local storage
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const matchedProf = profiles.find((p) => {
+    const pCode = (p.unique_customer_code || '').trim().toLowerCase();
+    return pCode === cleanSlug || (cleanAlphaNumeric && pCode.replace(/[^a-z0-9]/g, '') === cleanAlphaNumeric);
+  });
+  if (matchedProf) {
+    const bMatch = businesses.find((b) => b.user_id === matchedProf.id);
+    if (bMatch) return bMatch;
+  }
+
+  // 2. Fetch from Backend Server API (instant cross-device & mobile QR scan!)
+  try {
+    const res = await fetch(`/api/business/by-slug/${encodeURIComponent(cleanSlug)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.business) {
+        const foundBiz: Business = data.business;
+        const currentBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+        const idx = currentBiz.findIndex((b) => b.id === foundBiz.id);
+        if (idx !== -1) currentBiz[idx] = foundBiz;
+        else currentBiz.unshift(foundBiz);
+        setStorage(STORAGE_KEYS.BUSINESSES, currentBiz);
+
+        if (data.settings) {
+          const settList = getStorage<ReviewSettings[]>(STORAGE_KEYS.REVIEW_SETTINGS, []);
+          const sIdx = settList.findIndex((s) => s.business_id === foundBiz.id);
+          if (sIdx !== -1) settList[sIdx] = data.settings;
+          else settList.unshift(data.settings);
+          setStorage(STORAGE_KEYS.REVIEW_SETTINGS, settList);
+        }
+
+        if (data.loyaltyConfig) {
+          const lList = getStorage<LoyaltyProgramConfig[]>(STORAGE_KEYS.LOYALTY_CONFIGS, []);
+          const lIdx = lList.findIndex((l) => l.business_id === foundBiz.id);
+          if (lIdx !== -1) lList[lIdx] = data.loyaltyConfig;
+          else lList.unshift(data.loyaltyConfig);
+          setStorage(STORAGE_KEYS.LOYALTY_CONFIGS, lList);
+        }
+
+        return foundBiz;
+      }
+    }
+  } catch (err) {
+    console.warn('Backend by-slug fetch notice:', err);
+  }
+
+  // 3. Try Direct Cloud Firestore Query (100% universal across all mobile & desktop browsers)
+  try {
+    const { getDocs, collection, query, where, doc, getDoc } = await import('firebase/firestore');
+    const { db } = await import('./firebase');
+    const q = query(collection(db, 'businesses'), where('unique_slug', '==', cleanSlug));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const biz = snap.docs[0].data() as Business;
+      const currentBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+      if (!currentBiz.some((b) => b.id === biz.id)) {
+        currentBiz.unshift(biz);
+        setStorage(STORAGE_KEYS.BUSINESSES, currentBiz);
+      }
+      return biz;
+    }
+
+    // Try direct document ID match
+    const docSnap = await getDoc(doc(db, 'businesses', cleanSlug));
+    if (docSnap.exists()) {
+      const biz = docSnap.data() as Business;
+      return biz;
+    }
+  } catch (e) {
+    // Firestore offline fallback
+  }
+
+  // 4. Try Supabase if configured
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      const { data, error } = await supabase.from('businesses').select('*').eq('unique_slug', slug).single();
-      if (!error && data) return data;
+      const { data, error } = await supabase
+        .from('businesses')
+        .select('*')
+        .ilike('unique_slug', cleanSlug)
+        .single();
+      if (!error && data) {
+        businesses.unshift(data);
+        setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+        return data;
+      }
     } catch {
-      // Supabase disconnected or query failed -> fallback smoothly to local store
+      // Supabase disconnected
     }
   }
-  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
-  return businesses.find((b) => b.unique_slug.toLowerCase() === slug.toLowerCase()) || null;
+
+  // 5. Try current active session if inspecting or logged in
+  const curSession = getCurrentSession();
+  if (curSession?.business) {
+    const sb = curSession.business;
+    if (
+      sb.unique_slug?.toLowerCase() === cleanSlug ||
+      sb.id.toLowerCase() === cleanSlug ||
+      (cleanAlphaNumeric && sb.unique_slug?.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlphaNumeric)
+    ) {
+      return sb;
+    }
+  }
+
+  // 6. Try bootstrap data sync from server
+  try {
+    await initDefaultData();
+    const freshBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+    const match = freshBiz.find(
+      (b) =>
+        (b.unique_slug && b.unique_slug.toLowerCase() === cleanSlug) ||
+        b.id.toLowerCase() === cleanSlug ||
+        (cleanAlphaNumeric && b.unique_slug && b.unique_slug.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanAlphaNumeric)
+    );
+    if (match) return match;
+  } catch {}
+
+  return null;
 }
 
 export async function updateBusiness(
@@ -2477,7 +2682,10 @@ export async function startImpersonation(adminUser: Profile, targetCustomer: Pro
   }
 
   const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
-  const targetBiz = businesses.find((b) => b.user_id === targetCustomer.id);
+  let targetBiz = businesses.find((b) => b.user_id === targetCustomer.id);
+  if (!targetBiz) {
+    targetBiz = (await getBusinessByUserId(targetCustomer.id)) || undefined;
+  }
 
   // Record audit log
   const auditLogs = getStorage<ImpersonationAuditLog[]>(STORAGE_KEYS.IMPERSONATION_LOGS, []);

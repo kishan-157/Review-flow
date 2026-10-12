@@ -42,23 +42,39 @@ export default function App() {
       }
     }
 
-    // Comprehensive route checker supporting hash, pathname, and search params
+    // Comprehensive route checker supporting hash (#review/, #/review/), pathname (/review/), and search params (?review=, ?slug=, ?b=)
     const checkRoute = () => {
       const hash = window.location.hash;
       const pathname = window.location.pathname.toLowerCase();
       const search = new URLSearchParams(window.location.search);
 
-      if (hash.startsWith('#review/')) {
-        const slug = hash.replace('#review/', '').trim();
-        if (slug) {
-          setActiveReviewSlug(slug);
-          setCurrentView('review');
-          return;
+      let extractedSlug: string | null = null;
+
+      // 1. Check hash: #review/slug, #/review/slug, #review=slug
+      if (hash) {
+        const cleanHash = hash.replace(/^#\/?/, '');
+        if (cleanHash.startsWith('review/')) {
+          extractedSlug = cleanHash.replace(/^review\//, '');
+        } else if (cleanHash.startsWith('review=')) {
+          extractedSlug = cleanHash.replace(/^review=/, '');
         }
-      } else if (pathname.startsWith('/review/')) {
-        const slug = pathname.replace('/review/', '').trim();
-        if (slug) {
-          setActiveReviewSlug(slug);
+      }
+
+      // 2. Check pathname: /review/slug
+      if (!extractedSlug && pathname.startsWith('/review/')) {
+        extractedSlug = pathname.replace(/^\/review\//, '');
+      }
+
+      // 3. Check search params: ?review=slug, ?slug=slug, ?b=slug
+      if (!extractedSlug) {
+        extractedSlug = search.get('review') || search.get('slug') || search.get('b') || null;
+      }
+
+      if (extractedSlug) {
+        // Strip any trailing slashes, hash artifacts, or nested query strings
+        const cleanSlug = extractedSlug.split('?')[0].split('&')[0].replace(/\/+$/, '').trim().toLowerCase();
+        if (cleanSlug) {
+          setActiveReviewSlug(cleanSlug);
           setCurrentView('review');
           return;
         }
@@ -183,7 +199,11 @@ export default function App() {
         <ReviewExperience
           businessSlug={activeReviewSlug}
           onBackToApp={() => {
+            setActiveReviewSlug(null);
             window.location.hash = '';
+            if (window.location.search.includes('review') || window.location.search.includes('slug')) {
+              window.history.replaceState(null, '', window.location.pathname || '/');
+            }
             setCurrentView(session ? (session.user.role === 'admin' ? 'admin' : 'dashboard') : 'landing');
           }}
         />

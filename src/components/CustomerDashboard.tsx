@@ -3280,7 +3280,23 @@ Please generate:
               <QRCodeView
                 business={business}
                 settings={settings || undefined}
-                onPreviewFlow={() => settings && onPreviewReviewFlow(business, settings)}
+                onPreviewFlow={() => {
+                  const safeSettings: ReviewSettings = settings || {
+                    id: `rs_${business.id}`,
+                    business_id: business.id,
+                    language: 'en',
+                    welcome_text: 'How was your dining experience with us today?',
+                    thank_you_text: 'Thank you for supporting our local business! ❤️',
+                    enabled: true,
+                    accent_color: '#6C3BFF',
+                    qr_show_logo: true,
+                    qr_logo_border_style: 'circular',
+                    qr_color: '#1F1735',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                  };
+                  onPreviewReviewFlow(business, safeSettings);
+                }}
                 onSettingsUpdated={(updated) => setSettings(updated)}
               />
             )}

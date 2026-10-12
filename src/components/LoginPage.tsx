@@ -365,7 +365,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
       {/* Simple Footer */}
       <footer className="relative z-10 px-6 py-4 text-center text-xs text-neutral-600">
-        LocalBoost AI · Smart NFC &amp; Dynamic QR Review Platform
+        LocalBoost AI · Smart QR Review &amp; Customer Growth Platform
       </footer>
     </div>
   );

@@ -354,26 +354,130 @@ app.post('/api/analytics/record', (req, res) => {
   }
 });
 
-// Full client-to-server data reconciliation (keeps everything synced)
+// Public endpoint to look up business by unique_slug for QR review scanning
+app.get('/api/business/by-slug/:slug', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const rawSlug = (req.params.slug || '').trim();
+    const cleanSlug = rawSlug.toLowerCase().replace(/[\/\?\#].*$/, '');
+    const cleanAlphaNumeric = cleanSlug.replace(/[^a-z0-9]/g, '');
+
+    // 1. Find business by unique_slug, id, or user_id
+    let biz = db.businesses.find((b) => {
+      const bSlug = (b.unique_slug || '').trim().toLowerCase();
+      const bId = (b.id || '').trim().toLowerCase();
+      const bUserId = (b.user_id || '').trim().toLowerCase();
+      return (
+        bSlug === cleanSlug ||
+        bId === cleanSlug ||
+        bUserId === cleanSlug ||
+        (cleanAlphaNumeric && bSlug.replace(/[^a-z0-9]/g, '') === cleanAlphaNumeric)
+      );
+    });
+
+    // 2. If not found, match by user customer code (e.g. LB-CUS-EAM670 or lbcuseam670)
+    if (!biz) {
+      const matchedProfile = db.profiles.find((p) => {
+        const pCode = (p.unique_customer_code || '').trim().toLowerCase();
+        const pEmail = (p.email || '').trim().toLowerCase();
+        return (
+          pCode === cleanSlug ||
+          (cleanAlphaNumeric && pCode.replace(/[^a-z0-9]/g, '') === cleanAlphaNumeric) ||
+          pEmail === cleanSlug
+        );
+      });
+      if (matchedProfile) {
+        biz = db.businesses.find((b) => b.user_id === matchedProfile.id);
+      }
+    }
+
+    if (!biz) {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+
+    let settings = db.reviewSettings.find((s) => s.business_id === biz.id);
+    if (!settings) {
+      settings = {
+        id: `rs_${biz.id}`,
+        business_id: biz.id,
+        language: 'en' as const,
+        welcome_text: 'How was your experience with us today?',
+        thank_you_text: 'Thank you for supporting our local business! ❤️',
+        enabled: true,
+        accent_color: '#6C3BFF',
+        qr_show_logo: true,
+        qr_logo_border_style: 'circular' as const,
+        qr_color: '#1F1735',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    const loyaltyConfig = db.loyaltyConfigs?.find((l) => l.business_id === biz.id) || null;
+
+    return res.json({
+      success: true,
+      business: biz,
+      settings,
+      loyaltyConfig,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Server error' });
+  }
+});
+
+// Full client-to-server data reconciliation (keeps everything synced across all mobile devices)
 app.post('/api/sync/push', (req, res) => {
   try {
     const db = loadServerDb();
-    const { profiles = [], businesses = [], passwords = {} } = req.body;
+    const { profiles = [], businesses = [], reviewSettings = [], loyaltyConfigs = [], passwords = {} } = req.body;
 
     profiles.forEach((p: any) => {
-      if (!db.profiles.some((ep) => ep.id === p.id || ep.email.toLowerCase() === p.email.toLowerCase())) {
+      const idx = db.profiles.findIndex((ep) => ep.id === p.id || ep.email.toLowerCase() === p.email.toLowerCase());
+      if (idx !== -1) {
+        db.profiles[idx] = { ...db.profiles[idx], ...p };
+      } else {
         db.profiles.push(p);
       }
     });
 
     businesses.forEach((b: any) => {
-      if (!db.businesses.some((eb) => eb.id === b.id)) {
+      const idx = db.businesses.findIndex(
+        (eb) =>
+          eb.id === b.id ||
+          (eb.unique_slug && b.unique_slug && eb.unique_slug.toLowerCase() === b.unique_slug.toLowerCase())
+      );
+      if (idx !== -1) {
+        db.businesses[idx] = { ...db.businesses[idx], ...b };
+      } else {
         db.businesses.push(b);
       }
     });
 
+    if (Array.isArray(reviewSettings)) {
+      reviewSettings.forEach((s: any) => {
+        const idx = db.reviewSettings.findIndex((es) => es.id === s.id || es.business_id === s.business_id);
+        if (idx !== -1) {
+          db.reviewSettings[idx] = { ...db.reviewSettings[idx], ...s };
+        } else {
+          db.reviewSettings.push(s);
+        }
+      });
+    }
+
+    if (Array.isArray(loyaltyConfigs)) {
+      loyaltyConfigs.forEach((l: any) => {
+        const idx = db.loyaltyConfigs.findIndex((el) => el.id === l.id || el.business_id === l.business_id);
+        if (idx !== -1) {
+          db.loyaltyConfigs[idx] = { ...db.loyaltyConfigs[idx], ...l };
+        } else {
+          db.loyaltyConfigs.push(l);
+        }
+      });
+    }
+
     Object.entries(passwords).forEach(([k, v]) => {
-      if (!db.passwords[k.toLowerCase()] && typeof v === 'string') {
+      if (typeof v === 'string' && v) {
         db.passwords[k.toLowerCase()] = v;
       }
     });

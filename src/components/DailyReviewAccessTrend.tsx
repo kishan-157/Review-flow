@@ -142,7 +142,7 @@ export const DailyReviewAccessTrend: React.FC<DailyReviewAccessTrendProps> = ({
                 Daily Review Landing Page Access Trend
               </h3>
               <p className="text-xs text-neutral-500">
-                Live daily tracking of customers tapping NFC or scanning QR standees to view your review page
+                Live daily tracking of customers scanning tabletop QR standees to view your review page
               </p>
             </div>
           </div>
@@ -412,7 +412,7 @@ export const DailyReviewAccessTrend: React.FC<DailyReviewAccessTrendProps> = ({
         <div className="flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-[#6C3BFF]" />
           <span>
-            Every physical NFC tap or tabletop QR code scan increments this daily access log in real-time.
+            Every tabletop QR code scan increments this daily access log in real-time.
           </span>
         </div>
         <div className="flex items-center gap-2 font-mono font-medium text-neutral-600">

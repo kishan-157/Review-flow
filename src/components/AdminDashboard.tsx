@@ -1447,6 +1447,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              {/* Direct QR Review Button for this customer's business */}
+                              {row.business?.unique_slug && (
+                                <button
+                                  onClick={() => {
+                                    window.location.hash = `#review/${row.business!.unique_slug}`;
+                                  }}
+                                  title={`Open ${row.business.business_name} QR Review`}
+                                  className="px-2.5 py-1 text-[11px] font-semibold text-neutral-800 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors flex items-center gap-1 border border-neutral-300 shrink-0 cursor-pointer"
+                                >
+                                  <QrCode className="w-3 h-3 text-[#6C3BFF]" />
+                                  <span>QR Review</span>
+                                </button>
+                              )}
+
                               {/* Open Customer Settings Action */}
                               <button
                                 onClick={() => handleOpenCustomerSettings(row)}
@@ -2559,6 +2573,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <Settings className="w-3.5 h-3.5" />
                           <span>Configure Settings</span>
                         </button>
+                        {row.business?.unique_slug && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              window.location.hash = `#review/${row.business!.unique_slug}`;
+                            }}
+                            title={`Open ${row.business.business_name} QR Review`}
+                            className="p-2 text-[#6C3BFF] hover:text-white hover:bg-[#6C3BFF] bg-purple-50 border border-purple-200 rounded-xl transition-colors cursor-pointer"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleStartInspection(row.profile)}
