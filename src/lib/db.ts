@@ -2865,4 +2865,44 @@ export async function verifyLoyaltyCardByCode(
   return card || null;
 }
 
+/**
+ * Searches loyalty cards by mobile number, customer name, or voucher code.
+ */
+export async function searchLoyaltyCards(
+  businessId: string,
+  query: string
+): Promise<LoyaltyCard[]> {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('loyalty_cards')
+        .select('*')
+        .eq('business_id', businessId)
+        .or(`voucher_code.ilike.%${q}%,customer_phone.ilike.%${q}%,customer_name.ilike.%${q}%`)
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        return data as LoyaltyCard[];
+      }
+    } catch {
+      // Fallback to storage
+    }
+  }
+
+  const cards = getStorage<LoyaltyCard[]>(STORAGE_KEYS.LOYALTY_CARDS, []);
+  return cards
+    .filter(
+      (c) =>
+        c.business_id === businessId &&
+        (c.voucher_code.toLowerCase().includes(q) ||
+          c.customer_phone.toLowerCase().includes(q) ||
+          c.customer_name.toLowerCase().includes(q))
+    )
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
 

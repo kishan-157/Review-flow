@@ -188,8 +188,9 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
         business.category
       );
       setEditableSuggestions(result.suggestions);
-      if (result.suggestions.length > 0 && !selectedReviewText) {
-        setSelectedReviewText(result.suggestions[0]);
+      if (result.suggestions.length > 0) {
+        const curIdx = rotationOffset % result.suggestions.length;
+        setSelectedReviewText(result.suggestions[curIdx] || result.suggestions[0]);
       }
     } else {
       setEditableSuggestions([]);
@@ -367,42 +368,56 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
         </div>
       )}
 
-      {/* Language Switcher Bar */}
-      <div className="max-w-md mx-auto pt-4 px-4 flex justify-end">
-        <div className="inline-flex items-center gap-1 bg-white border border-neutral-200 rounded-lg p-1 shadow-xs text-xs">
-          <Globe className="w-3.5 h-3.5 text-neutral-400 ml-1.5" />
-          <button
-            onClick={() => setLanguage('en')}
-            className={`px-2 py-1 rounded-md font-medium transition-colors ${
-              language === 'en' ? 'bg-[#6C3BFF] text-white' : 'text-neutral-600 hover:text-neutral-900'
-            }`}
-          >
-            English
-          </button>
-          <button
-            onClick={() => setLanguage('hi')}
-            className={`px-2 py-1 rounded-md font-medium transition-colors ${
-              language === 'hi' ? 'bg-[#6C3BFF] text-white' : 'text-neutral-600 hover:text-neutral-900'
-            }`}
-          >
-            हिंदी
-          </button>
-          <button
-            onClick={() => setLanguage('gu')}
-            className={`px-2 py-1 rounded-md font-medium transition-colors ${
-              language === 'gu' ? 'bg-[#6C3BFF] text-white' : 'text-neutral-600 hover:text-neutral-900'
-            }`}
-          >
-            ગુજરાતી
-          </button>
-        </div>
-      </div>
-
       {/* Main Review Card Container */}
-      <main className="max-w-md mx-auto mt-3 px-4">
+      <main className="max-w-md mx-auto pt-4 px-4">
         <div className="bg-white rounded-3xl shadow-xl shadow-purple-500/5 border border-neutral-200/80 overflow-hidden">
           {/* Business Header */}
           <div className="p-6 text-center border-b border-neutral-100 bg-gradient-to-b from-white to-purple-50/30">
+            {/* Front & Center Language Selector (English, हिंदी, ગુજરાતી) - Placed at Very Top in Front */}
+            <div className="mb-4">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block mb-1.5">
+                Select Language / भाषा चुनें / ભાષા પસંદ કરો
+              </span>
+              <div className="flex items-center justify-center gap-1.5 p-1 bg-white border border-purple-200/90 rounded-2xl shadow-xs max-w-xs mx-auto">
+                <button
+                  type="button"
+                  onClick={() => setLanguage('en')}
+                  className={`flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    language === 'en'
+                      ? 'bg-[#6C3BFF] text-white shadow-xs'
+                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                  }`}
+                >
+                  <span>🇬🇧</span>
+                  <span>English</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('hi')}
+                  className={`flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    language === 'hi'
+                      ? 'bg-[#6C3BFF] text-white shadow-xs'
+                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                  }`}
+                >
+                  <span>🇮🇳</span>
+                  <span>हिंदी</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('gu')}
+                  className={`flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    language === 'gu'
+                      ? 'bg-[#6C3BFF] text-white shadow-xs'
+                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50'
+                  }`}
+                >
+                  <span>🇮🇳</span>
+                  <span>ગુજરાતી</span>
+                </button>
+              </div>
+            </div>
+
             {business.logo_url ? (
               <img
                 src={business.logo_url}
@@ -735,59 +750,88 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                 {/* Interactive Star Selector at Top */}
                 {renderInteractiveStars(rating)}
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-neutral-800 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#6C3BFF]" />
-                      <span>
-                        {language === 'hi'
-                          ? 'रिव्यू सुझाव (Review Suggestions)'
-                          : language === 'gu'
-                          ? 'રિવ્યૂ સૂચનો (Review Suggestions)'
-                          : 'Review Suggestions'}
-                      </span>
-                    </span>
-                    <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
-                      1-Click Copy
+                {/* Direct Language Switcher in Step 3 - Visible Right in Front of Customer */}
+                <div className="flex items-center justify-between gap-2 p-2 bg-purple-50/80 border border-purple-200/80 rounded-2xl">
+                  <div className="flex items-center gap-1.5 pl-1">
+                    <span className="text-xs">🌐</span>
+                    <span className="text-xs font-bold text-neutral-800">
+                      {language === 'hi' ? 'भाषा (Language):' : language === 'gu' ? 'ભાષા (Language):' : 'Language:'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-neutral-500 leading-relaxed">
-                    {language === 'hi'
-                      ? 'तीनों में से किसी भी सुझाव पर सिंगल क्लिक करें — वह तुरंत कॉपी हो जाएगा!'
-                      : language === 'gu'
-                      ? 'કોઈપણ સૂચન પર ક્લિક કરો — તે તરત જ કોપી થઈ જશે!'
-                      : 'Tap any suggestion below to copy instantly, then paste on Google Reviews!'}
-                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setLanguage('en')}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        language === 'en'
+                          ? 'bg-[#6C3BFF] text-white shadow-xs'
+                          : 'bg-white text-neutral-600 hover:text-neutral-900 border border-neutral-200'
+                      }`}
+                    >
+                      English
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLanguage('hi')}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        language === 'hi'
+                          ? 'bg-[#6C3BFF] text-white shadow-xs'
+                          : 'bg-white text-neutral-600 hover:text-neutral-900 border border-neutral-200'
+                      }`}
+                    >
+                      हिंदी
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLanguage('gu')}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        language === 'gu'
+                          ? 'bg-[#6C3BFF] text-white shadow-xs'
+                          : 'bg-white text-neutral-600 hover:text-neutral-900 border border-neutral-200'
+                      }`}
+                    >
+                      ગુજરાતી
+                    </button>
+                  </div>
                 </div>
 
-                {/* 3 ROTATING SUGGESTIONS FROM THE 10-12 KEYWORD DRAFTS POOL */}
-                {editableSuggestions.length > 3 && (
-                  <div className="flex items-center justify-between p-2.5 bg-purple-50/80 rounded-2xl border border-purple-200/80">
-                    <div className="flex items-center gap-1.5 text-xs text-purple-950 font-semibold">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-bold text-neutral-800 flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-[#6C3BFF]" />
                       <span>
                         {language === 'hi'
-                          ? `ड्राफ्ट ${(rotationOffset % editableSuggestions.length) + 1} - ${Math.min((rotationOffset % editableSuggestions.length) + 3, editableSuggestions.length)} (कुल ${editableSuggestions.length} कीवर्ड ड्राफ्ट्स)`
+                          ? 'रिव्यू सुझाव (सिंगल क्लिक से कॉपी करें)'
                           : language === 'gu'
-                          ? `ડ્રાફ્ટ ${(rotationOffset % editableSuggestions.length) + 1} - ${Math.min((rotationOffset % editableSuggestions.length) + 3, editableSuggestions.length)} (કુલ ${editableSuggestions.length} કીવર્ડ ડ્રાફ્ટ્સ)`
-                          : `Drafts ${(rotationOffset % editableSuggestions.length) + 1} - ${Math.min((rotationOffset % editableSuggestions.length) + 3, editableSuggestions.length)} of ${editableSuggestions.length} Keyword Drafts`}
+                          ? 'રિવ્યૂ સૂચનો (સિંગલ ક્લિકથી કોપી કરો)'
+                          : 'Review Suggestions (1-Click Copy)'}
                       </span>
-                    </div>
+                    </h3>
+                    <p className="text-[11px] text-neutral-500 mt-0.5">
+                      {language === 'hi'
+                        ? 'तीनों में से किसी भी सुझाव पर टैप करें — वह तुरंत कॉपी हो जाएगा!'
+                        : language === 'gu'
+                        ? 'કોઈપણ સૂચન પર ક્લિક કરો — તે તરત જ કોપી થઈ જશે!'
+                        : 'Tap any suggestion below to copy instantly, then paste on Google Reviews!'}
+                    </p>
+                  </div>
+
+                  {editableSuggestions.length > 3 && (
                     <button
                       type="button"
                       onClick={handleRotateSuggestions}
-                      className="px-3 py-1.5 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      className="px-3 py-1.5 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
                     >
-                      <RotateCw className="w-3 h-3" />
+                      <RotateCw className="w-3.5 h-3.5" />
                       <span>
-                        {language === 'hi' ? '🔄 अन्य 3 बदलें' : language === 'gu' ? '🔄 બીજા 3 બદલો' : '🔄 Rotate Next 3'}
+                        {language === 'hi' ? '🔄 सुझाव बदलें' : language === 'gu' ? '🔄 સૂચનો બદલો' : '🔄 Change Suggestions'}
                       </span>
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* ALL 3 SUGGESTIONS VISIBLE RIGHT IN FRONT OF CUSTOMER */}
-                <div className="space-y-3">
+                <div key={rotationOffset} className="space-y-3 animate-in fade-in duration-300">
                   {[0, 1, 2].map((slotIdx) => {
                     const actualIdx = (rotationOffset + slotIdx) % (editableSuggestions.length || 1);
                     const suggestionText = editableSuggestions[actualIdx];
@@ -797,7 +841,7 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
 
                     return (
                       <div
-                        key={actualIdx}
+                        key={`${rotationOffset}-${slotIdx}`}
                         onClick={() => handleCopySuggestion(suggestionText, actualIdx)}
                         className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative group ${
                           isCopied || isSelected

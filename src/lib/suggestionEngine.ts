@@ -129,27 +129,28 @@ export function generateReviewSuggestions(
 
   // 1. If customer business has custom suggestions configured from their prompt or manual input, use them!
   if (rating >= 4) {
-    if (customAiSuggestions?.positive && customAiSuggestions.positive.length >= 10) {
-      const validDrafts = customAiSuggestions.positive.map((s) => s.trim()).filter((s) => s.length > 5);
-      if (validDrafts.length >= 10) {
-        return {
-          suggestions: validDrafts,
-          notice: `Suggestions crafted for ${safeName}. Tap any draft to edit before opening Google Maps.`,
-        };
-      }
-    }
-
-    // Generate 12 distinct keyword-driven drafts based on the active keywords or category highlights
     const allKeywords = Array.from(new Set([
       ...(categories || []),
       ...(customAiKeywords || []),
       ...getDefaultCategoriesForCategory(businessCategory),
     ])).filter(k => k && k.trim().length > 1);
 
+    // If English and business has at least 10 custom drafts in English, use them
+    if (language === 'en' && customAiSuggestions?.positive && customAiSuggestions.positive.length >= 10) {
+      const validDrafts = customAiSuggestions.positive.map((s) => s.trim()).filter((s) => s.length > 5);
+      if (validDrafts.length >= 10) {
+        return {
+          suggestions: validDrafts,
+          notice: `Suggestions crafted for ${safeName}. Tap any suggestion to edit before opening Google Maps.`,
+        };
+      }
+    }
+
+    // Always generate 12 authentic keyword-driven suggestions in the active language (English, Hindi, or Gujarati)
     const pool = generate12KeywordDrafts(safeName, allKeywords, language, businessCategory);
     return {
       suggestions: pool,
-      notice: `Suggestions crafted for ${safeName}. You can tap to edit any draft before sharing on Google!`,
+      notice: `Suggestions crafted for ${safeName}. You can tap to edit any suggestion before sharing on Google!`,
     };
   }
 

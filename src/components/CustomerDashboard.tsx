@@ -81,6 +81,7 @@ import {
   getLoyaltyCardsByBusinessId,
   redeemLoyaltyCard,
   verifyLoyaltyCardByCode,
+  searchLoyaltyCards,
   issueLoyaltyCard,
   getBusinessByUserId,
 } from '../lib/db';
@@ -242,12 +243,24 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [isSavingLoyalty, setIsSavingLoyalty] = useState(false);
   const [loyaltySaveSuccess, setLoyaltySaveSuccess] = useState<string | null>(null);
 
-  // Counter Staff Voucher Verification State
+  // Counter Staff Voucher Verification State (Mobile / Name / Code / Smart Search)
   const [verifyCodeInput, setVerifyCodeInput] = useState('');
+  const [cashierSearchMode, setCashierSearchMode] = useState<'all' | 'phone' | 'name' | 'code'>('all');
+  const [matchingCards, setMatchingCards] = useState<LoyaltyCard[]>([]);
   const [verifiedCard, setVerifiedCard] = useState<LoyaltyCard | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [redeemSuccessMsg, setRedeemSuccessMsg] = useState<string | null>(null);
+
+  // Manual Setup Checklist completed overrides
+  const [manualChecklistDone, setManualChecklistDone] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(`checklist_${business?.id || 'default'}`);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
 
   // Loyalty Table Filter & Search
   const [loyaltySearch, setLoyaltySearch] = useState('');
@@ -445,22 +458,73 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
   };
 
-  const handleVerifyVoucher = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!verifyCodeInput.trim() || !business) return;
+  const handleVerifyVoucher = async (e?: React.FormEvent, directTerm?: string) => {
+    if (e) e.preventDefault();
+    const term = (directTerm !== undefined ? directTerm : verifyCodeInput).trim();
+    if (!term || !business) return;
     setIsVerifying(true);
     setVerifyError(null);
-    setVerifiedCard(null);
+    setMatchingCards([]);
     setRedeemSuccessMsg(null);
+
     try {
-      const card = await verifyLoyaltyCardByCode(verifyCodeInput.trim(), business.id);
-      if (!card) {
-        setVerifyError(`No loyalty card found matching code "${verifyCodeInput.trim()}". Please double-check the voucher.`);
+      const qLower = term.toLowerCase();
+      const digitsOnly = term.replace(/\D/g, '');
+
+      // 1. Search in local loyaltyCards state first
+      let matches: LoyaltyCard[] = [];
+      if (cashierSearchMode === 'phone') {
+        matches = loyaltyCards.filter(
+          (c) =>
+            c.customer_phone.includes(term) ||
+            (digitsOnly.length >= 3 && c.customer_phone.replace(/\D/g, '').includes(digitsOnly))
+        );
+      } else if (cashierSearchMode === 'name') {
+        matches = loyaltyCards.filter((c) => c.customer_name.toLowerCase().includes(qLower));
+      } else if (cashierSearchMode === 'code') {
+        matches = loyaltyCards.filter((c) => c.voucher_code.toLowerCase().includes(qLower));
       } else {
-        setVerifiedCard(card);
+        // Universal Smart Search
+        matches = loyaltyCards.filter((c) => {
+          const matchCode = c.voucher_code.toLowerCase().includes(qLower);
+          const matchName = c.customer_name.toLowerCase().includes(qLower);
+          const matchPhone =
+            c.customer_phone.includes(term) ||
+            (digitsOnly.length >= 3 && c.customer_phone.replace(/\D/g, '').includes(digitsOnly));
+          return matchCode || matchName || matchPhone;
+        });
+      }
+
+      // 2. If no local match, search backend database
+      if (matches.length === 0) {
+        const serverCards = await searchLoyaltyCards(business.id, term);
+        if (serverCards && serverCards.length > 0) {
+          matches = serverCards;
+        } else {
+          // Try exact voucher code verify as last fallback
+          const singleCard = await verifyLoyaltyCardByCode(term, business.id);
+          if (singleCard) {
+            matches = [singleCard];
+          }
+        }
+      }
+
+      if (matches.length === 0) {
+        setVerifiedCard(null);
+        setVerifyError(
+          `No voucher found matching "${term}". Please check the mobile number, name, or voucher code.`
+        );
+      } else if (matches.length === 1) {
+        setVerifiedCard(matches[0]);
+        setMatchingCards([]);
+      } else {
+        // Multiple customer cards found
+        setMatchingCards(matches);
+        const activeOne = matches.find((m) => m.status === 'active') || matches[0];
+        setVerifiedCard(activeOne);
       }
     } catch (err: any) {
-      setVerifyError(err.message || 'Error verifying voucher code.');
+      setVerifyError(err.message || 'Error searching voucher.');
     } finally {
       setIsVerifying(false);
     }
@@ -2131,33 +2195,121 @@ Please generate:
 
                 {/* Counter Staff POS Voucher Verification Box */}
                 <div className="bg-white rounded-2xl border-2 border-purple-200 p-5 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold">
-                        <ShieldCheck className="w-4 h-4" />
+                      <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold shadow-2xs">
+                        <ShieldCheck className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="text-xs font-bold text-neutral-900">
-                          Cashier Counter Voucher Verification & Redemption
+                        <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                          <span>Cashier Counter Voucher Verification & Redemption</span>
+                          <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                            POS Billing Tool
+                          </span>
                         </h3>
                         <p className="text-[11px] text-neutral-500">
-                          When a customer presents their Digital Card at billing, verify their voucher code or scan QR here
+                          Search by Mobile Number, Customer Name, or Voucher Code when a customer arrives at billing
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
-                      POS Tool
-                    </span>
                   </div>
 
-                  <form onSubmit={handleVerifyVoucher} className="flex flex-col sm:flex-row items-center gap-2.5">
+                  {/* Search Mode Tabs (Easy Option by Mobile, Name, or Code) */}
+                  <div className="flex flex-wrap items-center gap-1.5 p-1 bg-neutral-100 rounded-xl max-w-fit">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCashierSearchMode('all');
+                        setVerifyError(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        cashierSearchMode === 'all'
+                          ? 'bg-white text-[#6C3BFF] shadow-2xs'
+                          : 'text-neutral-600 hover:text-neutral-900'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Smart Search (Any)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCashierSearchMode('phone');
+                        setVerifyError(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        cashierSearchMode === 'phone'
+                          ? 'bg-white text-[#6C3BFF] shadow-2xs'
+                          : 'text-neutral-600 hover:text-neutral-900'
+                      }`}
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>📱 Mobile Number</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCashierSearchMode('name');
+                        setVerifyError(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        cashierSearchMode === 'name'
+                          ? 'bg-white text-[#6C3BFF] shadow-2xs'
+                          : 'text-neutral-600 hover:text-neutral-900'
+                      }`}
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>👤 Customer Name</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCashierSearchMode('code');
+                        setVerifyError(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        cashierSearchMode === 'code'
+                          ? 'bg-white text-[#6C3BFF] shadow-2xs'
+                          : 'text-neutral-600 hover:text-neutral-900'
+                      }`}
+                    >
+                      <Tag className="w-3.5 h-3.5" />
+                      <span>🎟️ Voucher Code</span>
+                    </button>
+                  </div>
+
+                  {/* Search Form */}
+                  <form onSubmit={(e) => handleVerifyVoucher(e)} className="flex flex-col sm:flex-row items-center gap-2.5">
                     <div className="relative flex-1 w-full">
+                      {cashierSearchMode === 'phone' ? (
+                        <Phone className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                      ) : cashierSearchMode === 'name' ? (
+                        <User className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                      ) : (
+                        <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
+                      )}
                       <input
                         type="text"
-                        placeholder="Enter voucher code (e.g. VIP-FOOD-7842)..."
+                        placeholder={
+                          cashierSearchMode === 'phone'
+                            ? 'Enter customer 10-digit mobile number (e.g. 9876543210)...'
+                            : cashierSearchMode === 'name'
+                            ? 'Enter customer name (e.g. Rahul Sharma, Pooja)...'
+                            : cashierSearchMode === 'code'
+                            ? 'Enter voucher code (e.g. VIP-FOOD-7842)...'
+                            : 'Search by mobile number, customer name, or voucher code...'
+                        }
                         value={verifyCodeInput}
-                        onChange={(e) => setVerifyCodeInput(e.target.value.toUpperCase())}
-                        className="w-full pl-3 pr-10 py-2.5 text-xs font-mono font-bold tracking-wider uppercase bg-neutral-50 border border-neutral-300 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#6C3BFF]"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setVerifyCodeInput(val);
+                          if (!val.trim()) {
+                            setVerifiedCard(null);
+                            setMatchingCards([]);
+                            setVerifyError(null);
+                          }
+                        }}
+                        className="w-full pl-9 pr-10 py-2.5 text-xs font-medium bg-neutral-50 border border-neutral-300 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#6C3BFF]"
                       />
                       {verifyCodeInput && (
                         <button
@@ -2165,43 +2317,140 @@ Please generate:
                           onClick={() => {
                             setVerifyCodeInput('');
                             setVerifiedCard(null);
+                            setMatchingCards([]);
                             setVerifyError(null);
                           }}
-                          className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-700 text-xs"
+                          className="absolute right-3 top-2.5 text-neutral-400 hover:text-neutral-700 text-xs cursor-pointer p-0.5"
                         >
-                          ×
+                          ✕
                         </button>
                       )}
                     </div>
                     <button
                       type="submit"
                       disabled={isVerifying || !verifyCodeInput.trim()}
-                      className="w-full sm:w-auto px-5 py-2.5 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                      className="w-full sm:w-auto px-6 py-2.5 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0"
                     >
                       <Search className="w-3.5 h-3.5" />
-                      <span>{isVerifying ? 'Verifying...' : 'Verify Voucher'}</span>
+                      <span>{isVerifying ? 'Searching...' : 'Search & Verify'}</span>
                     </button>
                   </form>
 
+                  {/* Quick-Pick Pills: Recent Active Cards */}
+                  {loyaltyCards.filter((c) => c.status === 'active' && new Date(c.expires_at).getTime() >= Date.now()).length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                      <span className="text-[11px] font-bold text-neutral-500 flex items-center gap-1">
+                        <span>⚡ Quick Pick (Recent Customers):</span>
+                      </span>
+                      {loyaltyCards
+                        .filter((c) => c.status === 'active' && new Date(c.expires_at).getTime() >= Date.now())
+                        .slice(0, 4)
+                        .map((card) => (
+                          <button
+                            key={card.id}
+                            type="button"
+                            onClick={() => {
+                              setVerifyCodeInput(card.customer_phone || card.voucher_code);
+                              setVerifiedCard(card);
+                              setMatchingCards([]);
+                              setVerifyError(null);
+                            }}
+                            className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs hover:scale-[1.02]"
+                          >
+                            <span className="font-bold">{card.customer_name}</span>
+                            <span className="text-purple-600 font-mono">({card.customer_phone.slice(-4)})</span>
+                            <span className="text-[10px] font-bold bg-white text-[#6C3BFF] px-1 rounded">
+                              {card.voucher_code}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+
+                  {/* Multiple Matching Cards Found Box */}
+                  {matchingCards.length > 1 && (
+                    <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2 animate-in fade-in">
+                      <div className="flex items-center justify-between text-xs text-amber-900 font-bold">
+                        <span>Found {matchingCards.length} matching customer cards — Click to select:</span>
+                        <span className="text-[11px] font-normal text-amber-700">Choose one to redeem</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {matchingCards.map((mCard) => (
+                          <div
+                            key={mCard.id}
+                            onClick={() => {
+                              setVerifiedCard(mCard);
+                              setVerifyCodeInput(mCard.voucher_code);
+                            }}
+                            className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                              verifiedCard?.id === mCard.id
+                                ? 'bg-white border-[#6C3BFF] ring-2 ring-[#6C3BFF]/20 shadow-xs'
+                                : 'bg-white/80 border-amber-200 hover:border-[#6C3BFF]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-bold text-neutral-900">{mCard.customer_name}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                mCard.status === 'active'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-neutral-100 text-neutral-600'
+                              }`}>
+                                {mCard.status}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-neutral-500 font-mono">📱 {mCard.customer_phone}</div>
+                            <div className="text-[11px] font-mono font-bold text-purple-900 mt-0.5">🎟️ {mCard.voucher_code}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Verification Error Notice */}
                   {verifyError && (
-                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span>{verifyError}</span>
+                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>{verifyError}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCashierSearchMode('all');
+                          setVerifyError(null);
+                        }}
+                        className="text-[11px] font-bold text-rose-700 hover:underline cursor-pointer shrink-0"
+                      >
+                        Try Smart Search
+                      </button>
                     </div>
                   )}
 
                   {/* Redeem Success Notice */}
                   {redeemSuccessMsg && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2 font-bold animate-in fade-in">
-                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span>{redeemSuccessMsg}</span>
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center justify-between gap-2 font-bold animate-in fade-in">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{redeemSuccessMsg}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVerifyCodeInput('');
+                          setVerifiedCard(null);
+                          setMatchingCards([]);
+                          setRedeemSuccessMsg(null);
+                        }}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] rounded-lg transition-colors cursor-pointer"
+                      >
+                        Next Customer
+                      </button>
                     </div>
                   )}
 
                   {/* Verified Card Details Card */}
                   {verifiedCard && (
-                    <div className="p-4 bg-purple-50/60 rounded-xl border border-purple-200/80 animate-in fade-in space-y-3">
+                    <div className="p-4 bg-purple-50/70 rounded-xl border-2 border-purple-300 animate-in fade-in space-y-3">
                       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
@@ -2218,9 +2467,9 @@ Please generate:
                                 Expired
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md flex items-center gap-1">
+                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md flex items-center gap-1 shadow-2xs">
                                 <CheckCircle className="w-3 h-3 text-emerald-600" />
-                                Valid & Active
+                                Valid & Active Reward
                               </span>
                             )}
                           </div>
@@ -2228,7 +2477,7 @@ Please generate:
                             {verifiedCard.reward_title}
                           </h4>
                           <p className="text-xs text-neutral-600">
-                            Customer: <strong className="text-neutral-900">{verifiedCard.customer_name}</strong> ({verifiedCard.customer_phone})
+                            Customer: <strong className="text-neutral-900">{verifiedCard.customer_name}</strong> (📱 {verifiedCard.customer_phone})
                           </p>
                           <p className="text-[11px] text-neutral-500 mt-0.5">
                             Valid Until: {new Date(verifiedCard.expires_at).toLocaleDateString()} · {verifiedCard.terms_conditions || 'Present at counter'}
@@ -2247,7 +2496,7 @@ Please generate:
                             <button
                               type="button"
                               onClick={() => handleRedeemVoucher(verifiedCard.id)}
-                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors"
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 cursor-pointer flex items-center gap-1.5 transition-colors"
                             >
                               <Check className="w-3.5 h-3.5" />
                               <span>Apply & Mark Redeemed</span>
@@ -2726,6 +2975,196 @@ Please generate:
                   </div>
                 </div>
 
+                {/* Interactive Setup Checklist (Placed Front & Center at Top of Dashboard) */}
+                {(() => {
+                  const isProfileDone = Boolean(business?.business_name && business.business_name.trim().length > 1);
+                  const isGoogleUrlDone = Boolean(business?.google_review_url && business.google_review_url.trim().length > 6);
+                  const isAiDone = Boolean(business?.ai_prompt && aiKeywords.length > 0);
+                  const isQrDone = Boolean(business?.unique_slug);
+                  const isLoyaltyDone = Boolean(loyaltyConfig?.enabled);
+                  const isTestDone = Boolean(analytics.totalScans > 0);
+
+                  const checklistItems = [
+                    {
+                      id: 'profile',
+                      title: '1. Business Profile & Details',
+                      desc: (isProfileDone || manualChecklistDone['profile']) ? `${business?.business_name} configured` : 'Add your business name, address & phone',
+                      isDone: isProfileDone || Boolean(manualChecklistDone['profile']),
+                      actionLabel: (isProfileDone || manualChecklistDone['profile']) ? 'View Profile' : 'Complete Profile',
+                      tab: 'business' as const,
+                    },
+                    {
+                      id: 'google_url',
+                      title: '2. Google Review Link',
+                      desc: (isGoogleUrlDone || manualChecklistDone['google_url']) ? 'Google Review link verified' : 'Link your Google Business review link',
+                      isDone: isGoogleUrlDone || Boolean(manualChecklistDone['google_url']),
+                      actionLabel: (isGoogleUrlDone || manualChecklistDone['google_url']) ? 'Edit Link' : 'Add Google Link',
+                      tab: 'business' as const,
+                    },
+                    {
+                      id: 'ai_agent',
+                      title: '3. AI Prompt & Keywords (12 Drafts)',
+                      desc: (isAiDone || manualChecklistDone['ai_agent']) ? `${aiKeywords.length} keywords & 12 review drafts active` : 'Generate your keywords and 12 review drafts',
+                      isDone: isAiDone || Boolean(manualChecklistDone['ai_agent']),
+                      actionLabel: (isAiDone || manualChecklistDone['ai_agent']) ? 'Edit Keywords' : 'Setup Keywords',
+                      tab: 'ai_agent' as const,
+                    },
+                    {
+                      id: 'qrcode',
+                      title: '4. Review QR Standee & Station',
+                      desc: (isQrDone || manualChecklistDone['qrcode']) ? `Slug: /review/${business?.unique_slug}` : 'Generate and print your QR standee',
+                      isDone: isQrDone || Boolean(manualChecklistDone['qrcode']),
+                      actionLabel: (isQrDone || manualChecklistDone['qrcode']) ? 'Open QR Studio' : 'Get QR Standee',
+                      tab: 'qrcode' as const,
+                    },
+                    {
+                      id: 'loyalty',
+                      title: '5. Loyalty VIP Rewards Program',
+                      desc: (isLoyaltyDone || manualChecklistDone['loyalty']) ? `Reward: ${loyaltyForm.reward_title}` : 'Activate reward cards for customers who review',
+                      isDone: isLoyaltyDone || Boolean(manualChecklistDone['loyalty']),
+                      actionLabel: (isLoyaltyDone || manualChecklistDone['loyalty']) ? 'Manage Loyalty' : 'Enable Rewards',
+                      tab: 'loyalty' as const,
+                    },
+                    {
+                      id: 'live_test',
+                      title: '6. Test Live Customer QR Experience',
+                      desc: (isTestDone || manualChecklistDone['live_test']) ? `${analytics.totalScans} live customer visits recorded` : 'Test the QR scan experience on mobile browser',
+                      isDone: isTestDone || Boolean(manualChecklistDone['live_test']),
+                      actionLabel: (isTestDone || manualChecklistDone['live_test']) ? 'Test Again' : 'Test Live Flow Now',
+                      customAction: () => {
+                        const safeSettings = settings || {
+                          id: 'preview',
+                          business_id: business?.id || '',
+                          language: 'en',
+                          welcome_text: 'How was your experience today?',
+                          thank_you_text: 'Thank you for your review!',
+                          enabled: true,
+                          accent_color: '#6C3BFF',
+                          created_at: new Date().toISOString(),
+                          updated_at: new Date().toISOString(),
+                        };
+                        if (business) {
+                          onPreviewReviewFlow(business, safeSettings);
+                        }
+                      },
+                    },
+                  ];
+
+                  const completedCount = checklistItems.filter((i) => i.isDone).length;
+                  const totalCount = checklistItems.length;
+                  const pct = Math.round((completedCount / totalCount) * 100);
+
+                  const handleChecklistAction = (item: typeof checklistItems[0]) => {
+                    if (item.customAction) {
+                      item.customAction();
+                    } else if (item.tab) {
+                      setActiveTab(item.tab);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  };
+
+                  const handleToggleItemCheck = (id: string, e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    setManualChecklistDone((prev) => {
+                      const next = { ...prev, [id]: !prev[id] };
+                      try {
+                        localStorage.setItem(`checklist_${business?.id || 'default'}`, JSON.stringify(next));
+                      } catch {}
+                      return next;
+                    });
+                  };
+
+                  return (
+                    <div className="bg-white rounded-2xl p-6 border-2 border-purple-200/80 shadow-xs space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="w-5 h-5 text-[#6C3BFF]" />
+                            <h3 className="text-sm font-bold text-neutral-900">
+                              First-Time Setup Checklist
+                            </h3>
+                          </div>
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            Click any item below to configure your review QR station and boost ratings (tap checkmark to mark done)
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-32 bg-neutral-100 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-[#6C3BFF] h-full rounded-full transition-all duration-500"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg ${
+                            pct === 100
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-purple-50 text-purple-700 border border-purple-200'
+                          }`}>
+                            {pct}% ({completedCount}/{totalCount})
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        {checklistItems.map((item) => (
+                          <div
+                            key={item.id}
+                            onClick={() => handleChecklistAction(item)}
+                            className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer group ${
+                              item.isDone
+                                ? 'bg-neutral-50/70 border-neutral-200/80 hover:border-purple-300 hover:bg-purple-50/20'
+                                : 'bg-amber-50/30 border-amber-200/80 hover:border-amber-400 hover:bg-amber-50/60'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <button
+                                type="button"
+                                title={item.isDone ? 'Mark Incomplete' : 'Mark Completed'}
+                                onClick={(e) => handleToggleItemCheck(item.id, e)}
+                                className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 cursor-pointer transition-transform hover:scale-110 ${
+                                  item.isDone
+                                    ? 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200'
+                                    : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                }`}
+                              >
+                                {item.isDone ? (
+                                  <Check className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Clock className="w-3 h-3" />
+                                )}
+                              </button>
+                              <div>
+                                <span className="font-bold text-neutral-900 group-hover:text-[#6C3BFF] transition-colors block">
+                                  {item.title}
+                                </span>
+                                <span className="text-[11px] text-neutral-500 line-clamp-1">
+                                  {item.desc}
+                                </span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleChecklistAction(item);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 ml-2 cursor-pointer flex items-center gap-1 ${
+                                item.isDone
+                                  ? 'bg-white border border-neutral-200 text-neutral-600 group-hover:bg-[#6C3BFF] group-hover:text-white group-hover:border-[#6C3BFF]'
+                                  : 'bg-amber-500 text-white shadow-2xs group-hover:bg-amber-600'
+                              }`}
+                            >
+                              <span>{item.actionLabel}</span>
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Daily Review Landing Page Access Trend Visualizer (Recharts) */}
                 {business && (
                   <DailyReviewAccessTrend
@@ -2762,53 +3201,6 @@ Please generate:
                     <span>Manage Loyalty Program</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
-                </div>
-
-                {/* Setup Checklist (Requirement 12) */}
-                <div className="bg-white rounded-2xl p-6 border border-neutral-200 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-neutral-900">
-                        First-Time Setup Checklist
-                      </h3>
-                      <p className="text-xs text-neutral-500">
-                        Ensure your QR review experience is fully optimized for customer visits
-                      </p>
-                    </div>
-                    <span className="text-xs font-mono text-purple-700 font-bold bg-purple-50 px-2.5 py-1 rounded-lg">
-                      100% Ready
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="flex items-center gap-2.5 p-3 rounded-xl bg-neutral-50 border border-neutral-200/70">
-                      <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                        <Check className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="font-medium text-neutral-800">1. Business Profile Created</span>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 p-3 rounded-xl bg-neutral-50 border border-neutral-200/70">
-                      <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                        <Check className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="font-medium text-neutral-800">2. Google Review URL Linked</span>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 p-3 rounded-xl bg-neutral-50 border border-neutral-200/70">
-                      <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                        <Check className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="font-medium text-neutral-800">3. Review QR Generator Ready</span>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 p-3 rounded-xl bg-neutral-50 border border-neutral-200/70">
-                      <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                        <Check className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="font-medium text-neutral-800">4. Multilingual Suggestions Active</span>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Rating Distribution & Conversion Funnel */}
