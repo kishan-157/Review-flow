@@ -18,6 +18,7 @@ import {
   Phone,
   User,
   PartyPopper,
+  RotateCw,
 } from 'lucide-react';
 import {
   Business,
@@ -66,8 +67,20 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
 
   // Review suggestions
   const [editableSuggestions, setEditableSuggestions] = useState<string[]>([]);
+  const [rotationOffset, setRotationOffset] = useState<number>(() => Math.floor(Math.random() * 4) * 3);
   const [selectedReviewText, setSelectedReviewText] = useState<string>('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  const handleRotateSuggestions = () => {
+    if (editableSuggestions.length <= 1) return;
+    setRotationOffset((prev) => {
+      const next = (prev + 3) % editableSuggestions.length;
+      if (editableSuggestions[next]) {
+        setSelectedReviewText(editableSuggestions[next]);
+      }
+      return next;
+    });
+  };
 
   // Private feedback form
   const [feedbackText, setFeedbackText] = useState<string>('');
@@ -747,16 +760,45 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                   </p>
                 </div>
 
-                {/* ALL 3 SUGGESTIONS VISIBLE RIGHT IN FRONT OF CUSTOMER (No Draft tabs!) */}
+                {/* 3 ROTATING SUGGESTIONS FROM THE 10-12 KEYWORD DRAFTS POOL */}
+                {editableSuggestions.length > 3 && (
+                  <div className="flex items-center justify-between p-2.5 bg-purple-50/80 rounded-2xl border border-purple-200/80">
+                    <div className="flex items-center gap-1.5 text-xs text-purple-950 font-semibold">
+                      <Sparkles className="w-3.5 h-3.5 text-[#6C3BFF]" />
+                      <span>
+                        {language === 'hi'
+                          ? `ड्राफ्ट ${(rotationOffset % editableSuggestions.length) + 1} - ${Math.min((rotationOffset % editableSuggestions.length) + 3, editableSuggestions.length)} (कुल ${editableSuggestions.length} कीवर्ड ड्राफ्ट्स)`
+                          : language === 'gu'
+                          ? `ડ્રાફ્ટ ${(rotationOffset % editableSuggestions.length) + 1} - ${Math.min((rotationOffset % editableSuggestions.length) + 3, editableSuggestions.length)} (કુલ ${editableSuggestions.length} કીવર્ડ ડ્રાફ્ટ્સ)`
+                          : `Drafts ${(rotationOffset % editableSuggestions.length) + 1} - ${Math.min((rotationOffset % editableSuggestions.length) + 3, editableSuggestions.length)} of ${editableSuggestions.length} Keyword Drafts`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRotateSuggestions}
+                      className="px-3 py-1.5 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    >
+                      <RotateCw className="w-3 h-3" />
+                      <span>
+                        {language === 'hi' ? '🔄 अन्य 3 बदलें' : language === 'gu' ? '🔄 બીજા 3 બદલો' : '🔄 Rotate Next 3'}
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {/* ALL 3 SUGGESTIONS VISIBLE RIGHT IN FRONT OF CUSTOMER */}
                 <div className="space-y-3">
-                  {editableSuggestions.slice(0, 3).map((suggestionText, idx) => {
-                    const isCopied = copiedIndex === idx;
+                  {[0, 1, 2].map((slotIdx) => {
+                    const actualIdx = (rotationOffset + slotIdx) % (editableSuggestions.length || 1);
+                    const suggestionText = editableSuggestions[actualIdx];
+                    if (!suggestionText) return null;
+                    const isCopied = copiedIndex === actualIdx;
                     const isSelected = selectedReviewText === suggestionText;
 
                     return (
                       <div
-                        key={idx}
-                        onClick={() => handleCopySuggestion(suggestionText, idx)}
+                        key={actualIdx}
+                        onClick={() => handleCopySuggestion(suggestionText, actualIdx)}
                         className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative group ${
                           isCopied || isSelected
                             ? 'border-[#6C3BFF] bg-purple-50/50 shadow-xs ring-1 ring-[#6C3BFF]/30'
@@ -767,9 +809,9 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                           <span className="text-xs font-bold text-[#6C3BFF] flex items-center gap-1">
                             <Sparkles className="w-3.5 h-3.5" />
                             <span>
-                              {idx === 0
+                              {slotIdx === 0
                                 ? (language === 'hi' ? '✨ दोस्ताना और सच्चा अनुभव' : language === 'gu' ? '✨ સ્નેહપૂર્ણ અનુભવ' : '✨ Friendly & Enthusiastic')
-                                : idx === 1
+                                : slotIdx === 1
                                 ? (language === 'hi' ? '⭐ सर्विस और क्वालिटी' : language === 'gu' ? '⭐ સર્વિસ અને ક્વોલિટી' : '⭐ Quality & Experience')
                                 : (language === 'hi' ? '⚡ संक्षिप्त और सटीक' : language === 'gu' ? '⚡ ટૂંકું અને સરળ' : '⚡ Short & Sweet')}
                             </span>
@@ -779,7 +821,7 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleCopySuggestion(suggestionText, idx);
+                              handleCopySuggestion(suggestionText, actualIdx);
                             }}
                             className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
                               isCopied

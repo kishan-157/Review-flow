@@ -54,31 +54,38 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setLoading(true);
 
     try {
+      const cleanCredential = email.trim();
+      const cleanPassword = password.trim();
+
+      if (!cleanCredential) {
+        throw new Error('Please enter your Email, Customer ID, or Phone number.');
+      }
+      if (!cleanPassword) {
+        throw new Error('Please enter your password.');
+      }
+
       if (mode === 'login') {
-        const session = await signInUser(email, password);
-        setSuccessMsg(`Welcome, ${session.user.full_name || session.user.email}!`);
+        const session = await signInUser(cleanCredential, cleanPassword);
+        setSuccessMsg(`Welcome, ${session.user.full_name || session.user.email}! Logging you into workspace...`);
         setTimeout(() => {
           onSuccess(session);
-        }, 500);
+        }, 400);
       } else {
         // Forgot / Reset password mode
-        if (!email.trim()) {
-          throw new Error('Please enter your account email.');
-        }
-        if (!password || password.length < 6) {
+        if (cleanPassword.length < 6) {
           throw new Error('New password must be at least 6 characters.');
         }
-        if (password !== confirmPassword) {
+        if (cleanPassword !== confirmPassword.trim()) {
           throw new Error('Passwords do not match.');
         }
 
-        await changeUserPassword(email, undefined, password, false);
+        await changeUserPassword(cleanCredential, undefined, cleanPassword, false);
         setSuccessMsg('Password updated successfully! Logging you in...');
         try {
-          const session = await signInUser(email, password);
+          const session = await signInUser(cleanCredential, cleanPassword);
           setTimeout(() => {
             onSuccess(session);
-          }, 600);
+          }, 500);
         } catch {
           setSuccessMsg('Password updated. Please sign in with your new password.');
           setMode('login');
@@ -186,6 +193,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   required
                   autoCapitalize="none"
                   autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={mode === 'login' ? 'name@example.com or LB-CUS-...' : 'name@example.com'}
@@ -223,6 +232,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   required
                   autoCapitalize="none"
                   autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={mode === 'login' ? '••••••••' : 'At least 6 characters'}
@@ -309,12 +320,38 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
-          {/* Customer sign-in reference note */}
+          {/* Customer sign-in reference note & quick fill chips */}
           {mode === 'login' && (
-            <div className="pt-1 text-center">
+            <div className="pt-2 text-center space-y-2">
               <p className="text-[11px] text-neutral-400 leading-relaxed px-2">
                 💡 <span className="text-purple-300 font-medium">Customer:</span> Admin dwara banaye gaye <span className="text-white">Email</span> ya <span className="text-[#9D7AFF]">Customer ID</span> aur Password se direct login karein.
               </p>
+
+              {/* Quick test buttons for mobile testers */}
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('amit.hotel@gmail.com');
+                    setPassword('MySecretPass123!');
+                    setErrorMsg(null);
+                  }}
+                  className="px-2.5 py-1 text-[10px] font-medium bg-white/5 hover:bg-white/10 text-purple-300 rounded-lg border border-purple-500/20 transition-colors"
+                >
+                  ⚡ Test: Amit Verma (Grand Royal)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('cafe@foodbites.com');
+                    setPassword('DemoPass123!');
+                    setErrorMsg(null);
+                  }}
+                  className="px-2.5 py-1 text-[10px] font-medium bg-white/5 hover:bg-white/10 text-neutral-300 rounded-lg border border-white/10 transition-colors"
+                >
+                  ⚡ Test: Food Bites Cafe
+                </button>
+              </div>
             </div>
           )}
 

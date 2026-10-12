@@ -659,19 +659,29 @@ function generateSmartSummary(name: string, category: string, prompt: string): s
 }
 
 function generateSmartSuggestions(name: string, keywords: string[], language: string = 'en') {
-  const k1 = keywords[0] || 'Quality Service';
-  const k2 = keywords[1] || 'Friendly Staff';
-  const k3 = keywords[2] || 'Great Value';
+  const kws = keywords.filter(k => k && k.trim().length > 1);
+  const getKw = (idx: number) => {
+    return (kws[idx % (kws.length || 1)] || 'Quality Service').trim();
+  };
 
   if (language === 'hi') {
     return {
       positive: [
-        `${name} पर बहुत ही शानदार अनुभव रहा! यहाँ की ${k1} और ${k2} वाकई बहुत बढ़िया है।`,
-        `${name} की सर्विस और ${k1} ने दिल जीत लिया। स्टाफ बहुत विनम्र है और माहौल भी बहुत सुखद है।`,
-        `अगर आप बेहतरीन ${k1} और किफायती दाम ढूंढ रहे हैं, तो ${name} सबसे बेस्ट जगह है। 5 स्टार!`
+        `सच में ${name} में हमारा अनुभव बहुत शानदार रहा! यहाँ की ${getKw(0)} और ${getKw(1)} दोनों वाकई लाजवाब हैं। सबको ज़रूर आने की सलाह दूंगा! ⭐⭐⭐⭐⭐`,
+        `${name} की सर्विस और ${getKw(0)} ने दिल जीत लिया! स्टाफ का व्यवहार बहुत विनम्र है और ${getKw(2)} भी बेहतरीन थी। पूरे 5 स्टार! 👍`,
+        `पहली बार ${name} विज़िट किया और बहुत अच्छा लगा। लाजवाब ${getKw(1)}, साफ-सुथरा माहौल और ${getKw(3)}। बार-बार आने का मन करेगा!`,
+        `एकदम पैसा वसूल अनुभव! ${name} पर ${getKw(2)} और ${getKw(0)} बहुत ही बढ़िया थे। यहाँ की सर्विस हमेशा याद रहेगी। ⭐`,
+        `अगर आप बेहतरीन ${getKw(0)} और बढ़िया सेवा ढूंढ रहे हैं, तो ${name} सबसे बेस्ट जगह है। ${getKw(3)} भी बहुत पसंद आया! ✨`,
+        `आज ${name} पर बहुत सुखद अनुभव रहा। यहाँ की ${getKw(1)} और ${getKw(2)} वाकई तारीफ के काबिल है। टीम का काम बहुत अच्छा है।`,
+        `${name} में सब कुछ बहुत ही व्यवस्थित था। स्टाफ बहुत मददगार है, और ${getKw(3)} के साथ ${getKw(4)} का अनुभव एकदम परफेक्ट रहा। 👍`,
+        `शानदार अनुभव! ${name} पर ${getKw(0)} की क्वालिटी बहुत बेहतरीन है और ${getKw(4)} ने हमारा दिल खुश कर दिया। 10/10 रेटिंग! ⭐`,
+        `बहुत ही बढ़िया जगह! ${name} का दोस्ताना माहौल, ${getKw(2)} और तुरंत मिलने वाली ${getKw(1)} सच में काबिले तारीफ है।`,
+        `${name} कभी निराश नहीं करता! यहाँ की ${getKw(0)} हमेशा की तरह शानदार थी और ${getKw(5)} का भी पूरा ध्यान रखा गया। बहुत-बहुत धन्यवाद! ✨`,
+        `हमारे पूरे परिवार को ${name} बहुत पसंद आया। खास तौर पर यहाँ की ${getKw(1)} और ${getKw(3)} ने सबका दिल जीत लिया। जरूर पधारें!`,
+        `उत्कृष्ट सेवा और बेहतरीन ${getKw(4)}! ${name} पर आकर बहुत खुशी हुई, ${getKw(2)} भी टॉप-क्लास थी। 5 स्टार अनुभव! ⭐`
       ],
       neutral: [
-        `${name} पर अनुभव ठीक रहा। ${k1} अच्छा था, पर भीड़ के समय थोड़ा इंतज़ार करना पड़ा।`,
+        `${name} पर अनुभव ठीक रहा। ${getKw(0)} अच्छा था, पर भीड़ के समय थोड़ा इंतज़ार करना पड़ा।`,
         `${name} की विज़िट अच्छी रही। स्टाफ का व्यवहार मददगार था, सर्विस संतोषजनक है।`
       ]
     };
@@ -680,25 +690,43 @@ function generateSmartSuggestions(name: string, keywords: string[], language: st
   if (language === 'gu') {
     return {
       positive: [
-        `${name} ખાતે અમારો અનુભવ ખૂબ જ ઉત્તમ રહ્યો! ખાસ કરીને ${k1} અને ${k2} ખરેખર પ્રશંસનીય છે.`,
-        `${name} ની મુલાકાત પૈસા વસૂલ રહી. અહીં ${k3} અને સ્ટાફનો સહકાર ઘણો સારો હતો.`,
-        `${name} ની સર્વિસ અને ${k1} મને ખૂબ ગમી. ભવિષ્યમાં પણ ફરી મુલાકાત લઈશું!`
+        `ખરેખર ${name} ખાતે અમારો અનુભવ ખૂબ જ અદ્ભુત રહ્યો! અહીંની ${getKw(0)} અને ${getKw(1)} બંને એકદમ શ્રેષ્ઠ છે. બધાને મુલાકાત લેવાની ભલામણ કરું છું! ⭐⭐⭐⭐⭐`,
+        `${name} ની સર્વિસ અને ${getKw(0)} એ દિલ જીતી લીધું! સ્ટાફનો વ્યવહાર ખૂબ જ નમ્ર છે અને ${getKw(2)} પણ ઉત્તમ હતી. પૂરા 5 સ્ટાર! 👍`,
+        `પહેલી વાર ${name} ની મુલાકાત લીધી અને ખૂબ મજા આવી. ઉત્તમ ${getKw(1)}, ચોખ્ખું વાતાવરણ અને ${getKw(3)}. વારંવાર આવવાનું મન થશે!`,
+        `એકદમ પૈસા વસૂલ અનુભવ! ${name} ખાતે ${getKw(2)} અને ${getKw(0)} બંને ખૂબ જ સારા હતા. અહીંની સર્વિસ હંમેશા યાદ રહેશે. ⭐`,
+        `જો તમે શ્રેષ્ઠ ${getKw(0)} અને ઉત્તમ સેવા શોધી રહ્યા હોવ, તો ${name} સૌથી બેસ્ટ જગ્યા છે. ${getKw(3)} પણ ખૂબ ગમ્યું! ✨`,
+        `આજે ${name} ખાતે ઘણો સારો અનુભવ રહ્યો. અહીંની ${getKw(1)} અને ${getKw(2)} ખરેખર પ્રશંસનીય છે. ટીમનું કામ ખૂબ સારું છે.`,
+        `${name} ખાતે બધું ખૂબ જ વ્યવસ્થિત હતું. સ્ટાફ ખૂબ મદદરૂપ છે, અને ${getKw(3)} સાથે ${getKw(4)} નો અનુભવ એકદમ પરફેક્ટ રહ્યો. 👍`,
+        `અદ્ભુત અનુભવ! ${name} પર ${getKw(0)} ની ક્વોલિટી ખૂબ ઉત્તમ છે અને ${getKw(4)} એ અમારું દિલ ખુશ કરી દીધું. 10/10 રેટિંગ! ⭐`,
+        `ખૂબ જ સરસ જગ્યા! ${name} નું વાતાવરણ, ${getKw(2)} અને ઝડપી ${getKw(1)} ખરેખર પ્રશંસનીય છે.`,
+        `${name} ક્યારેય નિરાશ કરતું નથી! અહીંની ${getKw(0)} હંમેશની જેમ અદ્ભુત હતી અને ${getKw(5)} નું પણ પૂરતું ધ્યાન રાખવામાં આવ્યું. ✨`,
+        `અમારા સમગ્ર પરિવારને ${name} ખૂબ ગમ્યું. ખાસ કરીને અહીંની ${getKw(1)} અને નમ્ર ${getKw(3)} એ સૌનું દિલ જીતી લીધું. ફરી જરૂર મુલાકાત લઈશું!`,
+        `ઉત્કૃષ્ટ સેવા અને શ્રેષ્ઠ ${getKw(4)}! ${name} ખાતે આવીને ખૂબ આનંદ થયો, ${getKw(2)} પણ ટોપ-ક્લાસ હતી. 5 સ્ટાર રેટિંગ! ⭐`
       ],
       neutral: [
-        `${name} નો અનુભવ યોગ્ય રહ્યો. ${k1} સંતોષકારક હતું પરંતુ થોડી વધુ ઝડપ જરૂરી છે.`
+        `${name} નો અનુભવ યોગ્ય રહ્યો. ${getKw(0)} સંતોષકારક હતું પરંતુ થોડી વધુ ઝડપ જરૂરી છે.`
       ]
     };
   }
 
   return {
     positive: [
-      `Had a wonderful experience at ${name}! The ${k1} and ${k2} exceeded expectations. Highly recommend!`,
-      `Really impressed by ${name}. Their attention to ${k1} along with ${k3} made my visit truly memorable.`,
-      `Outstanding hospitality and service at ${name}. The ${k2} made us feel right at home. 5 stars well deserved!`
+      `Honestly loved my experience at ${name}! The ${getKw(0)} and ${getKw(1)} were outstanding. Highly recommend to everyone! ⭐⭐⭐⭐⭐`,
+      `Really impressed with ${name}. Special shoutout for their ${getKw(0)} and courteous team. The ${getKw(2)} made the whole visit worthwhile! 👍`,
+      `First time visiting ${name} and it exceeded all expectations! Amazing ${getKw(1)}, spotless cleanliness, and great ${getKw(3)}. Will definitely be coming back!`,
+      `Top-notch ${getKw(0)} and super friendly staff at ${name}. Loved the ${getKw(2)}. 10/10 experience! ⭐`,
+      `Best place in town for ${getKw(0)}! Exceptional ${getKw(3)} and genuine value for money. Keep up the wonderful work ${name}! ✨`,
+      `Had a wonderful time at ${name}. What stood out most was their ${getKw(1)} and attention to ${getKw(2)}. Smooth and pleasant from start to finish.`,
+      `Such a pleasant experience at ${name}! Wonderful ${getKw(3)} along with ${getKw(4)}. Very welcoming atmosphere and polite service. 👍`,
+      `${name} never disappoints! Consistently great ${getKw(0)} and reliable ${getKw(4)}. My go-to recommendation for friends and family. ⭐`,
+      `Super fast service and top quality at ${name}. Their ${getKw(2)} is unbeatable, and the ${getKw(1)} makes it a true 5-star experience!`,
+      `The quality of ${getKw(0)} at ${name} is truly remarkable. Courteous staff, cozy vibes, and great ${getKw(5)}. Five stars all the way! ✨`,
+      `Outstanding hospitality at ${name}! Truly appreciated their ${getKw(1)} and helpful attitude. The ${getKw(3)} was a huge plus. Highly recommended!`,
+      `Totally satisfied with my visit to ${name}! From ${getKw(4)} to ${getKw(2)}, everything was handled with utmost care. Deserves 5 stars! ⭐`
     ],
     neutral: [
-      `Decent experience at ${name}. The ${k1} was good, though service during rush hours has room for improvement.`,
-      `Visited ${name} for the first time. The ${k2} was polite, overall a satisfactory and fair experience.`
+      `Decent experience at ${name}. The ${getKw(0)} was good, though service during rush hours has room for improvement.`,
+      `Visited ${name} for the first time. The ${getKw(1)} was polite, overall a satisfactory and fair experience.`
     ]
   };
 }

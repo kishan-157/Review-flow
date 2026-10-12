@@ -29,7 +29,7 @@ export default function App() {
   const [previewBusiness, setPreviewBusiness] = useState<Business | null>(null);
   const [previewSettings, setPreviewSettings] = useState<ReviewSettings | null>(null);
 
-  // Initialize session and check URL hash for #review/:slug or #login
+  // Initialize session and check URL route for #review/:slug, /review/:slug, #login, /login
   useEffect(() => {
     initDefaultData();
     const saved = getCurrentSession();
@@ -42,23 +42,41 @@ export default function App() {
       }
     }
 
-    // Check hash for direct QR scans (e.g. #review/slug-xyz) or #login
-    const checkHash = () => {
+    // Comprehensive route checker supporting hash, pathname, and search params
+    const checkRoute = () => {
       const hash = window.location.hash;
+      const pathname = window.location.pathname.toLowerCase();
+      const search = new URLSearchParams(window.location.search);
+
       if (hash.startsWith('#review/')) {
         const slug = hash.replace('#review/', '').trim();
         if (slug) {
           setActiveReviewSlug(slug);
           setCurrentView('review');
+          return;
         }
-      } else if (hash === '#login') {
+      } else if (pathname.startsWith('/review/')) {
+        const slug = pathname.replace('/review/', '').trim();
+        if (slug) {
+          setActiveReviewSlug(slug);
+          setCurrentView('review');
+          return;
+        }
+      }
+
+      if (hash === '#login' || pathname === '/login' || search.get('view') === 'login') {
         setCurrentView('login');
+        return;
       }
     };
 
-    checkHash();
-    window.addEventListener('hashchange', checkHash);
-    return () => window.removeEventListener('hashchange', checkHash);
+    checkRoute();
+    window.addEventListener('hashchange', checkRoute);
+    window.addEventListener('popstate', checkRoute);
+    return () => {
+      window.removeEventListener('hashchange', checkRoute);
+      window.removeEventListener('popstate', checkRoute);
+    };
   }, []);
 
   const handleSignOut = async () => {
@@ -66,11 +84,20 @@ export default function App() {
     setSession(null);
     setCurrentView('landing');
     window.location.hash = '';
+    if (window.location.pathname === '/login') {
+      window.history.replaceState(null, '', '/');
+    }
   };
 
   const handleAuthSuccess = (newSession: AuthSession) => {
     setSession(newSession);
     updateCurrentSession(newSession);
+    if (window.location.hash === '#login') {
+      window.location.hash = '';
+    }
+    if (window.location.pathname === '/login') {
+      window.history.replaceState(null, '', '/');
+    }
     if (newSession.user.role === 'admin') {
       setCurrentView('admin');
     } else {

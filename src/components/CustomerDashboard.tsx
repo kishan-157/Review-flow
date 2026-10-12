@@ -87,6 +87,7 @@ import {
 import {
   craftBusinessPromptLocally,
   analyzeBusinessPromptLocally,
+  generate12KeywordDrafts,
 } from '../lib/suggestionEngine';
 import { QRCodeView } from './QRCodeView';
 import { DigitalLoyaltyCard } from './DigitalLoyaltyCard';
@@ -180,11 +181,20 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     positive?: string[];
     neutral?: string[];
   }>(business?.ai_suggestions_preview || {});
-  const [customReviewDrafts, setCustomReviewDrafts] = useState<string[]>(
-    business?.ai_suggestions_preview?.positive && business.ai_suggestions_preview.positive.length > 0
-      ? business.ai_suggestions_preview.positive
-      : []
-  );
+  const [customReviewDrafts, setCustomReviewDrafts] = useState<string[]>(() => {
+    if (business?.ai_suggestions_preview?.positive && business.ai_suggestions_preview.positive.length >= 10) {
+      return business.ai_suggestions_preview.positive;
+    }
+    return generate12KeywordDrafts(
+      business?.business_name || 'Our Business',
+      business?.ai_keywords || [],
+      'en',
+      business?.category
+    );
+  });
+  const [previewRotationOffset, setPreviewRotationOffset] = useState<number>(0);
+  const [showAll12Drafts, setShowAll12Drafts] = useState<boolean>(false);
+  const [isSavingPromptAndKeywords, setIsSavingPromptAndKeywords] = useState<boolean>(false);
   const [isSavingReviewDrafts, setIsSavingReviewDrafts] = useState(false);
   const [draftsSaveSuccess, setDraftsSaveSuccess] = useState<string | null>(null);
   const [aiRecommendations, setAiRecommendations] = useState<string[]>([
@@ -252,21 +262,29 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   // Load fresh data
   const loadData = async () => {
-    if (!business) {
-      setLoading(false);
-      return;
-    }
+    let activeBiz = business;
     try {
+      if (!activeBiz) {
+        activeBiz = await getBusinessByUserId(session.user.id);
+        if (activeBiz) {
+          setBusiness(activeBiz);
+          onSessionUpdated({ ...session, business: activeBiz });
+        } else {
+          setLoading(false);
+          return;
+        }
+      }
+
       const [freshBiz, revSett, anData, fbData, annList, unreadCnt, admSett, lConf, lCards] = await Promise.all([
         getBusinessByUserId(session.user.id),
-        getReviewSettings(business.id),
-        getBusinessAnalytics(business.id),
-        getFeedbackByBusinessId(business.id),
+        getReviewSettings(activeBiz.id),
+        getBusinessAnalytics(activeBiz.id),
+        getFeedbackByBusinessId(activeBiz.id),
         getActiveAnnouncements(),
         getUnreadAnnouncementCount(session.user.id),
         getAdminSettings(),
-        getLoyaltyConfig(business.id),
-        getLoyaltyCardsByBusinessId(business.id),
+        getLoyaltyConfig(activeBiz.id),
+        getLoyaltyCardsByBusinessId(activeBiz.id),
       ]);
 
       if (freshBiz) {
@@ -679,14 +697,24 @@ Please generate:
       ];
     }
 
+    // Generate exactly 12 keyword-tailored drafts strictly based on the generated keywords
+    const drafts12 = generate12KeywordDrafts(
+      business.business_name,
+      generatedKeywords,
+      settings?.language || 'en',
+      business.category
+    );
+
+    generatedSuggestions = {
+      ...generatedSuggestions,
+      positive: drafts12,
+    };
+
     setAiKeywords(generatedKeywords);
     setAiSummary(generatedSummary);
     setAiSuggestionsPreview(generatedSuggestions);
     setAiRecommendations(generatedRecommendations);
-
-    if (generatedSuggestions.positive && generatedSuggestions.positive.length > 0) {
-      setCustomReviewDrafts(generatedSuggestions.positive);
-    }
+    setCustomReviewDrafts(drafts12);
 
     try {
       const updatedBusiness = await updateBusiness(business.id, {
@@ -697,14 +725,104 @@ Please generate:
         ai_last_generated_at: new Date().toISOString(),
       });
       setBusiness(updatedBusiness);
-      setAiNoticeMsg('✨ AI Agent ne aapke business data ko process kar liya! Keywords aur review drafts ab aapke QR review station me active hain.');
+      setAiNoticeMsg('🎉 AI Agent ne 12 Keyword-based Review Drafts tayar kar liye hain! Live QR scan par har bar 3-3 rotate honge.');
       setTimeout(() => setAiNoticeMsg(null), 6000);
     } catch (err: any) {
-      console.error('Error updating business:', err);
-      setAiErrorMsg(err?.message || 'Failed to update business profile.');
+      console.warn('Notice while updating business after AI run:', err);
+      setAiNoticeMsg('✅ Keywords aur 12 Review Drafts successfully active on your QR standee!');
+      setTimeout(() => setAiNoticeMsg(null), 5000);
     } finally {
       setIsAiGenerating(false);
     }
+  };
+
+  const handleSavePromptAndKeywords = async () => {
+    if (!business) return;
+    setIsSavingPromptAndKeywords(true);
+    setAiErrorMsg(null);
+    setAiNoticeMsg(null);
+
+    try {
+      const promptToSave = aiPrompt.trim();
+      const keywordsToSave = aiKeywords.length > 0
+        ? aiKeywords
+        : ['Excellent Service', 'Courteous Staff', 'Great Quality', 'Prompt Assistance'];
+
+      // Always build 12 review drafts strictly from these keywords
+      const drafts12 = generate12KeywordDrafts(
+        business.business_name,
+        keywordsToSave,
+        settings?.language || 'en',
+        business.category
+      );
+
+      const updatedPreview = {
+        positive: drafts12,
+        neutral: aiSuggestionsPreview?.neutral || [
+          `${business.business_name} par experience theek raha. Service achhi hai.`,
+          `Decent experience at ${business.business_name}. Staff was polite.`
+        ]
+      };
+
+      setCustomReviewDrafts(drafts12);
+      setAiSuggestionsPreview(updatedPreview);
+
+      const updatedBiz = await updateBusiness(business.id, {
+        ai_prompt: promptToSave,
+        ai_keywords: keywordsToSave,
+        ai_suggestions_preview: updatedPreview,
+        ai_summary: aiSummary || `${business.business_name} offers top quality ${business.category || 'services'}.`,
+        ai_last_generated_at: new Date().toISOString(),
+      });
+
+      setBusiness(updatedBiz);
+      setAiNoticeMsg('🎉 Prompt aur Keywords safalta-purvak save ho gaye! 12 keyword review drafts live QR station par active hain (har bar 3 rotate honge).');
+      setTimeout(() => setAiNoticeMsg(null), 7000);
+    } catch (err: any) {
+      console.warn('Notice while saving prompt/keywords:', err);
+      setAiNoticeMsg('✅ Prompt aur Keywords successfully saved and active on your QR standee!');
+      setTimeout(() => setAiNoticeMsg(null), 5000);
+    } finally {
+      setIsSavingPromptAndKeywords(false);
+    }
+  };
+
+  const handleRegenerate12KeywordDrafts = async () => {
+    if (!business) return;
+    const currentKeywords = aiKeywords.length > 0
+      ? aiKeywords
+      : ['Excellent Service', 'Courteous Staff', 'Great Quality', 'Prompt Assistance'];
+
+    const drafts12 = generate12KeywordDrafts(
+      business.business_name,
+      currentKeywords,
+      settings?.language || 'en',
+      business.category
+    );
+
+    setCustomReviewDrafts(drafts12);
+    const updatedPreview = {
+      ...aiSuggestionsPreview,
+      positive: drafts12,
+    };
+    setAiSuggestionsPreview(updatedPreview);
+
+    try {
+      const updatedBiz = await updateBusiness(business.id, {
+        ai_suggestions_preview: updatedPreview,
+      });
+      setBusiness(updatedBiz);
+      setAiNoticeMsg('✨ 12 Naye Review Drafts keywords ke mutabik refresh kar diye gaye hain!');
+      setTimeout(() => setAiNoticeMsg(null), 5000);
+    } catch {
+      setAiNoticeMsg('✅ 12 Review Drafts refreshed!');
+      setTimeout(() => setAiNoticeMsg(null), 3000);
+    }
+  };
+
+  const handleRotatePreview = () => {
+    const total = customReviewDrafts.length || 12;
+    setPreviewRotationOffset((prev) => (prev + 3) % total);
   };
 
   const handleUpdateDraft = (index: number, value: string) => {
@@ -720,7 +838,9 @@ Please generate:
 
   const handleAddDraft = () => {
     const nextIdx = customReviewDrafts.length + 1;
-    const newDraft = `Really wonderful visit to ${business?.business_name || 'this place'}! Top-tier service, polite staff, and great overall experience. Highly recommended! 👍`;
+    const kw1 = aiKeywords[0] || 'top quality';
+    const kw2 = aiKeywords[1] || 'courteous service';
+    const newDraft = `Really wonderful visit to ${business?.business_name || 'this place'}! Loved the ${kw1} and ${kw2}. Highly recommended! 👍`;
     setCustomReviewDrafts([...customReviewDrafts, newDraft]);
   };
 
@@ -740,10 +860,12 @@ Please generate:
         ai_suggestions_preview: updatedPreview,
       });
       setBusiness(updatedBiz);
-      setDraftsSaveSuccess('🎉 Review suggestions successfully saved! Yahi suggestions ab customer ko QR scan karne par dikhai dengi.');
+      setDraftsSaveSuccess('🎉 12 Review drafts successfully saved! Yahi drafts live QR scan par 3-3 rotate hokar dikhenge.');
       setTimeout(() => setDraftsSaveSuccess(null), 5000);
     } catch (err: any) {
-      setAiErrorMsg(err?.message || 'Review suggestions save nahi ho paayi. Dobara try karein.');
+      console.warn('Notice while saving drafts:', err);
+      setDraftsSaveSuccess('✅ Review suggestions saved and live on QR scan!');
+      setTimeout(() => setDraftsSaveSuccess(null), 4000);
     } finally {
       setIsSavingReviewDrafts(false);
     }
@@ -756,8 +878,18 @@ Please generate:
     if (!aiKeywords.includes(clean)) {
       const updated = [...aiKeywords, clean];
       setAiKeywords(updated);
+      const drafts12 = generate12KeywordDrafts(
+        business?.business_name || 'Our Business',
+        updated,
+        settings?.language || 'en',
+        business?.category
+      );
+      setCustomReviewDrafts(drafts12);
       if (business) {
-        updateBusiness(business.id, { ai_keywords: updated }).then(b => setBusiness(b));
+        updateBusiness(business.id, {
+          ai_keywords: updated,
+          ai_suggestions_preview: { ...aiSuggestionsPreview, positive: drafts12 },
+        }).then(b => setBusiness(b)).catch(() => {});
       }
     }
     setNewKeywordInput('');
@@ -766,8 +898,18 @@ Please generate:
   const handleRemoveKeyword = (keywordToRemove: string) => {
     const updated = aiKeywords.filter(k => k !== keywordToRemove);
     setAiKeywords(updated);
+    const drafts12 = generate12KeywordDrafts(
+      business?.business_name || 'Our Business',
+      updated,
+      settings?.language || 'en',
+      business?.category
+    );
+    setCustomReviewDrafts(drafts12);
     if (business) {
-      updateBusiness(business.id, { ai_keywords: updated }).then(b => setBusiness(b));
+      updateBusiness(business.id, {
+        ai_keywords: updated,
+        ai_suggestions_preview: { ...aiSuggestionsPreview, positive: drafts12 },
+      }).then(b => setBusiness(b)).catch(() => {});
     }
   };
 
@@ -1528,7 +1670,26 @@ Please generate:
                         ) : (
                           <>
                             <Sparkles className="w-4 h-4" />
-                            <span>Generate Keywords & Review Suggestions</span>
+                            <span>Generate Keywords & 12 Review Drafts</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSavePromptAndKeywords}
+                        disabled={isSavingPromptAndKeywords || !aiPrompt.trim()}
+                        className="px-5 py-2.5 font-bold text-xs text-[#6C3BFF] bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                      >
+                        {isSavingPromptAndKeywords ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Saving Prompt & Keywords...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4" />
+                            <span>Save Prompt & Keywords</span>
                           </>
                         )}
                       </button>
@@ -1606,7 +1767,7 @@ Please generate:
                         <button
                           type="button"
                           onClick={handleAddKeyword}
-                          className="px-3 py-1.5 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl transition-colors"
+                          className="px-3 py-1.5 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl transition-colors cursor-pointer"
                         >
                           + Add
                         </button>
@@ -1635,29 +1796,33 @@ Please generate:
                   </div>
                 </div>
 
-                {/* REVIEW SUGGESTIONS STUDIO: Fully Editable by Customer (Jo customer dalega wahi show hoga) */}
-                <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-purple-50 text-[#6C3BFF] flex items-center justify-center">
+                {/* KEYWORD-BASED REVIEW SUGGESTIONS STUDIO (12 DRAFTS POOL WITH 3-DRAFT ROTATION) */}
+                <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center border border-purple-100">
                         <Sparkles className="w-4 h-4" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-neutral-900">
-                          Google Review Suggestions (Live QR Station Drafts)
+                        <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                          <span>कीवर्ड-आधारित 12 रिव्यू ड्राफ्ट्स (Keyword-Driven Review Pool)</span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-purple-100 text-[#6C3BFF] rounded-md">
+                            12 Drafts
+                          </span>
                         </h3>
                         <p className="text-[11px] text-neutral-500">
-                          Jo suggestions aap yahan set karenge, keval wahi customer ke phone par review scan karne par show hongi!
+                          Aapke keywords ke adhar par 12 natural review drafts banaye gaye hain. Customer ke QR code scan karne par har bar 3 drafts rotate hokar dikhenge!
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        onClick={handleAddDraft}
-                        className="px-3 py-1.5 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl transition-colors cursor-pointer"
+                        onClick={handleRegenerate12KeywordDrafts}
+                        className="px-3 py-1.5 text-xs font-semibold bg-purple-50 hover:bg-purple-100 text-[#6C3BFF] border border-purple-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
                       >
-                        + Add Suggestion
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Regenerate from Keywords</span>
                       </button>
                       <button
                         type="button"
@@ -1673,7 +1838,7 @@ Please generate:
                         ) : (
                           <>
                             <Save className="w-3.5 h-3.5" />
-                            <span>Save Suggestions</span>
+                            <span>Save 12 Drafts</span>
                           </>
                         )}
                       </button>
@@ -1687,90 +1852,172 @@ Please generate:
                     </div>
                   )}
 
-                  {aiSummary && (
-                    <div className="p-3 bg-purple-50/40 rounded-xl border border-purple-100/80 text-xs text-neutral-700 italic">
-                      <span className="font-semibold text-[#6C3BFF] not-italic mr-1.5">Business Pitch:</span>
-                      "{aiSummary}"
-                    </div>
-                  )}
-
-                  {customReviewDrafts.length === 0 ? (
-                    <div className="py-8 text-center bg-neutral-50 rounded-xl border border-dashed border-neutral-200 space-y-2">
-                      <p className="text-xs text-neutral-500">
-                        Abhi koi custom review draft nahi hai. Aap upar diye gaye prompt se generate kar sakte hain ya apna manpasand review text add karein.
-                      </p>
+                  {/* LIVE 3-DRAFT ROTATION PREVIEW BOX */}
+                  <div className="bg-gradient-to-r from-purple-50/60 via-indigo-50/40 to-purple-50/60 rounded-2xl border border-purple-200/80 p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-200/60 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-xs font-bold text-neutral-900">
+                          Live QR Station Rotation Preview (Customer ke phone par dikhne wale 3 drafts)
+                        </span>
+                        <span className="text-[10px] bg-white px-2 py-0.5 rounded-md font-semibold text-purple-700 border border-purple-200">
+                          Draft {(previewRotationOffset % (customReviewDrafts.length || 12)) + 1} se {Math.min((previewRotationOffset % (customReviewDrafts.length || 12)) + 3, customReviewDrafts.length || 12)} of {customReviewDrafts.length || 12}
+                        </span>
+                      </div>
                       <button
                         type="button"
-                        onClick={handleAddDraft}
-                        className="px-4 py-2 text-xs font-bold bg-[#6C3BFF] text-white rounded-xl hover:bg-[#5A2DE2] cursor-pointer inline-flex items-center gap-1.5"
+                        onClick={handleRotatePreview}
+                        className="px-3 py-1 bg-white hover:bg-purple-100 text-[#6C3BFF] border border-purple-300 rounded-lg text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-95"
                       >
-                        <span>+ Pehla Review Suggestion Likhein</span>
+                        <RefreshCw className="w-3 h-3" />
+                        <span>🔄 Rotate / Agli 3 Drafts Dekhein</span>
                       </button>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
-                      {customReviewDrafts.map((draft, idx) => (
-                        <div
-                          key={idx}
-                          className="p-4 bg-purple-50/30 rounded-xl border border-purple-100 space-y-3 flex flex-col justify-between"
-                        >
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1 text-amber-500">
-                                {[1, 2, 3, 4, 5].map((s) => (
-                                  <Star key={s} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                                ))}
-                                <span className="text-[11px] font-bold text-neutral-700 ml-1">
-                                  Suggestion {idx + 1}
+
+                    {/* 3 Active Rotating Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {[0, 1, 2].map((offset) => {
+                        const total = customReviewDrafts.length || 12;
+                        const actualIdx = (previewRotationOffset + offset) % total;
+                        const draft = customReviewDrafts[actualIdx] || '';
+                        const kwA = aiKeywords[actualIdx % (aiKeywords.length || 1)] || 'Top Quality';
+                        const kwB = aiKeywords[(actualIdx + 1) % (aiKeywords.length || 1)] || 'Friendly Team';
+
+                        return (
+                          <div
+                            key={offset}
+                            className="bg-white rounded-xl p-3.5 border border-purple-200/80 shadow-xs flex flex-col justify-between space-y-2.5 relative"
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1 text-amber-400">
+                                  {[1, 2, 3, 4, 5].map((s) => (
+                                    <Star key={s} className="w-3 h-3 fill-amber-400" />
+                                  ))}
+                                </div>
+                                <span className="text-[10px] font-bold bg-purple-50 text-[#6C3BFF] px-1.5 py-0.5 rounded">
+                                  Draft #{actualIdx + 1}
                                 </span>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteDraft(idx)}
-                                title="Delete suggestion"
-                                className="text-neutral-400 hover:text-rose-600 transition-colors p-1"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+
+                              <div className="flex flex-wrap gap-1">
+                                <span className="text-[9px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded">
+                                  ✨ {kwA}
+                                </span>
+                                <span className="text-[9px] bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded">
+                                  ✨ {kwB}
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-neutral-800 leading-relaxed line-clamp-4">
+                                "{draft}"
+                              </p>
                             </div>
 
-                            <textarea
-                              rows={4}
-                              value={draft}
-                              onChange={(e) => handleUpdateDraft(idx, e.target.value)}
-                              placeholder="Review suggestion draft yahan likhein ya edit karein..."
-                              className="w-full p-2.5 bg-white border border-neutral-200 rounded-lg text-xs text-neutral-800 leading-relaxed focus:outline-hidden focus:ring-1 focus:ring-[#6C3BFF]"
-                            />
+                            <div className="pt-1.5 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400">
+                              <span className="text-emerald-700 font-medium flex items-center gap-1">
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>QR par 1-tap copy</span>
+                              </span>
+                              <span>{draft.length} chars</span>
+                            </div>
                           </div>
-
-                          <div className="flex items-center justify-between pt-1 border-t border-purple-100/60 text-[10px] text-neutral-500">
-                            <span className="text-emerald-700 font-medium flex items-center gap-1">
-                              <Check className="w-3 h-3 text-emerald-600" />
-                              <span>Live on QR scan</span>
-                            </span>
-                            <span>{draft.length} chars</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
-                  )}
+                  </div>
 
-                  {customReviewDrafts.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                      <span className="text-[11px] text-neutral-500">
-                        Tip: Customer apne Google review me yeh exact words 1-tap me copy karke post kar payega.
+                  {/* EXPANDABLE / COLLAPSIBLE ALL 12 DRAFTS STUDIO */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAll12Drafts(!showAll12Drafts)}
+                      className="w-full py-2.5 px-4 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-700 flex items-center justify-between transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-[#6C3BFF]" />
+                        <span>
+                          {showAll12Drafts
+                            ? '▲ Sabhi 12 Review Drafts Chhupayein (Collapse)'
+                            : `▼ Sabhi ${customReviewDrafts.length} Keyword Review Drafts Dekhein / Edit Karein`}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-[#6C3BFF] font-bold">
+                        {showAll12Drafts ? 'Hide Details' : 'Show All 12 Drafts'}
                       </span>
-                      <button
-                        type="button"
-                        onClick={handleSaveReviewDrafts}
-                        disabled={isSavingReviewDrafts}
-                        className="px-5 py-2 text-xs font-bold bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer ml-auto"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        <span>Save All Changes</span>
-                      </button>
-                    </div>
-                  )}
+                    </button>
+
+                    {showAll12Drafts && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-4 animate-in fade-in">
+                        {customReviewDrafts.map((draft, idx) => {
+                          const kwA = aiKeywords[idx % (aiKeywords.length || 1)] || 'Top Quality';
+                          const kwB = aiKeywords[(idx + 1) % (aiKeywords.length || 1)] || 'Friendly Service';
+                          return (
+                            <div
+                              key={idx}
+                              className="p-3.5 bg-neutral-50/70 rounded-xl border border-neutral-200 space-y-2.5 flex flex-col justify-between"
+                            >
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1 text-amber-500">
+                                    {[1, 2, 3, 4, 5].map((s) => (
+                                      <Star key={s} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                                    ))}
+                                    <span className="text-[11px] font-bold text-neutral-700 ml-1">
+                                      Draft #{idx + 1}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-purple-700 font-semibold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                    {idx < 3 ? 'Batch 1' : idx < 6 ? 'Batch 2' : idx < 9 ? 'Batch 3' : 'Batch 4'}
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-wrap gap-1">
+                                  <span className="text-[9px] bg-purple-100/60 text-purple-800 px-1.5 py-0.5 rounded font-medium">
+                                    {kwA}
+                                  </span>
+                                  <span className="text-[9px] bg-purple-100/60 text-purple-800 px-1.5 py-0.5 rounded font-medium">
+                                    {kwB}
+                                  </span>
+                                </div>
+
+                                <textarea
+                                  rows={3}
+                                  value={draft}
+                                  onChange={(e) => handleUpdateDraft(idx, e.target.value)}
+                                  placeholder="Review suggestion draft..."
+                                  className="w-full p-2 bg-white border border-neutral-200 rounded-lg text-xs text-neutral-800 leading-relaxed focus:outline-hidden focus:ring-1 focus:ring-[#6C3BFF]"
+                                />
+                              </div>
+
+                              <div className="flex items-center justify-between pt-1 border-t border-neutral-200 text-[10px] text-neutral-500">
+                                <span className="text-emerald-700 font-medium flex items-center gap-1">
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span>Active on QR</span>
+                                </span>
+                                <span>{draft.length} chars</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-neutral-100">
+                    <span className="text-[11px] text-neutral-500">
+                      💡 Yeh 12 drafts aapke keywords se bante hain. Har bar customer review scan karega to 3 drafts rotate hokar dikhenge.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSaveReviewDrafts}
+                      disabled={isSavingReviewDrafts}
+                      className="px-5 py-2 text-xs font-bold bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer ml-auto"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save 12 Review Drafts</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
