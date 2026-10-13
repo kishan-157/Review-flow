@@ -44,6 +44,8 @@ const STORAGE_KEYS = {
   PASSWORDS: 'lb_passwords_vault',
   LOYALTY_CONFIGS: 'lb_loyalty_configs',
   LOYALTY_CARDS: 'lb_loyalty_cards',
+  REWARD_REMINDERS: 'lb_reward_reminders',
+  REMINDER_AUDIT_LOGS: 'lb_reminder_audit_logs',
 };
 
 // Cryptographically secure customer code generator (e.g., LB-CUS-8F42K9)
@@ -3154,5 +3156,16 @@ export async function searchLoyaltyCards(
     )
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
+
+// Re-export loyalty reward reminder functions from reminderService
+export {
+  syncAndGetReminders,
+  confirmReminderSentApi,
+  manuallyCorrectReminderStatusApi,
+  buildPersonalizedWhatsAppMessage,
+  generateRemindersForCard,
+  calculateDaysRemaining,
+  REMINDER_STAGES,
+} from './reminderService';
 
 

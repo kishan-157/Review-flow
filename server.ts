@@ -6,6 +6,13 @@ import {
   saveServerDb,
   authenticateUser,
 } from './src/server/dbStore';
+import {
+  RewardReminder,
+  ReminderAuditLog,
+  ReminderStage,
+  ReminderStatus,
+  LoyaltyCard,
+} from './src/types/database';
 
 dotenv.config({ override: true });
 
@@ -525,6 +532,261 @@ app.post('/api/sync/push', (req, res) => {
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'Reconciliation failed.' });
+  }
+});
+
+// ============================================================================
+// LOYALTY REWARD REMINDER MODULE (TRANSACTIONAL DUPLICATE-PREVENTION & AUDIT)
+// ============================================================================
+
+// 1. Sync & Get Reminders for a Business (Enforces 3 stages and unique ID per reward)
+app.post('/api/loyalty/reminders/sync/:businessId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const { cards = [], businessName = '' } = req.body;
+
+    if (!Array.isArray(db.reminders)) db.reminders = [];
+    if (!Array.isArray(db.reminderAuditLogs)) db.reminderAuditLogs = [];
+
+    const nowIso = new Date().toISOString();
+    const stages: { stage: ReminderStage; label: string; days: number }[] = [
+      { stage: '7_days', label: '7 Days Remaining', days: 7 },
+      { stage: '3_days', label: '3 Days Remaining', days: 3 },
+      { stage: 'expiry_day', label: 'Expiry Day (Today)', days: 0 },
+    ];
+
+    cards.forEach((card: LoyaltyCard) => {
+      const isClaimed = card.status === 'redeemed';
+      const isExpired = new Date(card.expires_at).getTime() < Date.now();
+      const diffMs = new Date(card.expires_at).getTime() - Date.now();
+      const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      stages.forEach(({ stage, label }) => {
+        const uniqueId = `${card.id}_${stage}`;
+        const existingIdx = db.reminders.findIndex((r) => r.id === uniqueId);
+
+        let initialStatus: ReminderStatus = 'PENDING';
+        if (isClaimed || isExpired) {
+          initialStatus = 'STOPPED';
+        }
+
+        const msgTemplate =
+          stage === '7_days'
+            ? `Hello ${card.customer_name}! 🌟 Friendly reminder from ${businessName || 'our store'}: Your VIP Reward "${card.reward_title}" (Code: ${card.voucher_code}) has 7 days remaining before expiry. Visit us soon to redeem!`
+            : stage === '3_days'
+            ? `Hello ${card.customer_name}! ⏰ Urgent reminder from ${businessName || 'our store'}: Only 3 days left to redeem your VIP Reward "${card.reward_title}" (Code: ${card.voucher_code})! Don't miss out, visit us today!`
+            : `Hello ${card.customer_name}! 🚨 Final Call from ${businessName || 'our store'}: TODAY IS THE LAST DAY to redeem your VIP Reward "${card.reward_title}" (Code: ${card.voucher_code})! Visit us before closing to claim!`;
+
+        if (existingIdx === -1) {
+          // Database constraint: Unique ID per reward and stage
+          const newReminder: RewardReminder = {
+            id: uniqueId,
+            reward_id: card.id,
+            business_id: card.business_id || businessId,
+            customer_name: card.customer_name,
+            customer_phone: card.customer_phone,
+            voucher_code: card.voucher_code,
+            reward_title: card.reward_title,
+            reward_value: card.reward_value,
+            expires_at: card.expires_at,
+            stage,
+            stage_label: label,
+            days_remaining: daysLeft,
+            status: initialStatus,
+            sent_at: null,
+            sent_by: null,
+            message_template: msgTemplate,
+            created_at: nowIso,
+            updated_at: nowIso,
+          };
+          db.reminders.push(newReminder);
+        } else {
+          const existing = db.reminders[existingIdx];
+          existing.days_remaining = daysLeft;
+          existing.customer_name = card.customer_name;
+          existing.customer_phone = card.customer_phone;
+          existing.message_template = msgTemplate;
+
+          // If reward became claimed or expired, stop future pending reminders
+          if ((isClaimed || isExpired) && existing.status === 'PENDING') {
+            existing.status = 'STOPPED';
+            existing.updated_at = nowIso;
+            db.reminderAuditLogs.unshift({
+              id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              reminder_id: existing.id,
+              reward_id: existing.reward_id,
+              business_id: existing.business_id,
+              stage: existing.stage,
+              previous_status: 'PENDING',
+              new_status: 'STOPPED',
+              changed_by: 'System (Auto Rule)',
+              reason: isClaimed ? 'Reward claimed by customer at counter' : 'Reward expired',
+              action: 'STOPPED',
+              created_at: nowIso,
+            });
+          }
+        }
+      });
+    });
+
+    saveServerDb(db);
+
+    const businessReminders = db.reminders.filter((r) => r.business_id === businessId);
+    const businessLogs = db.reminderAuditLogs.filter((l) => l.business_id === businessId);
+
+    return res.json({
+      success: true,
+      reminders: businessReminders,
+      auditLogs: businessLogs,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to sync reminders' });
+  }
+});
+
+// 2. Fetch Reminders for a Business
+app.get('/api/loyalty/reminders/:businessId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const reminders = (db.reminders || []).filter((r) => r.business_id === businessId);
+    const auditLogs = (db.reminderAuditLogs || []).filter((l) => l.business_id === businessId);
+
+    return res.json({ success: true, reminders, auditLogs });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to get reminders' });
+  }
+});
+
+// 3. Confirm WhatsApp Reminder Sent (Strict Server-Side Duplicate Prevention)
+app.post('/api/loyalty/reminders/:id/confirm-sent', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { id } = req.params;
+    const { sentBy = 'Business Owner', notes = '' } = req.body;
+
+    if (!Array.isArray(db.reminders)) db.reminders = [];
+    if (!Array.isArray(db.reminderAuditLogs)) db.reminderAuditLogs = [];
+
+    const reminder = db.reminders.find((r) => r.id === id);
+    if (!reminder) {
+      return res.status(404).json({ error: 'Reminder record not found.' });
+    }
+
+    // SERVER-SIDE DUPLICATE CHECK: If already SENT, block duplicate sending
+    if (reminder.status === 'SENT') {
+      return res.status(409).json({
+        error: `Duplicate sending blocked: This reminder was already confirmed as SENT on ${reminder.sent_at} by ${reminder.sent_by}.`,
+        alreadySentAt: reminder.sent_at,
+        sentBy: reminder.sent_by,
+      });
+    }
+
+    // Check if reward was claimed or expired
+    if (reminder.status === 'STOPPED') {
+      return res.status(400).json({
+        error: 'Action blocked: Future reminder actions are stopped because the reward was claimed or expired.',
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const prevStatus = reminder.status;
+    reminder.status = 'SENT';
+    reminder.sent_at = nowIso;
+    reminder.sent_by = sentBy;
+    reminder.updated_at = nowIso;
+
+    const auditLog: ReminderAuditLog = {
+      id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      reminder_id: reminder.id,
+      reward_id: reminder.reward_id,
+      business_id: reminder.business_id,
+      stage: reminder.stage,
+      previous_status: prevStatus,
+      new_status: 'SENT',
+      changed_by: sentBy,
+      reason: notes || 'WhatsApp reminder message delivery confirmed by business owner',
+      action: 'CONFIRM_SENT',
+      created_at: nowIso,
+    };
+
+    db.reminderAuditLogs.unshift(auditLog);
+    saveServerDb(db);
+
+    return res.json({ success: true, reminder, auditLog });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to confirm reminder' });
+  }
+});
+
+// 4. Manually Correct Status with Mandatory Audit Log
+app.post('/api/loyalty/reminders/:id/manual-correction', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { id } = req.params;
+    const { newStatus, changedBy = 'Business Owner', reason = '' } = req.body;
+
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'Audit reason is required for manual status correction.' });
+    }
+
+    if (!Array.isArray(db.reminders)) db.reminders = [];
+    if (!Array.isArray(db.reminderAuditLogs)) db.reminderAuditLogs = [];
+
+    const reminder = db.reminders.find((r) => r.id === id);
+    if (!reminder) {
+      return res.status(404).json({ error: 'Reminder record not found.' });
+    }
+
+    const nowIso = new Date().toISOString();
+    const prevStatus = reminder.status;
+    reminder.status = newStatus;
+    reminder.updated_at = nowIso;
+
+    if (newStatus === 'SENT' && !reminder.sent_at) {
+      reminder.sent_at = nowIso;
+      reminder.sent_by = changedBy;
+    } else if (newStatus === 'PENDING') {
+      reminder.sent_at = null;
+      reminder.sent_by = null;
+    }
+
+    const auditLog: ReminderAuditLog = {
+      id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      reminder_id: reminder.id,
+      reward_id: reminder.reward_id,
+      business_id: reminder.business_id,
+      stage: reminder.stage,
+      previous_status: prevStatus,
+      new_status: newStatus,
+      changed_by: changedBy,
+      reason: reason.trim(),
+      action: 'MANUAL_CORRECTION',
+      created_at: nowIso,
+    };
+
+    db.reminderAuditLogs.unshift(auditLog);
+    saveServerDb(db);
+
+    return res.json({ success: true, reminder, auditLog });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to update reminder status' });
+  }
+});
+
+// 5. Fetch Audit Logs for Business
+app.get('/api/loyalty/reminders/:businessId/audit-logs', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const logs = (db.reminderAuditLogs || [])
+      .filter((l) => l.business_id === businessId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    return res.json({ success: true, auditLogs: logs });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch audit logs' });
   }
 });
 

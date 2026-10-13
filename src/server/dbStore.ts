@@ -9,6 +9,9 @@ import {
   Announcement,
   AdminSetting,
   LoyaltyProgramConfig,
+  LoyaltyCard,
+  RewardReminder,
+  ReminderAuditLog,
   AuthSession,
 } from '../types/database';
 
@@ -22,6 +25,9 @@ export interface ServerDatabaseData {
   announcements: Announcement[];
   adminSettings: AdminSetting[];
   loyaltyConfigs: LoyaltyProgramConfig[];
+  loyaltyCards: LoyaltyCard[];
+  reminders: RewardReminder[];
+  reminderAuditLogs: ReminderAuditLog[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -178,6 +184,9 @@ function getInitialData(): ServerDatabaseData {
     announcements: [demoAnnouncement],
     adminSettings: defaultAdminSettings,
     loyaltyConfigs: [],
+    loyaltyCards: [],
+    reminders: [],
+    reminderAuditLogs: [],
   };
 }
 
@@ -218,6 +227,9 @@ export function loadServerDb(): ServerDatabaseData {
         announcements: parsed.announcements || init.announcements,
         adminSettings: parsed.adminSettings || init.adminSettings,
         loyaltyConfigs: parsed.loyaltyConfigs || [],
+        loyaltyCards: parsed.loyaltyCards || [],
+        reminders: parsed.reminders || [],
+        reminderAuditLogs: parsed.reminderAuditLogs || [],
       };
       return cachedDb;
     }

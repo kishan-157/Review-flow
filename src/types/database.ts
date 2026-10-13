@@ -203,3 +203,41 @@ export interface LoyaltyCard {
   redeemed_by?: string;
   created_at: string;
 }
+
+export type ReminderStage = '7_days' | '3_days' | 'expiry_day';
+export type ReminderStatus = 'PENDING' | 'SENT' | 'STOPPED' | 'CANCELLED';
+
+export interface RewardReminder {
+  id: string; // Unique deterministic identifier: `${reward_id}_${stage}`
+  reward_id: string;
+  business_id: string;
+  customer_name: string;
+  customer_phone: string;
+  voucher_code: string;
+  reward_title: string;
+  reward_value?: string;
+  expires_at: string;
+  stage: ReminderStage;
+  stage_label: string; // '7 Days Remaining', '3 Days Remaining', 'Expiry Day'
+  days_remaining: number;
+  status: ReminderStatus; // 'PENDING' | 'SENT' | 'STOPPED' | 'CANCELLED'
+  sent_at?: string | null;
+  sent_by?: string | null;
+  message_template: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReminderAuditLog {
+  id: string;
+  reminder_id: string;
+  reward_id: string;
+  business_id: string;
+  stage: ReminderStage;
+  previous_status: ReminderStatus;
+  new_status: ReminderStatus;
+  changed_by: string;
+  reason: string;
+  action: 'INITIALIZE' | 'CONFIRM_SENT' | 'MANUAL_CORRECTION' | 'CANCELLED' | 'STOPPED';
+  created_at: string;
+}

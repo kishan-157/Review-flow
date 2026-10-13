@@ -49,6 +49,8 @@ import {
   ShieldCheck,
   MapPin,
   Navigation,
+  MessageSquare,
+  Receipt,
 } from 'lucide-react';
 import {
   AuthSession,
@@ -95,6 +97,7 @@ import {
 import { QRCodeView } from './QRCodeView';
 import { DigitalLoyaltyCard } from './DigitalLoyaltyCard';
 import { DailyReviewAccessTrend } from './DailyReviewAccessTrend';
+import { LoyaltyReminderManager } from './LoyaltyReminderManager';
 
 interface CustomerDashboardProps {
   session: AuthSession;
@@ -277,6 +280,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   // Loyalty Table Filter & Search
   const [loyaltySearch, setLoyaltySearch] = useState('');
   const [loyaltyStatusFilter, setLoyaltyStatusFilter] = useState<'all' | 'active' | 'redeemed' | 'expired'>('all');
+  const [loyaltySubTab, setLoyaltySubTab] = useState<'cards' | 'reminders'>('cards');
   const [previewCardModal, setPreviewCardModal] = useState<LoyaltyCard | null>(null);
 
   // Manual Card Issue Modal / Form (Counter Walk-in)
@@ -2250,8 +2254,55 @@ Please generate:
                   );
                 })()}
 
-                {/* Counter Staff POS Voucher Verification Box */}
-                <div className="bg-white rounded-2xl border-2 border-purple-200 p-5 shadow-xs space-y-4">
+                {/* Loyalty Module Sub-Navigation: POS Billing VS WhatsApp Reminders */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-2">
+                  <div className="flex items-center gap-1.5 p-1 bg-neutral-100 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setLoyaltySubTab('cards')}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        loyaltySubTab === 'cards'
+                          ? 'bg-white text-neutral-900 shadow-2xs'
+                          : 'text-neutral-600 hover:text-neutral-900'
+                      }`}
+                    >
+                      <Receipt className="w-3.5 h-3.5 text-neutral-500" />
+                      <span>POS Billing & Customer Cards ({loyaltyCards.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLoyaltySubTab('reminders')}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        loyaltySubTab === 'reminders'
+                          ? 'bg-white text-emerald-800 shadow-2xs'
+                          : 'text-neutral-600 hover:text-neutral-900'
+                      }`}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>WhatsApp Expiry Reminders</span>
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-black border border-emerald-300">
+                        Anti-Duplicate (3 Stages)
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {loyaltySubTab === 'reminders' && business ? (
+                  <LoyaltyReminderManager
+                    business={business}
+                    loyaltyCards={loyaltyCards}
+                    session={session}
+                    onRefreshCards={async () => {
+                      if (business) {
+                        const fresh = await getLoyaltyCardsByBusinessId(business.id);
+                        setLoyaltyCards(fresh);
+                      }
+                    }}
+                  />
+                ) : (
+                  <>
+                    {/* Counter Staff POS Voucher Verification Box */}
+                    <div className="bg-white rounded-2xl border-2 border-purple-200 p-5 shadow-xs space-y-4">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-9 h-9 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center font-bold shadow-2xs">
