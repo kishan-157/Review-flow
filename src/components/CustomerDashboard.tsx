@@ -3029,8 +3029,10 @@ Please generate:
                     </div>
                   </div>
                 )}
-              </div>
+              </>
             )}
+          </div>
+        )}
 
             {/* TAB: DASHBOARD OVERVIEW */}
             {activeTab === 'dashboard' && (
