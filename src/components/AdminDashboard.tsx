@@ -1018,11 +1018,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-6">
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-neutral-200 pb-3 mb-6 overflow-x-auto">
+        {/* Navigation Tabs - Mobile Touch Slider */}
+        <div className="flex items-center gap-2 border-b border-neutral-200 pb-3 mb-6 overflow-x-auto no-scrollbar scroll-smooth snap-x">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
               activeTab === 'overview'
                 ? 'bg-[#6C3BFF] text-white shadow-xs'
                 : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
@@ -1033,7 +1033,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => setActiveTab('customers')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
               activeTab === 'customers'
                 ? 'bg-[#6C3BFF] text-white shadow-xs'
                 : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
@@ -1044,7 +1044,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => setActiveTab('announcements')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
               activeTab === 'announcements'
                 ? 'bg-[#6C3BFF] text-white shadow-xs'
                 : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
@@ -1055,7 +1055,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
               activeTab === 'settings'
                 ? 'bg-[#6C3BFF] text-white shadow-xs'
                 : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
@@ -1066,7 +1066,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => setActiveTab('audit')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
               activeTab === 'audit'
                 ? 'bg-[#6C3BFF] text-white shadow-xs'
                 : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
@@ -1079,53 +1079,65 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* TAB 1: GLOBAL OVERVIEW */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-                <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                  Total Customer Accounts
-                </span>
-                <span className="text-3xl font-bold font-mono tabular-nums text-neutral-900">
-                  {globalStats.totalCustomers}
-                </span>
-                <span className="text-[10px] text-emerald-600 block mt-1 font-semibold">
+            <div className="flex sm:grid sm:grid-cols-4 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-2 pt-0.5">
+              <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                    Total Customer Accounts
+                  </span>
+                  <span className="text-3xl font-bold font-mono tabular-nums text-neutral-900">
+                    {globalStats.totalCustomers}
+                  </span>
+                </div>
+                <span className="text-[10px] text-emerald-600 block mt-2 font-semibold">
                   {globalStats.activeCustomers} active tenants
                 </span>
               </div>
 
-              <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-                <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                  Total Businesses
-                </span>
-                <span className="text-3xl font-bold font-mono tabular-nums text-neutral-900">
-                  {globalStats.totalBusinesses}
-                </span>
-                <span className="text-[10px] text-neutral-400 block mt-1">Local establishments</span>
-              </div>
-
-              <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-                <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                  Total QR Scans Logged
-                </span>
-                <span className="text-3xl font-bold font-mono tabular-nums text-[#6C3BFF]">
-                  {globalStats.totalScans}
-                </span>
-                <span className="text-[10px] text-neutral-400 block mt-1">Interactions across all QR codes</span>
-              </div>
-
-              <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-                <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                  Total Ratings Logged
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-3xl font-bold font-mono tabular-nums text-neutral-900">
-                    {globalStats.totalRatings}
+              <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                    Total Businesses
                   </span>
-                  <span className="text-xs text-neutral-500">
-                    ({globalStats.averageRating > 0 ? `${globalStats.averageRating} ★` : '—'})
+                  <span className="text-3xl font-bold font-mono tabular-nums text-neutral-900">
+                    {globalStats.totalBusinesses}
                   </span>
                 </div>
-                <span className="text-[10px] text-neutral-400 block mt-1">1 to 5 star taps</span>
+                <span className="text-[10px] text-neutral-400 block mt-2">Local establishments</span>
               </div>
+
+              <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                    Total QR Scans Logged
+                  </span>
+                  <span className="text-3xl font-bold font-mono tabular-nums text-[#6C3BFF]">
+                    {globalStats.totalScans}
+                  </span>
+                </div>
+                <span className="text-[10px] text-neutral-400 block mt-2">Interactions across all QR codes</span>
+              </div>
+
+              <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                <div>
+                  <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                    Total Ratings Logged
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-3xl font-bold font-mono tabular-nums text-neutral-900">
+                      {globalStats.totalRatings}
+                    </span>
+                    <span className="text-xs text-neutral-500">
+                      ({globalStats.averageRating > 0 ? `${globalStats.averageRating} ★` : '—'})
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] text-neutral-400 block mt-2">1 to 5 star taps</span>
+              </div>
+            </div>
+            <div className="flex sm:hidden items-center justify-between text-[10px] text-neutral-400 px-1 -mt-3">
+              <span>👈 Swipe admin stats 👉</span>
+              <span className="font-semibold text-purple-700">Global KPI</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

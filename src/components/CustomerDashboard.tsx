@@ -12,6 +12,8 @@ import {
   Check,
   ExternalLink,
   ChevronRight,
+  ChevronLeft,
+  SlidersHorizontal,
   Star,
   Eye,
   LogOut,
@@ -51,6 +53,7 @@ import {
   Navigation,
   MessageSquare,
   Receipt,
+  Trophy,
 } from 'lucide-react';
 import {
   AuthSession,
@@ -98,6 +101,7 @@ import { QRCodeView } from './QRCodeView';
 import { DigitalLoyaltyCard } from './DigitalLoyaltyCard';
 import { DailyReviewAccessTrend } from './DailyReviewAccessTrend';
 import { LoyaltyReminderManager } from './LoyaltyReminderManager';
+import { ScratchCampaignManager } from './ScratchCampaignManager';
 
 interface CustomerDashboardProps {
   session: AuthSession;
@@ -115,7 +119,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onOpenLiveReview,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'loyalty' | 'ai_agent' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
+    'dashboard' | 'loyalty' | 'scratch_offers' | 'ai_agent' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
   >('dashboard');
 
   const [business, setBusiness] = useState<Business | null>(session.business || null);
@@ -1240,10 +1244,205 @@ Please generate:
           );
         })()}
 
+        {/* MOBILE SLIDER NAVIGATION BAR (User Friendly Touch Carousel for Mobile Phones) */}
+        <div className="block lg:hidden mb-4 bg-white/95 backdrop-blur-md rounded-2xl border border-neutral-200 p-2.5 shadow-xs sticky top-2 z-20">
+          <div className="flex items-center justify-between pb-2 px-1 border-b border-neutral-100 text-[11px]">
+            <div className="flex items-center gap-1.5 font-bold text-neutral-800">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-[#6C3BFF]" />
+              <span>Features Slider Menu</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full font-semibold">
+              <span>👈 Swipe to explore 👉</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth snap-x pt-2.5 pb-1 px-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveTab('dashboard')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'dashboard'
+                  ? 'bg-linear-to-r from-[#6C3BFF] to-[#8B5CF6] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>Overview</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('loyalty')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'loyalty'
+                  ? 'bg-linear-to-r from-amber-500 to-amber-600 text-neutral-950 shadow-xs ring-2 ring-amber-300/40'
+                  : 'bg-amber-50/70 text-amber-900 hover:bg-amber-100/70 border border-amber-200/80'
+              }`}
+            >
+              <Gift className="w-3.5 h-3.5 text-amber-600" />
+              <span>Loyalty & Rewards</span>
+              <span className={`px-1.5 py-0.5 text-[9px] rounded-md font-extrabold ${
+                activeTab === 'loyalty' ? 'bg-neutral-950 text-white' : 'bg-amber-200 text-amber-950'
+              }`}>
+                {loyaltyCards.length > 0 ? `${loyaltyCards.length}` : 'New'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('scratch_offers')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'scratch_offers'
+                  ? 'bg-linear-to-r from-purple-700 to-indigo-700 text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-purple-50/70 text-purple-900 hover:bg-purple-100/70 border border-purple-200/80'
+              }`}
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span>Scratch & Win</span>
+              <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-purple-200 text-purple-900 font-extrabold">
+                Free
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('ai_agent')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'ai_agent'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>AI Agent & Prompt</span>
+              <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-purple-100 text-[#6C3BFF] font-extrabold">
+                Auto
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('qrcode')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'qrcode'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>QR Standee</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('analytics')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'analytics'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Analytics</span>
+              <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-neutral-200 text-neutral-800 font-mono">
+                {analytics.totalScans}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('feedback')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'feedback'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <MessageSquareText className="w-3.5 h-3.5" />
+              <span>Private Feedback</span>
+              {feedbacks.length > 0 && (
+                <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-neutral-200 text-neutral-800 font-bold">
+                  {feedbacks.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('business')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'business'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span>Profile</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('settings')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'settings'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Settings</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('announcements')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'announcements'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <Bell className="w-3.5 h-3.5" />
+              <span>Announcements</span>
+              {unreadAnnouncementsCount > 0 && (
+                <span className="px-1.5 py-0.5 text-[9px] rounded-full bg-rose-500 text-white font-bold">
+                  {unreadAnnouncementsCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('support')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'support'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span>Support</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('security')}
+              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'security'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Security</span>
+            </button>
+          </div>
+        </div>
+
         {/* Workspace Layout: Sidebar Nav + Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Navigation Sidebar */}
-          <aside className="lg:col-span-3 bg-white rounded-2xl border border-neutral-200 p-3 shadow-xs space-y-1">
+          {/* Navigation Sidebar (Desktop view) */}
+          <aside className="hidden lg:block lg:col-span-3 bg-white rounded-2xl border border-neutral-200 p-3 shadow-xs space-y-1">
             <button
               onClick={() => setActiveTab('dashboard')}
               className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
@@ -1274,6 +1473,25 @@ Please generate:
                 activeTab === 'loyalty' ? 'bg-neutral-950 text-white' : 'bg-amber-100 text-amber-900'
               }`}>
                 {loyaltyCards.length > 0 ? `${loyaltyCards.length} Cards` : 'New'}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('scratch_offers')}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-all ${
+                activeTab === 'scratch_offers'
+                  ? 'bg-linear-to-r from-purple-700 to-indigo-700 text-white font-bold shadow-xs'
+                  : 'text-neutral-700 hover:bg-purple-50/80 hover:text-purple-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Trophy className="w-4 h-4 text-amber-500" />
+                <span>Scratch & Win Offers</span>
+              </div>
+              <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                activeTab === 'scratch_offers' ? 'bg-white text-purple-900' : 'bg-purple-100 text-purple-800'
+              }`}>
+                Optional
               </span>
             </button>
 
@@ -1999,20 +2217,21 @@ Please generate:
                       </button>
                     </div>
 
-                    {/* 3 Active Rotating Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {[0, 1, 2].map((offset) => {
-                        const total = customReviewDrafts.length || 12;
-                        const actualIdx = (previewRotationOffset + offset) % total;
-                        const draft = customReviewDrafts[actualIdx] || '';
-                        const kwA = aiKeywords[actualIdx % (aiKeywords.length || 1)] || 'Top Quality';
-                        const kwB = aiKeywords[(actualIdx + 1) % (aiKeywords.length || 1)] || 'Friendly Team';
+                    {/* 3 Active Rotating Cards: Mobile Touch Slider Carousel + Desktop Grid */}
+                    <div className="space-y-1.5">
+                      <div className="flex md:grid md:grid-cols-3 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1.5 pt-0.5">
+                        {[0, 1, 2].map((offset) => {
+                          const total = customReviewDrafts.length || 12;
+                          const actualIdx = (previewRotationOffset + offset) % total;
+                          const draft = customReviewDrafts[actualIdx] || '';
+                          const kwA = aiKeywords[actualIdx % (aiKeywords.length || 1)] || 'Top Quality';
+                          const kwB = aiKeywords[(actualIdx + 1) % (aiKeywords.length || 1)] || 'Friendly Team';
 
-                        return (
-                          <div
-                            key={offset}
-                            className="bg-white rounded-xl p-3.5 border border-purple-200/80 shadow-xs flex flex-col justify-between space-y-2.5 relative"
-                          >
+                          return (
+                            <div
+                              key={offset}
+                              className="min-w-[80vw] md:min-w-0 snap-center bg-white rounded-xl p-3.5 border border-purple-200/80 shadow-xs flex flex-col justify-between space-y-2.5 relative shrink-0 md:shrink"
+                            >
                             <div className="space-y-1.5">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1 text-amber-400">
@@ -2049,6 +2268,11 @@ Please generate:
                           </div>
                         );
                       })}
+                    </div>
+                      <div className="flex md:hidden items-center justify-between text-[10px] text-neutral-400 px-1">
+                        <span>👈 Swipe drafts 👉</span>
+                        <span className="font-semibold text-purple-700">3 of {customReviewDrafts.length || 12}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -2206,49 +2430,63 @@ Please generate:
                   const redemptionRate = totalIssued > 0 ? Math.round((totalRedeemed / totalIssued) * 100) : 0;
 
                   return (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      <div className="bg-white p-4.5 rounded-2xl border border-neutral-200 shadow-xs">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-semibold text-neutral-500">Cards Issued</span>
-                          <Gift className="w-4 h-4 text-amber-500" />
+                    <div className="space-y-1.5">
+                      <div className="flex sm:grid sm:grid-cols-4 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1.5 pt-0.5">
+                        <div className="min-w-[68vw] sm:min-w-0 snap-center bg-white p-4.5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-semibold text-neutral-500">Cards Issued</span>
+                              <Gift className="w-4 h-4 text-amber-500" />
+                            </div>
+                            <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
+                              {totalIssued}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-neutral-400 block mt-2">Reviewers rewarded</span>
                         </div>
-                        <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
-                          {totalIssued}
-                        </span>
-                        <span className="text-[10px] text-neutral-400 block mt-1">Reviewers rewarded</span>
-                      </div>
 
-                      <div className="bg-white p-4.5 rounded-2xl border border-neutral-200 shadow-xs">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-semibold text-neutral-500">Redeemed at Counter</span>
-                          <BadgeCheck className="w-4 h-4 text-emerald-600" />
+                        <div className="min-w-[68vw] sm:min-w-0 snap-center bg-white p-4.5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-semibold text-neutral-500">Redeemed at Counter</span>
+                              <BadgeCheck className="w-4 h-4 text-emerald-600" />
+                            </div>
+                            <span className="text-2xl font-bold text-emerald-700 font-mono tabular-nums">
+                              {totalRedeemed}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-neutral-400 block mt-2">Repeat visits claimed</span>
                         </div>
-                        <span className="text-2xl font-bold text-emerald-700 font-mono tabular-nums">
-                          {totalRedeemed}
-                        </span>
-                        <span className="text-[10px] text-neutral-400 block mt-1">Repeat visits claimed</span>
-                      </div>
 
-                      <div className="bg-white p-4.5 rounded-2xl border border-neutral-200 shadow-xs">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-semibold text-neutral-500">Active Outstanding</span>
-                          <Clock className="w-4 h-4 text-purple-600" />
+                        <div className="min-w-[68vw] sm:min-w-0 snap-center bg-white p-4.5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-semibold text-neutral-500">Active Outstanding</span>
+                              <Clock className="w-4 h-4 text-purple-600" />
+                            </div>
+                            <span className="text-2xl font-bold text-[#6C3BFF] font-mono tabular-nums">
+                              {totalActive}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-neutral-400 block mt-2">In customer hands</span>
                         </div>
-                        <span className="text-2xl font-bold text-[#6C3BFF] font-mono tabular-nums">
-                          {totalActive}
-                        </span>
-                        <span className="text-[10px] text-neutral-400 block mt-1">In customer hands</span>
-                      </div>
 
-                      <div className="bg-white p-4.5 rounded-2xl border border-neutral-200 shadow-xs">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-semibold text-neutral-500">Redemption Rate</span>
-                          <BarChart3 className="w-4 h-4 text-indigo-600" />
+                        <div className="min-w-[68vw] sm:min-w-0 snap-center bg-white p-4.5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-semibold text-neutral-500">Redemption Rate</span>
+                              <BarChart3 className="w-4 h-4 text-indigo-600" />
+                            </div>
+                            <span className="text-2xl font-bold text-indigo-600 font-mono tabular-nums">
+                              {redemptionRate}%
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-neutral-400 block mt-2">Customer return rate</span>
                         </div>
-                        <span className="text-2xl font-bold text-indigo-600 font-mono tabular-nums">
-                          {redemptionRate}%
-                        </span>
-                        <span className="text-[10px] text-neutral-400 block mt-1">Customer return rate</span>
+                      </div>
+                      <div className="flex sm:hidden items-center justify-between text-[10px] text-neutral-400 px-1">
+                        <span>👈 Swipe loyalty metrics 👉</span>
+                        <span className="font-semibold text-amber-700">4 Stats</span>
                       </div>
                     </div>
                   );
@@ -2256,11 +2494,11 @@ Please generate:
 
                 {/* Loyalty Module Sub-Navigation: POS Billing VS WhatsApp Reminders */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-2">
-                  <div className="flex items-center gap-1.5 p-1 bg-neutral-100 rounded-xl">
+                  <div className="flex items-center gap-1.5 p-1 bg-neutral-100 rounded-xl overflow-x-auto no-scrollbar w-full sm:w-auto snap-x">
                     <button
                       type="button"
                       onClick={() => setLoyaltySubTab('cards')}
-                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 snap-start whitespace-nowrap ${
                         loyaltySubTab === 'cards'
                           ? 'bg-white text-neutral-900 shadow-2xs'
                           : 'text-neutral-600 hover:text-neutral-900'
@@ -2272,7 +2510,7 @@ Please generate:
                     <button
                       type="button"
                       onClick={() => setLoyaltySubTab('reminders')}
-                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shrink-0 snap-start whitespace-nowrap ${
                         loyaltySubTab === 'reminders'
                           ? 'bg-white text-emerald-800 shadow-2xs'
                           : 'text-neutral-600 hover:text-neutral-900'
@@ -3034,54 +3272,81 @@ Please generate:
           </div>
         )}
 
+            {/* TAB: SCRATCH & WIN OFFERS (INDEPENDENT PROMOTIONAL CAMPAIGN) */}
+            {activeTab === 'scratch_offers' && business && (
+              <ScratchCampaignManager
+                business={business}
+                onPreviewOffer={(camp) => {
+                  if (settings) {
+                    onPreviewReviewFlow(business, settings);
+                  }
+                }}
+              />
+            )}
+
             {/* TAB: DASHBOARD OVERVIEW */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
-                {/* Metrics Cards Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-                    <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                      Total QR Scans
-                    </span>
-                    <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
-                      {analytics.totalScans}
-                    </span>
-                    <span className="text-[10px] text-neutral-400 block mt-1">Interactions logged</span>
-                  </div>
-
-                  <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-                    <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                      Ratings Selected
-                    </span>
-                    <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
-                      {analytics.totalRatings}
-                    </span>
-                    <span className="text-[10px] text-neutral-400 block mt-1">1 to 5 star taps</span>
-                  </div>
-
-                  <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-                    <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                      Avg Rating
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
-                        {analytics.averageRating > 0 ? analytics.averageRating : '—'}
-                      </span>
-                      {analytics.averageRating > 0 && (
-                        <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                      )}
+                {/* Metrics Cards: Mobile Touch Slider Carousel + Desktop 4-col Grid */}
+                <div className="space-y-1.5">
+                  <div className="flex sm:grid sm:grid-cols-4 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1.5 pt-0.5">
+                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                      <div>
+                        <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                          Total QR Scans
+                        </span>
+                        <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
+                          {analytics.totalScans}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-neutral-400 block mt-2">Interactions logged</span>
                     </div>
-                    <span className="text-[10px] text-neutral-400 block mt-1">From user selections</span>
-                  </div>
 
-                  <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs">
-                    <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                      Google Review Clicks
-                    </span>
-                    <span className="text-2xl font-bold text-[#6C3BFF] font-mono tabular-nums">
-                      {analytics.googleClicks}
-                    </span>
-                    <span className="text-[10px] text-neutral-400 block mt-1">Redirects initiated</span>
+                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                      <div>
+                        <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                          Ratings Selected
+                        </span>
+                        <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
+                          {analytics.totalRatings}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-neutral-400 block mt-2">1 to 5 star taps</span>
+                    </div>
+
+                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                      <div>
+                        <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                          Avg Rating
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
+                            {analytics.averageRating > 0 ? analytics.averageRating : '—'}
+                          </span>
+                          {analytics.averageRating > 0 && (
+                            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-neutral-400 block mt-2">From user selections</span>
+                    </div>
+
+                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
+                      <div>
+                        <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                          Google Review Clicks
+                        </span>
+                        <span className="text-2xl font-bold text-[#6C3BFF] font-mono tabular-nums">
+                          {analytics.googleClicks}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-neutral-400 block mt-2">Redirects initiated</span>
+                    </div>
+                  </div>
+                  {/* Mobile swipe hint */}
+                  <div className="flex sm:hidden items-center justify-between text-[10px] text-neutral-400 px-1">
+                    <span>👈 Swipe 4 metric cards 👉</span>
+                    <span className="font-semibold text-purple-700">Live Sync</span>
                   </div>
                 </div>
 
@@ -3215,7 +3480,78 @@ Please generate:
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                      {/* Mobile Setup Checklist Slider */}
+                      <div className="block sm:hidden">
+                        <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 no-scrollbar pb-2 pt-0.5">
+                          {checklistItems.map((item, idx) => (
+                            <div
+                              key={item.id}
+                              onClick={() => handleChecklistAction(item)}
+                              className={`min-w-[82vw] snap-center p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 shrink-0 ${
+                                item.isDone
+                                  ? 'bg-neutral-50/80 border-neutral-200'
+                                  : 'bg-amber-50/40 border-amber-300 shadow-2xs'
+                              }`}
+                            >
+                              <div className="flex items-start gap-2.5">
+                                <button
+                                  type="button"
+                                  title={item.isDone ? 'Mark Incomplete' : 'Mark Completed'}
+                                  onClick={(e) => handleToggleItemCheck(item.id, e)}
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 cursor-pointer ${
+                                    item.isDone
+                                      ? 'bg-emerald-100 text-emerald-600'
+                                      : 'bg-amber-100 text-amber-700'
+                                  }`}
+                                >
+                                  {item.isDone ? (
+                                    <Check className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Clock className="w-3 h-3" />
+                                  )}
+                                </button>
+                                <div>
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className="text-[10px] font-bold text-neutral-400">Step {idx + 1} of {totalCount}</span>
+                                    {item.isDone && (
+                                      <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">Completed</span>
+                                    )}
+                                  </div>
+                                  <span className="font-bold text-neutral-900 text-xs block">
+                                    {item.title}
+                                  </span>
+                                  <span className="text-[11px] text-neutral-500 line-clamp-2 mt-0.5 block">
+                                    {item.desc}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleChecklistAction(item);
+                                }}
+                                className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                  item.isDone
+                                    ? 'bg-white border border-neutral-200 text-neutral-700'
+                                    : 'bg-[#6C3BFF] text-white shadow-xs'
+                                }`}
+                              >
+                                <span>{item.actionLabel}</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-neutral-400 px-1 pt-1">
+                          <span>👈 Swipe steps horizontally 👉</span>
+                          <span className="font-bold text-[#6C3BFF]">{completedCount} of {totalCount} Done</span>
+                        </div>
+                      </div>
+
+                      {/* Desktop Setup Checklist Grid */}
+                      <div className="hidden sm:grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                         {checklistItems.map((item) => (
                           <div
                             key={item.id}
@@ -3429,34 +3765,40 @@ Please generate:
                     not unverified claims of published Google reviews.
                   </p>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
-                    <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-100">
-                      <span className="text-xs text-neutral-500 block mb-1">Total QR Scans</span>
-                      <span className="text-2xl font-bold font-mono tabular-nums">{analytics.totalScans}</span>
+                  <div className="space-y-1.5 pt-2">
+                    <div className="flex sm:grid sm:grid-cols-3 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-2 pt-0.5">
+                      <div className="min-w-[65vw] sm:min-w-0 snap-center p-4 bg-neutral-50 rounded-xl border border-neutral-100 shrink-0 sm:shrink">
+                        <span className="text-xs text-neutral-500 block mb-1">Total QR Scans</span>
+                        <span className="text-2xl font-bold font-mono tabular-nums">{analytics.totalScans}</span>
+                      </div>
+                      <div className="min-w-[65vw] sm:min-w-0 snap-center p-4 bg-neutral-50 rounded-xl border border-neutral-100 shrink-0 sm:shrink">
+                        <span className="text-xs text-neutral-500 block mb-1">Ratings Logged</span>
+                        <span className="text-2xl font-bold font-mono tabular-nums">{analytics.totalRatings}</span>
+                      </div>
+                      <div className="min-w-[65vw] sm:min-w-0 snap-center p-4 bg-neutral-50 rounded-xl border border-neutral-100 shrink-0 sm:shrink">
+                        <span className="text-xs text-neutral-500 block mb-1">Average Selected Rating</span>
+                        <span className="text-2xl font-bold font-mono tabular-nums">{analytics.averageRating} ★</span>
+                      </div>
+                      <div className="min-w-[65vw] sm:min-w-0 snap-center p-4 bg-neutral-50 rounded-xl border border-neutral-100 shrink-0 sm:shrink">
+                        <span className="text-xs text-neutral-500 block mb-1">Drafts Copied</span>
+                        <span className="text-2xl font-bold font-mono tabular-nums">{analytics.reviewCopies}</span>
+                      </div>
+                      <div className="min-w-[65vw] sm:min-w-0 snap-center p-4 bg-neutral-50 rounded-xl border border-neutral-100 shrink-0 sm:shrink">
+                        <span className="text-xs text-neutral-500 block mb-1">Google Review Clicks</span>
+                        <span className="text-2xl font-bold font-mono text-[#6C3BFF] tabular-nums">
+                          {analytics.googleClicks}
+                        </span>
+                      </div>
+                      <div className="min-w-[65vw] sm:min-w-0 snap-center p-4 bg-neutral-50 rounded-xl border border-neutral-100 shrink-0 sm:shrink">
+                        <span className="text-xs text-neutral-500 block mb-1">Private Feedbacks</span>
+                        <span className="text-2xl font-bold font-mono tabular-nums">
+                          {analytics.feedbackSubmissions}
+                        </span>
+                      </div>
                     </div>
-                    <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-100">
-                      <span className="text-xs text-neutral-500 block mb-1">Ratings Logged</span>
-                      <span className="text-2xl font-bold font-mono tabular-nums">{analytics.totalRatings}</span>
-                    </div>
-                    <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-100">
-                      <span className="text-xs text-neutral-500 block mb-1">Average Selected Rating</span>
-                      <span className="text-2xl font-bold font-mono tabular-nums">{analytics.averageRating} ★</span>
-                    </div>
-                    <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-100">
-                      <span className="text-xs text-neutral-500 block mb-1">Drafts Copied</span>
-                      <span className="text-2xl font-bold font-mono tabular-nums">{analytics.reviewCopies}</span>
-                    </div>
-                    <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-100">
-                      <span className="text-xs text-neutral-500 block mb-1">Google Review Clicks</span>
-                      <span className="text-2xl font-bold font-mono text-[#6C3BFF] tabular-nums">
-                        {analytics.googleClicks}
-                      </span>
-                    </div>
-                    <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-100">
-                      <span className="text-xs text-neutral-500 block mb-1">Private Feedbacks</span>
-                      <span className="text-2xl font-bold font-mono tabular-nums">
-                        {analytics.feedbackSubmissions}
-                      </span>
+                    <div className="flex sm:hidden items-center justify-between text-[10px] text-neutral-400 px-1">
+                      <span>👈 Swipe metrics cards 👉</span>
+                      <span className="text-purple-600 font-bold">Analytics KPI</span>
                     </div>
                   </div>
                 </div>

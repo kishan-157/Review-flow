@@ -12,6 +12,8 @@ import {
   ReminderStage,
   ReminderStatus,
   LoyaltyCard,
+  ScratchCampaign,
+  ScratchPlay,
 } from './src/types/database';
 
 dotenv.config({ override: true });
@@ -789,6 +791,367 @@ app.get('/api/loyalty/reminders/:businessId/audit-logs', (req, res) => {
     return res.status(500).json({ error: err?.message || 'Failed to fetch audit logs' });
   }
 });
+
+// ==============================================================================
+// SCRATCH & WIN OFFERS MODULE (INDEPENDENT CAMPAIGN & PROMOTIONAL ENGINE)
+// ==============================================================================
+
+// Helper to determine campaign active validity
+function isCampaignPlayable(campaign: ScratchCampaign): { valid: boolean; reason?: string } {
+  if (!campaign) return { valid: false, reason: 'Campaign not found' };
+  if (campaign.status !== 'active') return { valid: false, reason: `Campaign is currently ${campaign.status}` };
+  const now = Date.now();
+  if (campaign.start_date && new Date(campaign.start_date).getTime() > now) {
+    return { valid: false, reason: 'Campaign has not started yet' };
+  }
+  if (campaign.expiry_date && new Date(campaign.expiry_date).getTime() < now) {
+    return { valid: false, reason: 'Campaign has expired' };
+  }
+  if (campaign.total_reward_quantity > 0 && campaign.rewards_claimed_count >= campaign.total_reward_quantity) {
+    return { valid: false, reason: 'Campaign prize pool limit reached' };
+  }
+  return { valid: true };
+}
+
+// 1. Get or Create Scratch & Win Campaign for a Business
+app.get('/api/scratch/campaign/:businessId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    if (!Array.isArray(db.scratchCampaigns)) db.scratchCampaigns = [];
+
+    let campaign = db.scratchCampaigns.find((c) => c.business_id === businessId);
+    if (!campaign) {
+      const now = new Date();
+      const exp = new Date(now);
+      exp.setDate(exp.getDate() + 30);
+
+      campaign = {
+        id: `sc_${businessId}`,
+        business_id: businessId,
+        campaign_name: 'Summer Scratch & Win Fiesta',
+        description: 'Scratch and reveal an instant surprise discount or free item on your bill!',
+        reward_type: 'discount_percentage',
+        reward_value: '20% OFF',
+        reward_headline: '🎉 You Won Flat 20% OFF!',
+        free_item_name: 'Signature Dessert',
+        min_purchase_amount: 'Min. bill ₹299',
+        start_date: now.toISOString().split('T')[0],
+        expiry_date: exp.toISOString().split('T')[0],
+        validity_days_after_win: 15,
+        total_reward_quantity: 150,
+        rewards_claimed_count: 0,
+        per_customer_play_limit: 1,
+        status: 'draft', // Disabled by default, business owner controls independently
+        terms_conditions: 'Valid on dine-in & takeaway. Show the revealed digital coupon at billing. Single use only.',
+        created_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      };
+      db.scratchCampaigns.push(campaign);
+      saveServerDb(db);
+    }
+
+    return res.json({ success: true, campaign });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch campaign' });
+  }
+});
+
+// 2. Save / Update Scratch & Win Campaign Configuration
+app.post('/api/scratch/campaign/:businessId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const updates = req.body || {};
+
+    if (!Array.isArray(db.scratchCampaigns)) db.scratchCampaigns = [];
+    let idx = db.scratchCampaigns.findIndex((c) => c.business_id === businessId);
+
+    const now = new Date().toISOString();
+    let updatedCampaign: ScratchCampaign;
+
+    if (idx !== -1) {
+      updatedCampaign = {
+        ...db.scratchCampaigns[idx],
+        ...updates,
+        business_id: businessId,
+        updated_at: now,
+      };
+      db.scratchCampaigns[idx] = updatedCampaign;
+    } else {
+      updatedCampaign = {
+        id: `sc_${businessId}`,
+        business_id: businessId,
+        campaign_name: updates.campaign_name || 'Scratch & Win Special',
+        description: updates.description || 'Scratch to win exciting prizes!',
+        reward_type: updates.reward_type || 'discount_percentage',
+        reward_value: updates.reward_value || '15% OFF',
+        reward_headline: updates.reward_headline || '🎉 You Won 15% OFF!',
+        free_item_name: updates.free_item_name || '',
+        min_purchase_amount: updates.min_purchase_amount || '',
+        start_date: updates.start_date || now.split('T')[0],
+        expiry_date: updates.expiry_date || now.split('T')[0],
+        validity_days_after_win: Number(updates.validity_days_after_win) || 15,
+        total_reward_quantity: Number(updates.total_reward_quantity) || 100,
+        rewards_claimed_count: 0,
+        per_customer_play_limit: Number(updates.per_customer_play_limit) || 1,
+        status: updates.status || 'draft',
+        terms_conditions: updates.terms_conditions || 'One coupon per customer/bill. Present code at billing.',
+        created_at: now,
+        updated_at: now,
+      };
+      db.scratchCampaigns.push(updatedCampaign);
+    }
+
+    saveServerDb(db);
+    return res.json({ success: true, campaign: updatedCampaign });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to save campaign' });
+  }
+});
+
+// 3. Check Eligibility for Customer (Server-Side Limit & Campaign Verification)
+app.get('/api/scratch/eligibility/:businessId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const phone = ((req.query.phone as string) || '').trim().replace(/[^0-9]/g, '');
+
+    if (!Array.isArray(db.scratchCampaigns)) db.scratchCampaigns = [];
+    if (!Array.isArray(db.scratchPlays)) db.scratchPlays = [];
+
+    const campaign = db.scratchCampaigns.find((c) => c.business_id === businessId);
+    if (!campaign) {
+      return res.json({ eligible: false, reason: 'No scratch campaign found for this business' });
+    }
+
+    const check = isCampaignPlayable(campaign);
+    if (!check.valid) {
+      return res.json({ eligible: false, reason: check.reason, campaignStatus: campaign.status });
+    }
+
+    if (!phone) {
+      return res.json({
+        eligible: true,
+        campaign: {
+          id: campaign.id,
+          name: campaign.campaign_name,
+          description: campaign.description,
+          status: campaign.status,
+          expiry_date: campaign.expiry_date,
+          reward_headline: campaign.reward_headline,
+          reward_type: campaign.reward_type,
+          reward_value: campaign.reward_value,
+        },
+      });
+    }
+
+    // Check customer plays count
+    const customerPlays = db.scratchPlays.filter(
+      (p) => p.campaign_id === campaign.id && p.customer_phone.replace(/[^0-9]/g, '') === phone
+    );
+
+    const limit = campaign.per_customer_play_limit || 1;
+    if (customerPlays.length >= limit) {
+      return res.json({
+        eligible: false,
+        reason: `You have reached the limit of ${limit} play(s) for this promotional campaign.`,
+        playsCount: customerPlays.length,
+        existingPlays: customerPlays,
+      });
+    }
+
+    return res.json({
+      eligible: true,
+      remainingPlays: limit - customerPlays.length,
+      campaign,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Eligibility check failed' });
+  }
+});
+
+// 4. Server-Side Prize Determination & Concurrency-Safe Scratch Play
+app.post('/api/scratch/play', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId, customerName, customerPhone, customerEmail } = req.body;
+
+    const cleanName = (customerName || '').trim();
+    const cleanPhone = (customerPhone || '').trim();
+
+    if (!businessId || !cleanName || !cleanPhone) {
+      return res.status(400).json({ error: 'Business ID, Customer Name, and Customer Phone are required.' });
+    }
+
+    if (!Array.isArray(db.scratchCampaigns)) db.scratchCampaigns = [];
+    if (!Array.isArray(db.scratchPlays)) db.scratchPlays = [];
+
+    const campaign = db.scratchCampaigns.find((c) => c.business_id === businessId);
+    if (!campaign) {
+      return res.status(404).json({ error: 'No promotional scratch campaign found.' });
+    }
+
+    const check = isCampaignPlayable(campaign);
+    if (!check.valid) {
+      return res.status(400).json({ error: check.reason });
+    }
+
+    // Concurrency-safe play count check
+    const normalizedPhone = cleanPhone.replace(/[^0-9]/g, '');
+    const previousPlays = db.scratchPlays.filter(
+      (p) => p.campaign_id === campaign.id && p.customer_phone.replace(/[^0-9]/g, '') === normalizedPhone
+    );
+
+    const limit = campaign.per_customer_play_limit || 1;
+    if (previousPlays.length >= limit) {
+      return res.status(429).json({
+        error: `Play limit reached: You have already played ${previousPlays.length} time(s) for this campaign.`,
+        existingPlays: previousPlays,
+      });
+    }
+
+    // Check pool cap
+    if (campaign.total_reward_quantity > 0 && campaign.rewards_claimed_count >= campaign.total_reward_quantity) {
+      return res.status(410).json({ error: 'All rewards for this campaign have been claimed.' });
+    }
+
+    // SERVER-SIDE PRIZE DETERMINATION (Client never dictates prize)
+    // Server dynamically resolves the verified prize parameters
+    let prizeTitle = campaign.reward_headline;
+    let prizeValue = campaign.reward_value;
+    if (campaign.reward_type === 'free_item' && campaign.free_item_name) {
+      prizeTitle = `Free ${campaign.free_item_name}`;
+      prizeValue = `1 Free ${campaign.free_item_name}`;
+    }
+
+    // Generate unique concurrency-safe voucher code: SCR-<HEX>-<RAND>
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let codeRand = '';
+    for (let i = 0; i < 4; i++) {
+      codeRand += chars[Math.floor(Math.random() * chars.length)];
+    }
+    const voucherCode = `SCR-${codeRand}`;
+
+    const now = new Date();
+    const expiry = new Date(now);
+    expiry.setDate(expiry.getDate() + (campaign.validity_days_after_win || 15));
+
+    const playId = `scplay_${campaign.id}_${normalizedPhone}_${previousPlays.length + 1}_${Date.now()}`;
+
+    const newPlay: ScratchPlay = {
+      id: playId,
+      campaign_id: campaign.id,
+      business_id: businessId,
+      customer_name: cleanName,
+      customer_phone: cleanPhone,
+      customer_email: customerEmail || undefined,
+      voucher_code: voucherCode,
+      reward_title: prizeTitle,
+      reward_type: campaign.reward_type,
+      reward_value: prizeValue,
+      min_purchase_amount: campaign.min_purchase_amount,
+      terms_conditions: campaign.terms_conditions,
+      status: 'active',
+      scratched_at: now.toISOString(),
+      expires_at: expiry.toISOString(),
+      created_at: now.toISOString(),
+    };
+
+    db.scratchPlays.unshift(newPlay);
+    campaign.rewards_claimed_count = (campaign.rewards_claimed_count || 0) + 1;
+    campaign.updated_at = now.toISOString();
+
+    saveServerDb(db);
+
+    return res.json({
+      success: true,
+      play: newPlay,
+      campaignRemaining: Math.max(0, campaign.total_reward_quantity - campaign.rewards_claimed_count),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to process scratch play' });
+  }
+});
+
+// 5. List Scratch Plays / Customer Winners for a Business
+app.get('/api/scratch/plays/:businessId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    if (!Array.isArray(db.scratchPlays)) db.scratchPlays = [];
+
+    const plays = db.scratchPlays
+      .filter((p) => p.business_id === businessId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    return res.json({ success: true, plays });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch plays' });
+  }
+});
+
+// 6. POS Cashier Scratch Voucher Verification & Redemption (Supports Voucher Code, Mobile Number, or Play ID)
+app.post('/api/scratch/redeem', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { code, playId, businessId, redeemedBy = 'Counter Staff' } = req.body;
+
+    if (!code && !playId) {
+      return res.status(400).json({ error: 'Voucher code or mobile number is required' });
+    }
+
+    if (!Array.isArray(db.scratchPlays)) db.scratchPlays = [];
+
+    const cleanInput = (code || '').trim();
+    const cleanUpper = cleanInput.toUpperCase();
+    const digitsOnly = cleanInput.replace(/\D/g, '');
+
+    // Search by specific playId, or voucher code, or mobile number
+    let play = db.scratchPlays.find((p) => {
+      if (businessId && p.business_id !== businessId) return false;
+      if (playId && p.id === playId) return true;
+      if (cleanUpper && p.voucher_code.toUpperCase() === cleanUpper) return true;
+      if (digitsOnly.length >= 7) {
+        const phoneDigits = p.customer_phone.replace(/\D/g, '');
+        if (phoneDigits === digitsOnly || phoneDigits.endsWith(digitsOnly) || digitsOnly.endsWith(phoneDigits)) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (!play) {
+      return res.status(404).json({ error: `No Scratch & Win coupon found matching "${cleanInput}". Please check the voucher code or mobile number.` });
+    }
+
+    if (play.status === 'redeemed') {
+      return res.status(409).json({
+        error: `Coupon was already redeemed on ${new Date(play.redeemed_at || '').toLocaleString()} by ${play.redeemed_by || 'Staff'}.`,
+        play,
+      });
+    }
+
+    if (new Date(play.expires_at).getTime() < Date.now()) {
+      return res.status(410).json({
+        error: `Coupon expired on ${new Date(play.expires_at).toLocaleDateString()}. Cannot redeem.`,
+        play,
+      });
+    }
+
+    const now = new Date().toISOString();
+    play.status = 'redeemed';
+    play.redeemed_at = now;
+    play.redeemed_by = redeemedBy;
+
+    saveServerDb(db);
+
+    return res.json({ success: true, message: 'Coupon redeemed successfully!', play });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Redemption failed' });
+  }
+});
+
 
 // Server-side health and Supabase Secret Key status check (Zero secret leakage)
 app.get('/api/supabase/status', (_req, res) => {

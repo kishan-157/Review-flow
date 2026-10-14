@@ -22,6 +22,7 @@ import {
   MapPin,
   CheckCircle2,
   Navigation,
+  Trophy,
 } from 'lucide-react';
 import {
   Business,
@@ -29,6 +30,8 @@ import {
   SupportedLanguage,
   LoyaltyProgramConfig,
   LoyaltyCard,
+  ScratchCampaign,
+  ScratchPlay,
 } from '../types/database';
 import {
   recordAnalyticsEvent,
@@ -37,12 +40,16 @@ import {
   getReviewSettings,
   getLoyaltyConfig,
   issueLoyaltyCard,
+  getScratchCampaign,
+  checkScratchEligibility,
+  executeScratchPlay,
 } from '../lib/db';
 import {
   generateReviewSuggestions,
   getDefaultCategoriesForCategory,
 } from '../lib/suggestionEngine';
 import { DigitalLoyaltyCard } from './DigitalLoyaltyCard';
+import { ScratchCardModal } from './ScratchCardModal';
 
 interface ReviewExperienceProps {
   businessSlug?: string;
@@ -103,6 +110,17 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
   const [issuedLoyaltyCard, setIssuedLoyaltyCard] = useState<LoyaltyCard | null>(null);
   const [issuingLoyalty, setIssuingLoyalty] = useState<boolean>(false);
   const [loyaltyClaimError, setLoyaltyClaimError] = useState<string | null>(null);
+
+  // Scratch & Win Promotional Campaign State (Completely Independent from Review Reward)
+  const [scratchCampaign, setScratchCampaign] = useState<ScratchCampaign | null>(null);
+  const [scratchEligible, setScratchEligible] = useState<boolean>(false);
+  const [activeScratchPlay, setActiveScratchPlay] = useState<ScratchPlay | null>(null);
+  const [scratchPlayerName, setScratchPlayerName] = useState<string>('');
+  const [scratchPlayerPhone, setScratchPlayerPhone] = useState<string>('');
+  const [scratchPlayError, setScratchPlayError] = useState<string | null>(null);
+  const [isScratchPlaying, setIsScratchPlaying] = useState<boolean>(false);
+  const [showScratchModal, setShowScratchModal] = useState<boolean>(false);
+  const [showScratchUnlockBox, setShowScratchUnlockBox] = useState<boolean>(false);
 
   // Free Live GPS Verification State (100% Free HTML5 Geolocation)
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'checking' | 'verified' | 'out_of_range' | 'denied'>('idle');
@@ -166,6 +184,16 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
         } catch {
           // fallback
         }
+        // Load scratch campaign if active
+        try {
+          const sCampaign = await getScratchCampaign(previewBusiness.id);
+          setScratchCampaign(sCampaign);
+          if (sCampaign && sCampaign.status === 'active') {
+            setScratchEligible(true);
+          }
+        } catch {
+          // fallback
+        }
         // Record scan event
         await recordAnalyticsEvent(previewBusiness.id, 'qr_scan');
         return;
@@ -186,6 +214,16 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
             try {
               const lConfig = await getLoyaltyConfig(biz.id);
               setLoyaltyConfig(lConfig);
+            } catch {
+              // fallback
+            }
+            // Load scratch campaign if active
+            try {
+              const sCampaign = await getScratchCampaign(biz.id);
+              setScratchCampaign(sCampaign);
+              if (sCampaign && sCampaign.status === 'active') {
+                setScratchEligible(true);
+              }
             } catch {
               // fallback
             }
@@ -255,6 +293,43 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
       setLoyaltyClaimError(err?.message || 'Could not issue loyalty card. Please try again.');
     } finally {
       setIssuingLoyalty(false);
+    }
+  };
+
+  const handlePlayScratchCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scratchPlayerName.trim() || !scratchPlayerPhone.trim()) {
+      setScratchPlayError('Please enter your name and mobile number to unlock your scratch card.');
+      return;
+    }
+    if (!business) return;
+
+    setIsScratchPlaying(true);
+    setScratchPlayError(null);
+
+    try {
+      // 1. Check eligibility
+      const elig = await checkScratchEligibility(business.id, scratchPlayerPhone);
+      if (!elig.eligible) {
+        setScratchPlayError(elig.reason || 'You are not eligible for this scratch campaign at this time.');
+        setIsScratchPlaying(false);
+        return;
+      }
+
+      // 2. Execute play on server
+      const play = await executeScratchPlay({
+        businessId: business.id,
+        customerName: scratchPlayerName,
+        customerPhone: scratchPlayerPhone,
+      });
+
+      setActiveScratchPlay(play);
+      setShowScratchModal(true);
+      setShowScratchUnlockBox(false);
+    } catch (err: any) {
+      setScratchPlayError(err.message || 'Failed to unlock scratch card.');
+    } finally {
+      setIsScratchPlaying(false);
     }
   };
 
@@ -555,6 +630,83 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
             <p className="text-xs text-neutral-500 mt-1 max-w-xs mx-auto">
               {settings?.welcome_text || 'How was your experience today?'}
             </p>
+
+            {/* SEPARATE OPTIONAL SCRATCH & WIN PROMOTIONAL BANNER (Visible only when campaign is active and customer is eligible) */}
+            {scratchCampaign && scratchCampaign.status === 'active' && (
+              <div className="mt-4 p-3.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 text-white shadow-md text-left relative overflow-hidden animate-in fade-in">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
+                      <Trophy className="w-5 h-5 text-amber-300" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-black/25 px-1.5 py-0.5 rounded text-amber-200">
+                          Lucky Draw Offer
+                        </span>
+                        <span className="text-[10px] text-purple-200 font-semibold">
+                          {scratchCampaign.reward_value}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-black text-white mt-0.5">
+                        {scratchCampaign.campaign_name}
+                      </h4>
+                      <p className="text-[11px] text-purple-100/90 leading-tight">
+                        {scratchCampaign.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowScratchUnlockBox(!showScratchUnlockBox)}
+                    className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black rounded-xl text-xs shadow-xs transition-colors shrink-0 cursor-pointer"
+                  >
+                    <span>{showScratchUnlockBox ? 'Hide' : 'Play & Win 🎁'}</span>
+                  </button>
+                </div>
+
+                {/* Inline Unlock Form for Scratch Card */}
+                {showScratchUnlockBox && (
+                  <form onSubmit={handlePlayScratchCard} className="mt-3 pt-3 border-t border-white/20 space-y-2">
+                    <p className="text-[11px] text-white/90 font-semibold">
+                      Enter your name and mobile to scratch your lucky card:
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Your Name"
+                        value={scratchPlayerName}
+                        onChange={(e) => setScratchPlayerName(e.target.value)}
+                        className="px-3 py-1.5 bg-white text-neutral-900 placeholder:text-neutral-400 rounded-lg text-xs font-semibold focus:outline-hidden"
+                      />
+                      <input
+                        type="tel"
+                        required
+                        placeholder="Mobile Number"
+                        value={scratchPlayerPhone}
+                        onChange={(e) => setScratchPlayerPhone(e.target.value)}
+                        className="px-3 py-1.5 bg-white text-neutral-900 placeholder:text-neutral-400 rounded-lg text-xs font-semibold focus:outline-hidden"
+                      />
+                    </div>
+                    {scratchPlayError && (
+                      <p className="text-[11px] text-amber-200 font-bold bg-black/30 p-1.5 rounded-lg">
+                        {scratchPlayError}
+                      </p>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={isScratchPlaying}
+                      className="w-full py-2 bg-white hover:bg-neutral-100 text-[#6C3BFF] font-black rounded-xl text-xs shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>{isScratchPlaying ? 'Verifying...' : 'Scratch Lucky Card Now ✨'}</span>
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
 
             {/* Stepper indicator */}
             <div className="flex items-center justify-center gap-2 mt-4">
@@ -945,69 +1097,84 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                   )}
                 </div>
 
-                {/* ALL 3 SUGGESTIONS VISIBLE RIGHT IN FRONT OF CUSTOMER */}
-                <div key={rotationOffset} className="space-y-3 animate-in fade-in duration-300">
-                  {[0, 1, 2].map((slotIdx) => {
-                    const actualIdx = (rotationOffset + slotIdx) % (editableSuggestions.length || 1);
-                    const suggestionText = editableSuggestions[actualIdx];
-                    if (!suggestionText) return null;
-                    const isCopied = copiedIndex === actualIdx;
-                    const isSelected = selectedReviewText === suggestionText;
+                {/* ALL 3 SUGGESTIONS: Mobile Touch Slider Carousel + Desktop Stack */}
+                <div key={rotationOffset} className="space-y-2 animate-in fade-in duration-300">
+                  <div className="flex sm:flex-col overflow-x-auto sm:overflow-x-visible snap-x snap-mandatory sm:snap-none gap-3 no-scrollbar pb-2 sm:pb-0 pt-0.5">
+                    {[0, 1, 2].map((slotIdx) => {
+                      const actualIdx = (rotationOffset + slotIdx) % (editableSuggestions.length || 1);
+                      const suggestionText = editableSuggestions[actualIdx];
+                      if (!suggestionText) return null;
+                      const isCopied = copiedIndex === actualIdx;
+                      const isSelected = selectedReviewText === suggestionText;
 
-                    return (
-                      <div
-                        key={`${rotationOffset}-${slotIdx}`}
-                        onClick={() => handleCopySuggestion(suggestionText, actualIdx)}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative group ${
-                          isCopied || isSelected
-                            ? 'border-[#6C3BFF] bg-purple-50/50 shadow-xs ring-1 ring-[#6C3BFF]/30'
-                            : 'border-neutral-200 bg-neutral-50/70 hover:border-purple-300 hover:bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-bold text-[#6C3BFF] flex items-center gap-1">
-                            <Sparkles className="w-3.5 h-3.5" />
-                            <span>
-                              {slotIdx === 0
-                                ? (language === 'hi' ? '✨ दोस्ताना और सच्चा अनुभव' : language === 'gu' ? '✨ સ્નેહપૂર્ણ અનુભવ' : '✨ Friendly & Enthusiastic')
-                                : slotIdx === 1
-                                ? (language === 'hi' ? '⭐ सर्विस और क्वालिटी' : language === 'gu' ? '⭐ સર્વિસ અને ક્વોલિટી' : '⭐ Quality & Experience')
-                                : (language === 'hi' ? '⚡ संक्षिप्त और सटीक' : language === 'gu' ? '⚡ ટૂંકું અને સરળ' : '⚡ Short & Sweet')}
-                            </span>
-                          </span>
+                      return (
+                        <div
+                          key={`${rotationOffset}-${slotIdx}`}
+                          onClick={() => handleCopySuggestion(suggestionText, actualIdx)}
+                          className={`min-w-[85vw] sm:min-w-0 snap-center p-4 rounded-2xl border transition-all cursor-pointer relative group flex flex-col justify-between shrink-0 sm:shrink ${
+                            isCopied || isSelected
+                              ? 'border-[#6C3BFF] bg-purple-50/50 shadow-xs ring-2 ring-[#6C3BFF]/30'
+                              : 'border-neutral-200 bg-neutral-50/70 hover:border-purple-300 hover:bg-white'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-bold text-[#6C3BFF] flex items-center gap-1">
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>
+                                  {slotIdx === 0
+                                    ? (language === 'hi' ? '✨ दोस्ताना और सच्चा अनुभव' : language === 'gu' ? '✨ સ્નેહપૂર્ણ અનુભવ' : '✨ Friendly & Enthusiastic')
+                                    : slotIdx === 1
+                                    ? (language === 'hi' ? '⭐ सर्विस और क्वालिटी' : language === 'gu' ? '⭐ સર્વિસ અને ક્વોલિટી' : '⭐ Quality & Experience')
+                                    : (language === 'hi' ? '⚡ संक्षिप्त और सटीक' : language === 'gu' ? '⚡ ટૂંકું અને સરળ' : '⚡ Short & Sweet')}
+                                </span>
+                              </span>
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCopySuggestion(suggestionText, actualIdx);
-                            }}
-                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
-                              isCopied
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-white border border-neutral-200 text-neutral-700 hover:bg-[#6C3BFF] hover:text-white hover:border-[#6C3BFF]'
-                            }`}
-                          >
-                            {isCopied ? (
-                              <>
-                                <Check className="w-3.5 h-3.5" />
-                                <span>Copied!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5" />
-                                <span>Click to Copy</span>
-                              </>
-                            )}
-                          </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopySuggestion(suggestionText, actualIdx);
+                                }}
+                                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
+                                  isCopied
+                                    ? 'bg-emerald-600 text-white shadow-xs'
+                                    : 'bg-white border border-neutral-200 text-neutral-700 hover:bg-[#6C3BFF] hover:text-white hover:border-[#6C3BFF]'
+                                }`}
+                              >
+                                {isCopied ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span>Tap to Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            <p className="text-xs text-neutral-800 leading-relaxed font-normal">
+                              "{suggestionText}"
+                            </p>
+                          </div>
+
+                          <div className="mt-3 pt-2 border-t border-purple-100/60 flex sm:hidden items-center justify-between text-[10px] text-neutral-400">
+                            <span>Option {slotIdx + 1} of 3</span>
+                            <span className="text-purple-600 font-bold">Tap card to select & copy</span>
+                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
 
-                        <p className="text-xs text-neutral-800 leading-relaxed font-normal">
-                          "{suggestionText}"
-                        </p>
-                      </div>
-                    );
-                  })}
+                  {/* Mobile Swipe Hint */}
+                  <div className="flex sm:hidden items-center justify-between text-[10px] text-neutral-400 px-1 pt-0.5">
+                    <span>👈 Swipe to view other suggestions 👉</span>
+                    <span className="font-bold text-[#6C3BFF]">3 Ready Drafts</span>
+                  </div>
                 </div>
 
                 {/* Editable Box showing active selected suggestion */}
@@ -1193,6 +1360,15 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
           </div>
         </div>
       </main>
+
+      {/* Responsive Scratch & Win Modal Experience */}
+      {showScratchModal && activeScratchPlay && business && (
+        <ScratchCardModal
+          play={activeScratchPlay}
+          business={business}
+          onClose={() => setShowScratchModal(false)}
+        />
+      )}
     </div>
   );
 };

@@ -27,6 +27,9 @@ import {
   LoyaltyCard,
   RewardType,
   LoyaltyCardStatus,
+  ScratchCampaign,
+  ScratchPlay,
+  ScratchCampaignStatus,
 } from '../types/database';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 
@@ -46,6 +49,8 @@ const STORAGE_KEYS = {
   LOYALTY_CARDS: 'lb_loyalty_cards',
   REWARD_REMINDERS: 'lb_reward_reminders',
   REMINDER_AUDIT_LOGS: 'lb_reminder_audit_logs',
+  SCRATCH_CAMPAIGNS: 'lb_scratch_campaigns',
+  SCRATCH_PLAYS: 'lb_scratch_plays',
 };
 
 // Cryptographically secure customer code generator (e.g., LB-CUS-8F42K9)
@@ -3167,5 +3172,279 @@ export {
   calculateDaysRemaining,
   REMINDER_STAGES,
 } from './reminderService';
+
+// ==============================================================================
+// SCRATCH & WIN CLIENT DATA ACCESS & SUPABASE / LOCAL HYBRID ADAPTER
+// ==============================================================================
+
+export async function getScratchCampaign(businessId: string): Promise<ScratchCampaign> {
+  // 1. Try server endpoint first for authoritative state
+  try {
+    const res = await fetch(`/api/scratch/campaign/${businessId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.campaign) {
+        // Also cache locally
+        const campaigns = getStorage<ScratchCampaign[]>(STORAGE_KEYS.SCRATCH_CAMPAIGNS, []);
+        const idx = campaigns.findIndex((c) => c.business_id === businessId);
+        if (idx !== -1) campaigns[idx] = data.campaign;
+        else campaigns.push(data.campaign);
+        setStorage(STORAGE_KEYS.SCRATCH_CAMPAIGNS, campaigns);
+        return data.campaign as ScratchCampaign;
+      }
+    }
+  } catch {
+    // Fall back to Supabase or local storage
+  }
+
+  // 2. Try Supabase if configured
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('scratch_campaigns')
+        .select('*')
+        .eq('business_id', businessId)
+        .single();
+      if (!error && data) {
+        return data as ScratchCampaign;
+      }
+    } catch {
+      // Local fallback
+    }
+  }
+
+  // 3. Local storage fallback
+  const campaigns = getStorage<ScratchCampaign[]>(STORAGE_KEYS.SCRATCH_CAMPAIGNS, []);
+  let found = campaigns.find((c) => c.business_id === businessId);
+  if (!found) {
+    const now = new Date();
+    const exp = new Date(now);
+    exp.setDate(exp.getDate() + 30);
+
+    found = {
+      id: `sc_${businessId}`,
+      business_id: businessId,
+      campaign_name: 'Summer Scratch & Win Fiesta',
+      description: 'Scratch and reveal an instant surprise discount or free item on your bill!',
+      reward_type: 'discount_percentage',
+      reward_value: '20% OFF',
+      reward_headline: '🎉 You Won Flat 20% OFF!',
+      free_item_name: 'Signature Dessert',
+      min_purchase_amount: 'Min. bill ₹299',
+      start_date: now.toISOString().split('T')[0],
+      expiry_date: exp.toISOString().split('T')[0],
+      validity_days_after_win: 15,
+      total_reward_quantity: 150,
+      rewards_claimed_count: 0,
+      per_customer_play_limit: 1,
+      status: 'draft',
+      terms_conditions: 'Valid on dine-in & takeaway. Show the revealed digital coupon at billing. Single use only.',
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    };
+    campaigns.push(found);
+    setStorage(STORAGE_KEYS.SCRATCH_CAMPAIGNS, campaigns);
+  }
+  return found;
+}
+
+export async function updateScratchCampaign(
+  businessId: string,
+  updates: Partial<ScratchCampaign>
+): Promise<ScratchCampaign> {
+  // 1. Save to server API
+  try {
+    const res = await fetch(`/api/scratch/campaign/${businessId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.campaign) {
+        const campaigns = getStorage<ScratchCampaign[]>(STORAGE_KEYS.SCRATCH_CAMPAIGNS, []);
+        const idx = campaigns.findIndex((c) => c.business_id === businessId);
+        if (idx !== -1) campaigns[idx] = data.campaign;
+        else campaigns.push(data.campaign);
+        setStorage(STORAGE_KEYS.SCRATCH_CAMPAIGNS, campaigns);
+        return data.campaign as ScratchCampaign;
+      }
+    }
+  } catch {
+    // Local fallback
+  }
+
+  // 2. Fallback update local storage
+  const current = await getScratchCampaign(businessId);
+  const updated: ScratchCampaign = {
+    ...current,
+    ...updates,
+    updated_at: new Date().toISOString(),
+  };
+
+  const campaigns = getStorage<ScratchCampaign[]>(STORAGE_KEYS.SCRATCH_CAMPAIGNS, []);
+  const idx = campaigns.findIndex((c) => c.business_id === businessId);
+  if (idx >= 0) campaigns[idx] = updated;
+  else campaigns.push(updated);
+  setStorage(STORAGE_KEYS.SCRATCH_CAMPAIGNS, campaigns);
+
+  // 3. Supabase sync if connected
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      await supabase.from('scratch_campaigns').upsert(updated, { onConflict: 'business_id' });
+    } catch {
+      // Ignored
+    }
+  }
+
+  return updated;
+}
+
+export async function checkScratchEligibility(
+  businessId: string,
+  customerPhone?: string
+): Promise<{
+  eligible: boolean;
+  reason?: string;
+  campaign?: any;
+  remainingPlays?: number;
+  existingPlays?: ScratchPlay[];
+}> {
+  try {
+    const url = `/api/scratch/eligibility/${businessId}${customerPhone ? `?phone=${encodeURIComponent(customerPhone)}` : ''}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch {
+    // Fallback logic
+  }
+
+  const campaign = await getScratchCampaign(businessId);
+  if (campaign.status !== 'active') {
+    return { eligible: false, reason: `Campaign is currently ${campaign.status}` };
+  }
+  const now = Date.now();
+  if (campaign.start_date && new Date(campaign.start_date).getTime() > now) {
+    return { eligible: false, reason: 'Campaign has not started yet' };
+  }
+  if (campaign.expiry_date && new Date(campaign.expiry_date).getTime() < now) {
+    return { eligible: false, reason: 'Campaign has expired' };
+  }
+
+  if (customerPhone) {
+    const cleanPhone = customerPhone.replace(/[^0-9]/g, '');
+    const plays = getStorage<ScratchPlay[]>(STORAGE_KEYS.SCRATCH_PLAYS, []);
+    const userPlays = plays.filter(
+      (p) => p.campaign_id === campaign.id && p.customer_phone.replace(/[^0-9]/g, '') === cleanPhone
+    );
+    const limit = campaign.per_customer_play_limit || 1;
+    if (userPlays.length >= limit) {
+      return {
+        eligible: false,
+        reason: `You have reached the limit of ${limit} play(s) for this promotional campaign.`,
+        existingPlays: userPlays,
+      };
+    }
+    return { eligible: true, remainingPlays: limit - userPlays.length, campaign };
+  }
+
+  return { eligible: true, campaign };
+}
+
+export async function executeScratchPlay(params: {
+  businessId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+}): Promise<ScratchPlay> {
+  // Always invoke server to determine prize authoritatively
+  const res = await fetch('/api/scratch/play', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || 'Unable to play scratch card at this time.');
+  }
+
+  const data = await res.json();
+  const play: ScratchPlay = data.play;
+
+  // Cache locally
+  const plays = getStorage<ScratchPlay[]>(STORAGE_KEYS.SCRATCH_PLAYS, []);
+  plays.unshift(play);
+  setStorage(STORAGE_KEYS.SCRATCH_PLAYS, plays);
+
+  return play;
+}
+
+export async function getScratchPlaysByBusiness(businessId: string): Promise<ScratchPlay[]> {
+  try {
+    const res = await fetch(`/api/scratch/plays/${businessId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.plays)) {
+        return data.plays as ScratchPlay[];
+      }
+    }
+  } catch {
+    // Fallback
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('scratch_plays')
+        .select('*')
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false });
+      if (!error && data) return data as ScratchPlay[];
+    } catch {
+      // Fallback
+    }
+  }
+
+  const plays = getStorage<ScratchPlay[]>(STORAGE_KEYS.SCRATCH_PLAYS, []);
+  return plays
+    .filter((p) => p.business_id === businessId)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+export async function redeemScratchVoucher(
+  code: string,
+  businessId: string,
+  redeemedBy: string = 'Counter Staff',
+  playId?: string
+): Promise<ScratchPlay> {
+  const res = await fetch('/api/scratch/redeem', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, playId, businessId, redeemedBy }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || 'Failed to redeem scratch card voucher.');
+  }
+
+  const data = await res.json();
+  const play: ScratchPlay = data.play;
+
+  // Update local storage
+  const plays = getStorage<ScratchPlay[]>(STORAGE_KEYS.SCRATCH_PLAYS, []);
+  const idx = plays.findIndex((p) => p.id === play.id || p.voucher_code.toUpperCase() === (code || '').trim().toUpperCase());
+  if (idx !== -1) {
+    plays[idx] = play;
+    setStorage(STORAGE_KEYS.SCRATCH_PLAYS, plays);
+  }
+
+  return play;
+}
 
 

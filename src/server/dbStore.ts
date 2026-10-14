@@ -13,6 +13,8 @@ import {
   RewardReminder,
   ReminderAuditLog,
   AuthSession,
+  ScratchCampaign,
+  ScratchPlay,
 } from '../types/database';
 
 export interface ServerDatabaseData {
@@ -28,6 +30,8 @@ export interface ServerDatabaseData {
   loyaltyCards: LoyaltyCard[];
   reminders: RewardReminder[];
   reminderAuditLogs: ReminderAuditLog[];
+  scratchCampaigns: ScratchCampaign[];
+  scratchPlays: ScratchPlay[];
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -187,6 +191,8 @@ function getInitialData(): ServerDatabaseData {
     loyaltyCards: [],
     reminders: [],
     reminderAuditLogs: [],
+    scratchCampaigns: [],
+    scratchPlays: [],
   };
 }
 
@@ -230,6 +236,8 @@ export function loadServerDb(): ServerDatabaseData {
         loyaltyCards: parsed.loyaltyCards || [],
         reminders: parsed.reminders || [],
         reminderAuditLogs: parsed.reminderAuditLogs || [],
+        scratchCampaigns: parsed.scratchCampaigns || [],
+        scratchPlays: parsed.scratchPlays || [],
       };
       return cachedDb;
     }

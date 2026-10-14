@@ -532,6 +532,66 @@ CREATE POLICY "Public loyalty configs" ON loyalty_program_configs FOR ALL USING 
 DROP POLICY IF EXISTS "Public loyalty cards" ON loyalty_cards;
 CREATE POLICY "Public loyalty cards" ON loyalty_cards FOR ALL USING (true);
 
+-- 13. SCRATCH & WIN CAMPAIGNS TABLE (Independent Optional Promotional Feature)
+CREATE TABLE IF NOT EXISTS scratch_campaigns (
+  id TEXT PRIMARY KEY,
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  campaign_name TEXT NOT NULL,
+  description TEXT,
+  reward_type TEXT NOT NULL DEFAULT 'discount_percentage',
+  reward_value TEXT NOT NULL,
+  reward_headline TEXT NOT NULL,
+  free_item_name TEXT,
+  min_purchase_amount TEXT,
+  start_date DATE NOT NULL,
+  expiry_date DATE NOT NULL,
+  validity_days_after_win INT NOT NULL DEFAULT 15,
+  total_reward_quantity INT NOT NULL DEFAULT 100,
+  rewards_claimed_count INT NOT NULL DEFAULT 0,
+  per_customer_play_limit INT NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused', 'expired')),
+  terms_conditions TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT unique_biz_scratch_campaign UNIQUE (business_id)
+);
+
+-- 14. SCRATCH & WIN PLAYS TABLE (Customer Won Coupons & Redemption Records)
+CREATE TABLE IF NOT EXISTS scratch_plays (
+  id TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL REFERENCES scratch_campaigns(id) ON DELETE CASCADE,
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  customer_name TEXT NOT NULL,
+  customer_phone TEXT NOT NULL,
+  customer_email TEXT,
+  voucher_code TEXT NOT NULL UNIQUE,
+  reward_title TEXT NOT NULL,
+  reward_type TEXT NOT NULL DEFAULT 'discount_percentage',
+  reward_value TEXT NOT NULL,
+  min_purchase_amount TEXT,
+  terms_conditions TEXT,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'redeemed', 'expired')),
+  scratched_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  expires_at TIMESTAMPTZ NOT NULL,
+  redeemed_at TIMESTAMPTZ,
+  redeemed_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_scratch_plays_phone ON scratch_plays(customer_phone);
+CREATE INDEX IF NOT EXISTS idx_scratch_plays_biz ON scratch_plays(business_id);
+CREATE INDEX IF NOT EXISTS idx_scratch_plays_code ON scratch_plays(voucher_code);
+
+-- Enable Supabase Row Level Security & Multi-Tenant Isolation
+ALTER TABLE scratch_campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE scratch_plays ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public scratch campaigns" ON scratch_campaigns;
+CREATE POLICY "Public scratch campaigns" ON scratch_campaigns FOR ALL USING (true);
+
+DROP POLICY IF EXISTS "Public scratch plays" ON scratch_plays;
+CREATE POLICY "Public scratch plays" ON scratch_plays FOR ALL USING (true);
+
 -- Documentation note:
 -- To promote an initial user to admin after registration, run:
 -- UPDATE profiles SET role = 'admin' WHERE email = 'your-admin-email@example.com';

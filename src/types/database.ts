@@ -241,3 +241,55 @@ export interface ReminderAuditLog {
   action: 'INITIALIZE' | 'CONFIRM_SENT' | 'MANUAL_CORRECTION' | 'CANCELLED' | 'STOPPED';
   created_at: string;
 }
+
+// ==============================================================================
+// SCRATCH & WIN OFFERS (INDEPENDENT CAMPAIGN & PROMOTIONAL REWARD ENGINE)
+// ==============================================================================
+
+export type ScratchCampaignStatus = 'draft' | 'active' | 'paused' | 'expired';
+
+export interface ScratchCampaign {
+  id: string;
+  business_id: string;
+  campaign_name: string;
+  description: string;
+  reward_type: RewardType;
+  reward_value: string;
+  reward_headline: string;
+  free_item_name?: string;
+  min_purchase_amount?: string;
+  start_date: string; // ISO date string (YYYY-MM-DD or full ISO)
+  expiry_date: string; // ISO date string (YYYY-MM-DD or full ISO)
+  validity_days_after_win: number; // e.g. 15 or 30 days
+  total_reward_quantity: number; // e.g. 100 total prizes allowed
+  rewards_claimed_count: number;
+  per_customer_play_limit: number; // e.g. 1 or 2 plays per customer phone
+  status: ScratchCampaignStatus;
+  terms_conditions?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ScratchPlayStatus = 'active' | 'redeemed' | 'expired';
+
+export interface ScratchPlay {
+  id: string; // Deterministic or unique play id: `scratch_${campaign_id}_${phone}_${play_index}`
+  campaign_id: string;
+  business_id: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_email?: string;
+  voucher_code: string; // e.g. WIN-7K9A
+  reward_title: string;
+  reward_type: RewardType;
+  reward_value: string;
+  min_purchase_amount?: string;
+  terms_conditions?: string;
+  status: ScratchPlayStatus;
+  scratched_at: string;
+  expires_at: string;
+  redeemed_at?: string;
+  redeemed_by?: string;
+  created_at: string;
+}
+
