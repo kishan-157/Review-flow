@@ -1097,9 +1097,9 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                   )}
                 </div>
 
-                {/* ALL 3 SUGGESTIONS: Mobile Touch Slider Carousel + Desktop Stack */}
-                <div key={rotationOffset} className="space-y-2 animate-in fade-in duration-300">
-                  <div className="flex sm:flex-col overflow-x-auto sm:overflow-x-visible snap-x snap-mandatory sm:snap-none gap-3 no-scrollbar pb-2 sm:pb-0 pt-0.5">
+                {/* 3 REVIEW SUGGESTIONS: Mobile-friendly vertical one-by-one stack (NO SLIDER) */}
+                <div key={rotationOffset} className="space-y-2.5 animate-in fade-in duration-300">
+                  <div className="flex flex-col gap-2.5 w-full">
                     {[0, 1, 2].map((slotIdx) => {
                       const actualIdx = (rotationOffset + slotIdx) % (editableSuggestions.length || 1);
                       const suggestionText = editableSuggestions[actualIdx];
@@ -1107,28 +1107,41 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                       const isCopied = copiedIndex === actualIdx;
                       const isSelected = selectedReviewText === suggestionText;
 
+                      const optionBadge =
+                        language === 'hi'
+                          ? `विकल्प ${slotIdx + 1}`
+                          : language === 'gu'
+                          ? `વિકલ્પ ${slotIdx + 1}`
+                          : `Option ${slotIdx + 1}`;
+
+                      const toneLabel =
+                        slotIdx === 0
+                          ? (language === 'hi' ? 'दोस्ताना अनुभव' : language === 'gu' ? 'સ્નેહપૂર્ણ અનુભવ' : 'Friendly & Warm')
+                          : slotIdx === 1
+                          ? (language === 'hi' ? 'सर्विस और क्वालिटी' : language === 'gu' ? 'સર્વિસ અને ક્વોલિટી' : 'Quality & Service')
+                          : (language === 'hi' ? 'संक्षिप्त और सटीक' : language === 'gu' ? 'ટૂંકું અને સરળ' : 'Short & Direct');
+
                       return (
                         <div
                           key={`${rotationOffset}-${slotIdx}`}
                           onClick={() => handleCopySuggestion(suggestionText, actualIdx)}
-                          className={`min-w-[85vw] sm:min-w-0 snap-center p-4 rounded-2xl border transition-all cursor-pointer relative group flex flex-col justify-between shrink-0 sm:shrink ${
+                          className={`w-full p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer relative group flex flex-col justify-between ${
                             isCopied || isSelected
-                              ? 'border-[#6C3BFF] bg-purple-50/50 shadow-xs ring-2 ring-[#6C3BFF]/30'
+                              ? 'border-[#6C3BFF] bg-purple-50/70 shadow-xs ring-2 ring-[#6C3BFF]/30'
                               : 'border-neutral-200 bg-neutral-50/70 hover:border-purple-300 hover:bg-white'
                           }`}
                         >
                           <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs font-bold text-[#6C3BFF] flex items-center gap-1">
-                                <Sparkles className="w-3.5 h-3.5" />
-                                <span>
-                                  {slotIdx === 0
-                                    ? (language === 'hi' ? '✨ दोस्ताना और सच्चा अनुभव' : language === 'gu' ? '✨ સ્નેહપૂર્ણ અનુભવ' : '✨ Friendly & Enthusiastic')
-                                    : slotIdx === 1
-                                    ? (language === 'hi' ? '⭐ सर्विस और क्वालिटी' : language === 'gu' ? '⭐ સર્વિસ અને ક્વોલિટી' : '⭐ Quality & Experience')
-                                    : (language === 'hi' ? '⚡ संक्षिप्त और सटीक' : language === 'gu' ? '⚡ ટૂંકું અને સરળ' : '⚡ Short & Sweet')}
+                            <div className="flex items-center justify-between mb-2 gap-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#6C3BFF] text-white">
+                                  {optionBadge}
                                 </span>
-                              </span>
+                                <span className="text-xs font-semibold text-neutral-700 flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3 text-[#6C3BFF]" />
+                                  <span>{toneLabel}</span>
+                                </span>
+                              </div>
 
                               <button
                                 type="button"
@@ -1136,9 +1149,11 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                                   e.stopPropagation();
                                   handleCopySuggestion(suggestionText, actualIdx);
                                 }}
-                                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer ${
+                                className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0 ${
                                   isCopied
                                     ? 'bg-emerald-600 text-white shadow-xs'
+                                    : isSelected
+                                    ? 'bg-[#6C3BFF] text-white shadow-xs'
                                     : 'bg-white border border-neutral-200 text-neutral-700 hover:bg-[#6C3BFF] hover:text-white hover:border-[#6C3BFF]'
                                 }`}
                               >
@@ -1146,6 +1161,11 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                                   <>
                                     <Check className="w-3.5 h-3.5" />
                                     <span>Copied!</span>
+                                  </>
+                                ) : isSelected ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Selected</span>
                                   </>
                                 ) : (
                                   <>
@@ -1156,24 +1176,20 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                               </button>
                             </div>
 
-                            <p className="text-xs text-neutral-800 leading-relaxed font-normal">
+                            <p className="text-xs sm:text-[13px] text-neutral-800 leading-relaxed font-normal">
                               "{suggestionText}"
                             </p>
                           </div>
 
-                          <div className="mt-3 pt-2 border-t border-purple-100/60 flex sm:hidden items-center justify-between text-[10px] text-neutral-400">
-                            <span>Option {slotIdx + 1} of 3</span>
-                            <span className="text-purple-600 font-bold">Tap card to select & copy</span>
+                          <div className="mt-2.5 pt-2 border-t border-purple-100/60 flex items-center justify-between text-[10px] text-neutral-400">
+                            <span className={isSelected || isCopied ? 'text-[#6C3BFF] font-bold flex items-center gap-1' : ''}>
+                              {isSelected || isCopied ? '✓ Selected for posting' : 'Tap to select & copy'}
+                            </span>
+                            <span className="text-neutral-400">{suggestionText.length} characters</span>
                           </div>
                         </div>
                       );
                     })}
-                  </div>
-
-                  {/* Mobile Swipe Hint */}
-                  <div className="flex sm:hidden items-center justify-between text-[10px] text-neutral-400 px-1 pt-0.5">
-                    <span>👈 Swipe to view other suggestions 👉</span>
-                    <span className="font-bold text-[#6C3BFF]">3 Ready Drafts</span>
                   </div>
                 </div>
 

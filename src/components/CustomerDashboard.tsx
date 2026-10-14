@@ -2217,9 +2217,9 @@ Please generate:
                       </button>
                     </div>
 
-                    {/* 3 Active Rotating Cards: Mobile Touch Slider Carousel + Desktop Grid */}
-                    <div className="space-y-1.5">
-                      <div className="flex md:grid md:grid-cols-3 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1.5 pt-0.5">
+                    {/* 3 Active Rotating Cards: Mobile friendly one-by-one stack + Desktop Grid */}
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         {[0, 1, 2].map((offset) => {
                           const total = customReviewDrafts.length || 12;
                           const actualIdx = (previewRotationOffset + offset) % total;
@@ -2230,7 +2230,7 @@ Please generate:
                           return (
                             <div
                               key={offset}
-                              className="min-w-[80vw] md:min-w-0 snap-center bg-white rounded-xl p-3.5 border border-purple-200/80 shadow-xs flex flex-col justify-between space-y-2.5 relative shrink-0 md:shrink"
+                              className="w-full bg-white rounded-xl p-3.5 border border-purple-200/80 shadow-xs flex flex-col justify-between space-y-2.5 relative"
                             >
                             <div className="space-y-1.5">
                               <div className="flex items-center justify-between">
@@ -2240,7 +2240,7 @@ Please generate:
                                   ))}
                                 </div>
                                 <span className="text-[10px] font-bold bg-purple-50 text-[#6C3BFF] px-1.5 py-0.5 rounded">
-                                  Draft #{actualIdx + 1}
+                                  Option #{offset + 1} (Draft #{actualIdx + 1})
                                 </span>
                               </div>
 
@@ -2253,7 +2253,7 @@ Please generate:
                                 </span>
                               </div>
 
-                              <p className="text-xs text-neutral-800 leading-relaxed line-clamp-4">
+                              <p className="text-xs text-neutral-800 leading-relaxed">
                                 "{draft}"
                               </p>
                             </div>
@@ -2269,12 +2269,8 @@ Please generate:
                         );
                       })}
                     </div>
-                      <div className="flex md:hidden items-center justify-between text-[10px] text-neutral-400 px-1">
-                        <span>👈 Swipe drafts 👉</span>
-                        <span className="font-semibold text-purple-700">3 of {customReviewDrafts.length || 12}</span>
-                      </div>
-                    </div>
                   </div>
+                </div>
 
                   {/* EXPANDABLE / COLLAPSIBLE ALL 12 DRAFTS STUDIO */}
                   <div className="pt-1">
