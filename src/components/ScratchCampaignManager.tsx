@@ -19,6 +19,10 @@ import {
   Phone,
   User,
   Tag,
+  Copy,
+  Edit3,
+  Lock,
+  AlertTriangle,
 } from 'lucide-react';
 import { Business, ScratchCampaign, ScratchPlay, RewardType, ScratchCampaignStatus } from '../types/database';
 import {
@@ -26,17 +30,20 @@ import {
   updateScratchCampaign,
   getScratchPlaysByBusiness,
   redeemScratchVoucher,
+  updateBusiness,
 } from '../lib/db';
 import { ScratchCardModal } from './ScratchCardModal';
 
 interface ScratchCampaignManagerProps {
   business: Business;
   onPreviewOffer?: (campaign: ScratchCampaign) => void;
+  onUpdateBusiness?: (updated: Business) => void;
 }
 
 export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
   business,
   onPreviewOffer,
+  onUpdateBusiness,
 }) => {
   const [campaign, setCampaign] = useState<ScratchCampaign | null>(null);
   const [plays, setPlays] = useState<ScratchPlay[]>([]);
@@ -86,6 +93,87 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
   const [redeemResult, setRedeemResult] = useState<ScratchPlay | null>(null);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemSuccess, setRedeemSuccess] = useState<string | null>(null);
+
+  // Business Owner Separate Phone Configuration state for POS marketing
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [tempPhone, setTempPhone] = useState(business.whatsapp_number || business.phone || '');
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [phoneSaveNotice, setPhoneSaveNotice] = useState<string | null>(null);
+  const [copiedVoucherText, setCopiedVoucherText] = useState<string | null>(null);
+  const [whatsappTargetMode, setWhatsappTargetMode] = useState<'app' | 'web'>('app');
+
+  const businessPhone = business.whatsapp_number || business.phone || '';
+
+  const getScratchWhatsAppDispatchUrl = (phone: string, text: string) => {
+    let clean = phone.replace(/[^0-9]/g, '');
+    if (clean.length === 10) clean = `91${clean}`;
+    const encoded = encodeURIComponent(text);
+    return whatsappTargetMode === 'web'
+      ? `https://web.whatsapp.com/send?phone=${clean}&text=${encoded}`
+      : `https://wa.me/${clean}?text=${encoded}`;
+  };
+
+  const handleSaveBusinessPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingPhone(true);
+    setPhoneSaveNotice(null);
+    try {
+      const clean = tempPhone.trim();
+      const updated = await updateBusiness(business.id, {
+        phone: clean || undefined,
+        whatsapp_number: clean || undefined,
+      });
+      if (onUpdateBusiness) {
+        onUpdateBusiness(updated);
+      }
+      setPhoneSaveNotice('Business separate number updated successfully!');
+      setTimeout(() => {
+        setShowPhoneModal(false);
+        setPhoneSaveNotice(null);
+      }, 1500);
+    } catch (err: any) {
+      setPhoneSaveNotice(err.message || 'Failed to update business number');
+    } finally {
+      setSavingPhone(false);
+    }
+  };
+
+  const buildScratchMarketingMessage = (play: ScratchPlay) => {
+    const expiryFormatted = new Date(play.expires_at).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const contactLine = businessPhone
+      ? `\n\n🏢 *Official Business Account:* ${business.business_name}\n📱 *Store WhatsApp Account:* ${businessPhone}${business.address ? `\n📍 *Store Address:* ${business.address}` : ''}`
+      : `\n\n🏢 *Official Business Account:* ${business.business_name}`;
+
+    return (
+      `🎉 *Scratch & Win Lucky Voucher - ${business.business_name}*\n\n` +
+      `Hello ${play.customer_name}! 🌟\n` +
+      `Congratulations! You unlocked a lucky prize from *${business.business_name}*:\n\n` +
+      `🎟️ *Voucher Code:* ${play.voucher_code}\n` +
+      `🎁 *Prize Won:* "${play.reward_title}" (${play.reward_value})\n` +
+      `⏳ *Valid Till:* ${expiryFormatted}\n` +
+      `📍 *Terms:* ${play.min_purchase_amount || 'Present at cashier counter during billing'}\n\n` +
+      `Show this message at our billing counter during your visit to redeem!` +
+      contactLine
+    );
+  };
+
+  const buildScratchReceiptMessage = (play: ScratchPlay) => {
+    const contactLine = businessPhone
+      ? `\n\n🏢 *Official Store Account:* ${business.business_name}\n📱 *Business WhatsApp Contact:* ${businessPhone}${business.address ? `\n📍 *Store Address:* ${business.address}` : ''}`
+      : `\n\n🏢 *${business.business_name}*`;
+
+    return (
+      `✅ *Bill Discount Applied at ${business.business_name}*\n\n` +
+      `Hello ${play.customer_name}! 🎉\n` +
+      `Your Scratch & Win coupon *${play.voucher_code}* (${play.reward_title} - ${play.reward_value}) was successfully redeemed and applied to your bill!\n\n` +
+      `Thank you for shopping with *${business.business_name}*. We look forward to serving you again soon!` +
+      contactLine
+    );
+  };
 
   // Table filter
   const [searchFilter, setSearchFilter] = useState('');
@@ -424,6 +512,125 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
           </span>
         </div>
 
+        {/* DEDICATED SENDER IDENTITY BAR: BUSINESS OWNER SEPARATE NUMBER */}
+        {!businessPhone ? (
+          <div className="bg-rose-50 border-2 border-rose-300 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center font-bold shrink-0">
+                <Lock className="w-4 h-4 text-rose-600" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-extrabold text-rose-950">Customer Messages Strictly Blocked</span>
+                  <span className="text-[10px] font-black bg-rose-200 text-rose-900 px-2 py-0.5 rounded-full border border-rose-300">
+                    🔒 Business Setup Number Missing
+                  </span>
+                  <span className="text-[10px] font-bold bg-neutral-900 text-white px-2 py-0.5 rounded-full">
+                    Super Admin Blocked
+                  </span>
+                </div>
+                <p className="text-[11px] text-rose-800 mt-1">
+                  Jab tak aap apna setup number nahi dalte, tab tak <strong>koi bhi marketing ya receipt message nahi jayega</strong>. Super admin ke number se message bilkul nahi jayega.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTempPhone('');
+                setShowPhoneModal(true);
+              }}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto shrink-0 shadow-md shadow-rose-600/20"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>+ Add Setup Number to Unlock</span>
+            </button>
+          </div>
+        ) : (
+          <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 flex flex-col gap-3 text-xs shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                  <Phone className="w-5 h-5 text-emerald-700" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-extrabold text-neutral-900 text-sm">
+                      Store WhatsApp Account: {business.business_name}
+                    </span>
+                    <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                      ✅ Active Merchant Account
+                    </span>
+                    <span className="text-[10px] font-bold text-neutral-700 bg-white px-2 py-0.5 rounded-md border border-neutral-200">
+                      🔒 Super Admin Account Disconnected
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-neutral-600 mt-0.5">
+                    Registered Store WhatsApp:{' '}
+                    <strong className="font-mono text-emerald-950 bg-white px-2 py-0.5 rounded-md border border-emerald-300 text-xs">
+                      {businessPhone}
+                    </strong>
+                    <span className="text-neutral-500 text-[10px] ml-2">
+                      (All Scratch vouchers & bill receipts originate exclusively from this business number)
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTempPhone(businessPhone);
+                  setShowPhoneModal(true);
+                }}
+                className="px-3.5 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto shrink-0 shadow-2xs hover:scale-[1.01]"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-amber-700" />
+                <span>Change Business Account</span>
+              </button>
+            </div>
+
+            {/* WhatsApp Dispatch Mode for Billing Counter PC vs Mobile */}
+            <div className="pt-2 border-t border-amber-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="text-neutral-600 font-semibold">POS Dispatch Channel:</span>
+                <div className="flex items-center bg-white rounded-lg p-0.5 border border-amber-200 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setWhatsappTargetMode('web')}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                      whatsappTargetMode === 'web'
+                        ? 'bg-amber-700 text-white shadow-2xs'
+                        : 'text-neutral-600 hover:text-neutral-900'
+                    }`}
+                    title="Opens WhatsApp Web (web.whatsapp.com) where your store account is logged in"
+                  >
+                    💻 WhatsApp Web (Counter PC)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWhatsappTargetMode('app')}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                      whatsappTargetMode === 'app'
+                        ? 'bg-amber-700 text-white shadow-2xs'
+                        : 'text-neutral-600 hover:text-neutral-900'
+                    }`}
+                    title="Direct Click-to-Chat (wa.me) for mobile or WhatsApp App"
+                  >
+                    📱 WhatsApp App (Mobile)
+                  </button>
+                </div>
+              </div>
+
+              <span className="text-neutral-500 text-[10px]">
+                {whatsappTargetMode === 'web'
+                  ? '💡 Counter PC par web.whatsapp.com login rakhein taaki counter staff direct business account se bhej sake.'
+                  : '💡 Direct wa.me link open hoga.'}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Search Mode Selector Tabs - Mobile horizontal swipeable slider */}
         <div className="flex items-center gap-1.5 bg-neutral-100 p-1 rounded-xl w-full sm:w-fit overflow-x-auto no-scrollbar snap-x">
           <button
@@ -697,7 +904,7 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                 </p>
               </div>
 
-              <div className="shrink-0 flex items-center gap-2">
+              <div className="shrink-0 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setPreviewPlay(redeemResult)}
@@ -705,20 +912,83 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                 >
                   View Digital Card
                 </button>
+
+                {/* WhatsApp Marketing Message to Customer - STRICTLY LOCKED UNTIL SETUP NUMBER IS ENTERED */}
                 {redeemResult.customer_phone && (
-                  <a
-                    href={`https://wa.me/${redeemResult.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                      `Hello ${redeemResult.customer_name}! Your Scratch & Win prize at ${business?.business_name || 'our store'} is: "${redeemResult.reward_title}" (${redeemResult.reward_value}). Your voucher code is: ${redeemResult.voucher_code}. Show this at the billing counter to redeem!`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
-                    title="Send WhatsApp"
-                  >
-                    <Phone className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">WhatsApp</span>
-                  </a>
+                  businessPhone ? (
+                    <a
+                      href={getScratchWhatsAppDispatchUrl(
+                        redeemResult.customer_phone,
+                        redeemResult.status === 'redeemed'
+                          ? buildScratchReceiptMessage(redeemResult)
+                          : buildScratchMarketingMessage(redeemResult)
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-2xs"
+                      title={`Send WhatsApp from Store Account: ${business.business_name} (${businessPhone})`}
+                    >
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{redeemResult.status === 'redeemed' ? 'Send Bill Receipt (WhatsApp)' : 'Send Voucher (WhatsApp)'}</span>
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempPhone('');
+                        setShowPhoneModal(true);
+                      }}
+                      className="px-3 py-2 text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-2xs"
+                      title="Setup number missing! Pehle setup number add karein. Super admin number se message nahi jayega."
+                    >
+                      <Lock className="w-3.5 h-3.5 text-rose-600" />
+                      <span>🔒 Setup Number to Send WhatsApp</span>
+                    </button>
+                  )
                 )}
+
+                {/* Copy SMS / Text fallback - LOCKED IF NO BUSINESS PHONE */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!businessPhone) {
+                      setTempPhone('');
+                      setShowPhoneModal(true);
+                      return;
+                    }
+                    const text = redeemResult.status === 'redeemed'
+                      ? buildScratchReceiptMessage(redeemResult)
+                      : buildScratchMarketingMessage(redeemResult);
+                    navigator.clipboard.writeText(text);
+                    setCopiedVoucherText(redeemResult.id);
+                    setTimeout(() => setCopiedVoucherText(null), 2500);
+                  }}
+                  className={`px-3 py-2 border rounded-xl text-xs font-semibold cursor-pointer flex items-center gap-1.5 ${
+                    !businessPhone
+                      ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                      : 'bg-white border-neutral-300 text-neutral-700 hover:bg-neutral-50'
+                  }`}
+                  title={!businessPhone ? "Setup business number required" : "Copy message to clipboard"}
+                >
+                  {copiedVoucherText === redeemResult.id ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700 font-bold">Copied!</span>
+                    </>
+                  ) : !businessPhone ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Setup Number to Copy</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-neutral-500" />
+                      <span>Copy SMS</span>
+                    </>
+                  )}
+                </button>
+
+                {/* Apply & Mark Redeemed Button */}
                 {redeemResult.status === 'active' && new Date(redeemResult.expires_at).getTime() >= Date.now() && (
                   <button
                     type="button"
@@ -727,7 +997,7 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                       try {
                         const redeemed = await redeemScratchVoucher(redeemResult.voucher_code, business.id, 'Counter Staff', redeemResult.id);
                         setRedeemResult(redeemed);
-                        setRedeemSuccess(`Coupon ${redeemed.voucher_code} marked REDEEMED! Reward applied.`);
+                        setRedeemSuccess(`Coupon ${redeemed.voucher_code} marked REDEEMED! Reward applied to bill.`);
                         const freshPlays = await getScratchPlaysByBusiness(business.id);
                         setPlays(freshPlays);
                       } catch (err: any) {
@@ -743,6 +1013,42 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                   </button>
                 )}
               </div>
+            </div>
+
+            {/* Warning when business setup number is missing */}
+            {!businessPhone && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-medium">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>
+                    <strong>Customer Message Blocked:</strong> Setup number missing! Jab tak setup number add nahi hota, tab tak koi message nahi jayega. Super Admin number is strictly blocked.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempPhone('');
+                    setShowPhoneModal(true);
+                  }}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer shadow-xs"
+                >
+                  + Add Setup Number Now
+                </button>
+              </div>
+            )}
+
+            {/* Business Separate Sender Note */}
+            <div className="pt-2 border-t border-amber-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-amber-900">
+              <span className="flex items-center gap-1">
+                {businessPhone ? (
+                  <span>📱 <strong>Sender Identity:</strong> Messages dispatched with business contact: <strong>{businessPhone}</strong></span>
+                ) : (
+                  <span className="text-rose-700 font-bold">🔒 Messages blocked until business setup number is configured</span>
+                )}
+              </span>
+              <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                🔒 Super Admin number is NOT used
+              </span>
             </div>
           </div>
         )}
@@ -1100,17 +1406,32 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                         View Card
                       </button>
                       {play.customer_phone && (
-                        <a
-                          href={`https://wa.me/${play.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                            `Hello ${play.customer_name}! Your Scratch & Win reward code at ${business?.business_name || 'our store'} is: ${play.voucher_code} (${play.reward_title}). Show this message at billing counter to claim your discount! Valid till: ${new Date(play.expires_at).toLocaleDateString()}.`
-                          )}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-neutral-200"
-                          title="Send WhatsApp Coupon"
-                        >
-                          <Phone className="w-3.5 h-3.5" />
-                        </a>
+                        businessPhone ? (
+                          <a
+                            href={getScratchWhatsAppDispatchUrl(
+                              play.customer_phone,
+                              isRedeemed ? buildScratchReceiptMessage(play) : buildScratchMarketingMessage(play)
+                            )}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-neutral-200"
+                            title={`Send WhatsApp from Store Account: ${business.business_name} (${businessPhone})`}
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                          </a>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTempPhone('');
+                              setShowPhoneModal(true);
+                            }}
+                            className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-rose-200"
+                            title="Setup business number required. Super admin number is blocked."
+                          >
+                            <Lock className="w-3.5 h-3.5 text-rose-600" />
+                          </button>
+                        )
                       )}
                       {!isRedeemed && !isExpired && (
                         <button
@@ -1136,6 +1457,91 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
           )}
         </div>
       </div>
+
+      {/* Edit Business Phone / WhatsApp Number Modal */}
+      {showPhoneModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <Phone className="w-4 h-4 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-900">
+                    Connect Business Owner WhatsApp Account
+                  </h3>
+                  <p className="text-[11px] text-neutral-500">
+                    Official store marketing account for {business.business_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPhoneModal(false)}
+                className="w-7 h-7 rounded-lg hover:bg-neutral-100 flex items-center justify-center text-neutral-500 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <span>🔒 Official Merchant Account Connection</span>
+              </p>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Scratch & Win POS counter se customer ko bheje jane wale sabhi WhatsApp & SMS vouchers aur receipts <strong>aapke is business WhatsApp account</strong> se dispatch honge. <strong>Super Admin ka account kabhi bhi use nahi hoga.</strong>
+              </p>
+            </div>
+
+            {phoneSaveNotice && (
+              <div className={`p-3 rounded-xl text-xs font-bold ${
+                phoneSaveNotice.includes('success')
+                  ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-900 border border-rose-200'
+              }`}>
+                {phoneSaveNotice}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBusinessPhone} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-neutral-700 block mb-1">
+                  Business Owner WhatsApp Number (Store Account) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={tempPhone}
+                  onChange={(e) => setTempPhone(e.target.value)}
+                  placeholder="e.g. +91 9876543210 or 9876543210"
+                  className="w-full px-3 py-2 text-xs bg-neutral-50 border border-neutral-300 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                />
+                <p className="text-[10px] text-neutral-400 mt-1">
+                  Aapki dukaan / business ka apna WhatsApp number (e.g. +91 9876543210)
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100">
+                <button
+                  type="button"
+                  onClick={() => setShowPhoneModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPhone}
+                  className="px-5 py-2 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
+                >
+                  {savingPhone ? 'Saving...' : 'Connect Business WhatsApp Account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Interactive Modal Preview */}
       {previewPlay && (

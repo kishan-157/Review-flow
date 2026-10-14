@@ -31,7 +31,8 @@ export function calculateDaysRemaining(expiresAtIso: string): number {
 export function buildPersonalizedWhatsAppMessage(
   card: LoyaltyCard,
   stage: ReminderStage,
-  businessName: string
+  businessName: string,
+  businessPhone?: string
 ): string {
   const bName = businessName || 'our store';
   const expiryFormatted = new Date(card.expires_at).toLocaleDateString('en-IN', {
@@ -39,14 +40,16 @@ export function buildPersonalizedWhatsAppMessage(
     month: 'short',
     year: 'numeric',
   });
+  const contactLine = businessPhone ? `\n\n🏢 *Sent by:* ${bName}\n📞 *Store Contact:* ${businessPhone}` : `\n\n🏢 *Sent by:* ${bName}`;
 
   if (stage === '7_days') {
     return (
       `Hello ${card.customer_name}! 🌟\n\n` +
       `Friendly reminder from *${bName}*: Your exclusive VIP Reward *"${card.reward_title}"* (Code: *${card.voucher_code}*) has *7 days remaining* before it expires on ${expiryFormatted}.\n\n` +
       `🎁 Reward: ${card.reward_value || card.reward_title}\n` +
-      `📍 Show this message or your voucher code at billing counter to claim your discount!\n\n` +
-      `We look forward to welcoming you soon! ❤️`
+      `📍 Show this message or your voucher code at billing counter to claim your discount!` +
+      contactLine +
+      `\nWe look forward to welcoming you soon! ❤️`
     );
   }
 
@@ -56,7 +59,8 @@ export function buildPersonalizedWhatsAppMessage(
       `Urgent reminder from *${bName}*: Only *3 days left* to redeem your VIP Reward *"${card.reward_title}"* (Code: *${card.voucher_code}*)!\n\n` +
       `⚠️ Expiry Date: *${expiryFormatted}*\n` +
       `🎁 Reward: ${card.reward_value || card.reward_title}\n\n` +
-      `Don't let your reward expire. Visit us today and show your code at the billing counter!`
+      `Don't let your reward expire. Visit us today and show your code at the billing counter!` +
+      contactLine
     );
   }
 
@@ -66,7 +70,8 @@ export function buildPersonalizedWhatsAppMessage(
     `Final Call from *${bName}*: *TODAY IS THE LAST DAY* to redeem your VIP Reward *"${card.reward_title}"* (Code: *${card.voucher_code}*)!\n\n` +
     `⏳ Expiring tonight: *${expiryFormatted}*\n` +
     `🎁 Reward: ${card.reward_value || card.reward_title}\n\n` +
-    `Visit us before closing hours today to redeem your bill discount. We are excited to see you!`
+    `Visit us before closing hours today to redeem your bill discount. We are excited to see you!` +
+    contactLine
   );
 }
 
@@ -156,14 +161,15 @@ function setLocalAuditLogs(list: ReminderAuditLog[]): void {
 export async function syncAndGetReminders(
   businessId: string,
   cards: LoyaltyCard[],
-  businessName: string
+  businessName: string,
+  businessPhone?: string
 ): Promise<{ reminders: RewardReminder[]; auditLogs: ReminderAuditLog[] }> {
   // 1. Try server-side endpoint first
   try {
     const res = await fetch(`/api/loyalty/reminders/sync/${encodeURIComponent(businessId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cards, businessName }),
+      body: JSON.stringify({ cards, businessName, businessPhone }),
     });
 
     if (res.ok) {
@@ -220,7 +226,7 @@ export async function syncAndGetReminders(
           status: isClaimed || isExpired ? 'STOPPED' : 'PENDING',
           sent_at: null,
           sent_by: null,
-          message_template: buildPersonalizedWhatsAppMessage(card, stage, businessName),
+          message_template: buildPersonalizedWhatsAppMessage(card, stage, businessName, businessPhone),
           created_at: nowIso,
           updated_at: nowIso,
         };
@@ -230,7 +236,7 @@ export async function syncAndGetReminders(
         existing.days_remaining = daysLeft;
         existing.customer_name = card.customer_name;
         existing.customer_phone = card.customer_phone;
-        existing.message_template = buildPersonalizedWhatsAppMessage(card, stage, businessName);
+        existing.message_template = buildPersonalizedWhatsAppMessage(card, stage, businessName, businessPhone);
 
         if ((isClaimed || isExpired) && existing.status === 'PENDING') {
           existing.status = 'STOPPED';

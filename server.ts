@@ -546,7 +546,7 @@ app.post('/api/loyalty/reminders/sync/:businessId', (req, res) => {
   try {
     const db = loadServerDb();
     const { businessId } = req.params;
-    const { cards = [], businessName = '' } = req.body;
+    const { cards = [], businessName = '', businessPhone = '' } = req.body;
 
     if (!Array.isArray(db.reminders)) db.reminders = [];
     if (!Array.isArray(db.reminderAuditLogs)) db.reminderAuditLogs = [];
@@ -557,6 +557,8 @@ app.post('/api/loyalty/reminders/sync/:businessId', (req, res) => {
       { stage: '3_days', label: '3 Days Remaining', days: 3 },
       { stage: 'expiry_day', label: 'Expiry Day (Today)', days: 0 },
     ];
+
+    const contactSuffix = businessPhone ? ` 📞 Contact ${businessName || 'Store'}: ${businessPhone}` : '';
 
     cards.forEach((card: LoyaltyCard) => {
       const isClaimed = card.status === 'redeemed';
@@ -575,10 +577,10 @@ app.post('/api/loyalty/reminders/sync/:businessId', (req, res) => {
 
         const msgTemplate =
           stage === '7_days'
-            ? `Hello ${card.customer_name}! 🌟 Friendly reminder from ${businessName || 'our store'}: Your VIP Reward "${card.reward_title}" (Code: ${card.voucher_code}) has 7 days remaining before expiry. Visit us soon to redeem!`
+            ? `Hello ${card.customer_name}! 🌟 Friendly reminder from ${businessName || 'our store'}: Your VIP Reward "${card.reward_title}" (Code: ${card.voucher_code}) has 7 days remaining before expiry. Visit us soon to redeem!${contactSuffix}`
             : stage === '3_days'
-            ? `Hello ${card.customer_name}! ⏰ Urgent reminder from ${businessName || 'our store'}: Only 3 days left to redeem your VIP Reward "${card.reward_title}" (Code: ${card.voucher_code})! Don't miss out, visit us today!`
-            : `Hello ${card.customer_name}! 🚨 Final Call from ${businessName || 'our store'}: TODAY IS THE LAST DAY to redeem your VIP Reward "${card.reward_title}" (Code: ${card.voucher_code})! Visit us before closing to claim!`;
+            ? `Hello ${card.customer_name}! ⏰ Urgent reminder from ${businessName || 'our store'}: Only 3 days left to redeem your VIP Reward "${card.reward_title}" (Code: ${card.voucher_code})! Don't miss out, visit us today!${contactSuffix}`
+            : `Hello ${card.customer_name}! 🚨 Final Call from ${businessName || 'our store'}: TODAY IS THE LAST DAY to redeem your VIP Reward "${card.reward_title}" (Code: ${card.voucher_code})! Visit us before closing to claim!${contactSuffix}`;
 
         if (existingIdx === -1) {
           // Database constraint: Unique ID per reward and stage

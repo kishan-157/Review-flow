@@ -9,6 +9,7 @@ import {
   Bell,
   HelpCircle,
   Copy,
+  Edit3,
   Check,
   ExternalLink,
   ChevronRight,
@@ -271,6 +272,64 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [isVerifying, setIsVerifying] = useState(false);
   const [redeemSuccessMsg, setRedeemSuccessMsg] = useState<string | null>(null);
 
+  // Business Owner Dedicated Marketing Number for POS
+  const [showBizPhoneModal, setShowBizPhoneModal] = useState(false);
+  const [quickBizPhoneInput, setQuickBizPhoneInput] = useState('');
+  const [isSavingBizPhone, setIsSavingBizPhone] = useState(false);
+  const [bizPhoneSaveMsg, setBizPhoneSaveMsg] = useState<string | null>(null);
+  const [copiedRewardVoucherId, setCopiedRewardVoucherId] = useState<string | null>(null);
+  const [whatsappTargetMode, setWhatsappTargetMode] = useState<'app' | 'web'>('app');
+
+  const bizMarketingPhone = business?.whatsapp_number || business?.phone || '';
+
+  const getWhatsAppDispatchUrl = (phone: string, text: string) => {
+    let clean = phone.replace(/[^0-9]/g, '');
+    if (clean.length === 10) clean = `91${clean}`;
+    const encoded = encodeURIComponent(text);
+    return whatsappTargetMode === 'web'
+      ? `https://web.whatsapp.com/send?phone=${clean}&text=${encoded}`
+      : `https://wa.me/${clean}?text=${encoded}`;
+  };
+
+  const buildRewardMarketingMessage = (card: LoyaltyCard) => {
+    const bName = business?.business_name || 'our store';
+    const expiryFormatted = new Date(card.expires_at).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const contactLine = bizMarketingPhone
+      ? `\n\n🏢 *Official Business Account:* ${bName}\n📱 *Store WhatsApp Account:* ${bizMarketingPhone}${business?.address ? `\n📍 *Store Address:* ${business.address}` : ''}`
+      : `\n\n🏢 *Official Business Account:* ${bName}`;
+
+    return (
+      `🌟 *VIP Customer Reward - ${bName}*\n\n` +
+      `Hello ${card.customer_name}! ✨\n` +
+      `Thank you for visiting us! Here is your exclusive VIP reward voucher from *${bName}*:\n\n` +
+      `🎟️ *Voucher Code:* ${card.voucher_code}\n` +
+      `🎁 *Reward:* ${card.reward_title}\n` +
+      `⏳ *Valid Till:* ${expiryFormatted}\n` +
+      `📍 *Terms:* ${card.terms_conditions || 'Present at cashier counter during billing'}\n\n` +
+      `Show this voucher code at our billing counter to claim your discount!` +
+      contactLine
+    );
+  };
+
+  const buildRewardReceiptMessage = (card: LoyaltyCard) => {
+    const bName = business?.business_name || 'our store';
+    const contactLine = bizMarketingPhone
+      ? `\n\n🏢 *Official Store Account:* ${bName}\n📱 *Business WhatsApp Contact:* ${bizMarketingPhone}${business?.address ? `\n📍 *Store Address:* ${business.address}` : ''}`
+      : `\n\n🏢 *${bName}*`;
+
+    return (
+      `✅ *Bill Discount Applied at ${bName}*\n\n` +
+      `Hello ${card.customer_name}! 🎉\n` +
+      `Your VIP Reward voucher *${card.voucher_code}* (${card.reward_title}) has been successfully redeemed and applied to your bill!\n\n` +
+      `Thank you for being our valued customer at *${bName}*. We look forward to serving you again soon!` +
+      contactLine
+    );
+  };
+
   // Manual Setup Checklist completed overrides
   const [manualChecklistDone, setManualChecklistDone] = useState<Record<string, boolean>>(() => {
     try {
@@ -464,6 +523,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         google_review_url: bizForm.google_review_url.trim(),
         logo_url: bizForm.logo_url.trim() || undefined,
         phone: bizForm.phone.trim() || undefined,
+        whatsapp_number: bizForm.phone.trim() || undefined,
         address: bizForm.address.trim() || undefined,
         category: bizForm.category,
         unique_slug: bizForm.unique_slug.trim().toLowerCase(),
@@ -592,6 +652,32 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       setVerifyError(err.message || 'Error searching voucher.');
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleSaveQuickBizPhone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!business) return;
+    setIsSavingBizPhone(true);
+    setBizPhoneSaveMsg(null);
+    try {
+      const cleanPhone = quickBizPhoneInput.trim();
+      const updated = await updateBusiness(business.id, {
+        phone: cleanPhone || undefined,
+        whatsapp_number: cleanPhone || undefined,
+      });
+      setBusiness(updated);
+      setBizForm((prev) => ({ ...prev, phone: cleanPhone }));
+      onSessionUpdated({ ...session, business: updated });
+      setBizPhoneSaveMsg('Business separate number saved successfully!');
+      setTimeout(() => {
+        setShowBizPhoneModal(false);
+        setBizPhoneSaveMsg(null);
+      }, 1500);
+    } catch (err: any) {
+      setBizPhoneSaveMsg(err.message || 'Failed to save phone number');
+    } finally {
+      setIsSavingBizPhone(false);
     }
   };
 
@@ -2556,6 +2642,125 @@ Please generate:
                     </div>
                   </div>
 
+                  {/* DEDICATED SENDER IDENTITY BAR: BUSINESS OWNER SEPARATE NUMBER */}
+                  {!bizMarketingPhone ? (
+                    <div className="bg-rose-50 border-2 border-rose-300 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+                      <div className="flex items-start sm:items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center font-bold shrink-0">
+                          <Lock className="w-4 h-4 text-rose-600" />
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-extrabold text-rose-950">Customer Messages Strictly Blocked</span>
+                            <span className="text-[10px] font-black bg-rose-200 text-rose-900 px-2 py-0.5 rounded-full border border-rose-300">
+                              🔒 Business Setup Number Missing
+                            </span>
+                            <span className="text-[10px] font-bold bg-neutral-900 text-white px-2 py-0.5 rounded-full">
+                              Super Admin Blocked
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-rose-800 mt-1">
+                            Jab tak aap apna setup number nahi dalte, tab tak <strong>koi bhi marketing ya receipt message nahi jayega</strong>. Super admin ke number se message bilkul nahi jayega.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickBizPhoneInput('');
+                          setShowBizPhoneModal(true);
+                        }}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto shrink-0 shadow-md shadow-rose-600/20"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>+ Add Setup Number to Unlock</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-purple-50/90 border border-purple-200 rounded-2xl p-4 flex flex-col gap-3 text-xs shadow-2xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-start sm:items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                            <Phone className="w-5 h-5 text-emerald-700" />
+                          </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-extrabold text-neutral-900 text-sm">
+                                Store WhatsApp Account: {business.business_name}
+                              </span>
+                              <span className="text-[10px] font-black bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-300">
+                                ✅ Active Merchant Account
+                              </span>
+                              <span className="text-[10px] font-bold text-neutral-700 bg-white px-2 py-0.5 rounded-md border border-neutral-200">
+                                🔒 Super Admin Account Disconnected
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-neutral-600 mt-0.5">
+                              Registered Store WhatsApp:{' '}
+                              <strong className="font-mono text-emerald-950 bg-white px-2 py-0.5 rounded-md border border-emerald-300 text-xs">
+                                {bizMarketingPhone}
+                              </strong>
+                              <span className="text-neutral-500 text-[10px] ml-2">
+                                (All customer vouchers & bill receipts originate exclusively from this business number)
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setQuickBizPhoneInput(bizMarketingPhone);
+                            setShowBizPhoneModal(true);
+                          }}
+                          className="px-3.5 py-1.5 bg-white hover:bg-purple-50 text-[#6C3BFF] border border-purple-300 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto shrink-0 shadow-2xs hover:scale-[1.01]"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-[#6C3BFF]" />
+                          <span>Change Business Account</span>
+                        </button>
+                      </div>
+
+                      {/* WhatsApp Dispatch Mode for Billing Counter PC vs Mobile */}
+                      <div className="pt-2 border-t border-purple-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                        <div className="flex items-center gap-2">
+                          <span className="text-neutral-600 font-semibold">POS Dispatch Channel:</span>
+                          <div className="flex items-center bg-white rounded-lg p-0.5 border border-purple-200 shadow-2xs">
+                            <button
+                              type="button"
+                              onClick={() => setWhatsappTargetMode('web')}
+                              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                                whatsappTargetMode === 'web'
+                                  ? 'bg-[#6C3BFF] text-white shadow-2xs'
+                                  : 'text-neutral-600 hover:text-neutral-900'
+                              }`}
+                              title="Opens WhatsApp Web (web.whatsapp.com) where your store account is logged in"
+                            >
+                              💻 WhatsApp Web (Counter PC)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setWhatsappTargetMode('app')}
+                              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                                whatsappTargetMode === 'app'
+                                  ? 'bg-[#6C3BFF] text-white shadow-2xs'
+                                  : 'text-neutral-600 hover:text-neutral-900'
+                              }`}
+                              title="Direct Click-to-Chat (wa.me) for mobile or WhatsApp App"
+                            >
+                              📱 WhatsApp App (Mobile)
+                            </button>
+                          </div>
+                        </div>
+
+                        <span className="text-neutral-500 text-[10px]">
+                          {whatsappTargetMode === 'web'
+                            ? '💡 Counter PC par web.whatsapp.com login rakhein taaki counter staff direct business account se bhej sake.'
+                            : '💡 Direct wa.me link open hoga.'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Search Mode Tabs (Easy Option by Mobile, Name, or Code) */}
                   <div className="flex flex-wrap items-center gap-1.5 p-1 bg-neutral-100 rounded-xl max-w-fit">
                     <button
@@ -2826,7 +3031,7 @@ Please generate:
                           </p>
                         </div>
 
-                        <div className="shrink-0 flex items-center gap-2">
+                        <div className="shrink-0 flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setPreviewCardModal(verifiedCard)}
@@ -2834,6 +3039,83 @@ Please generate:
                           >
                             View Digital Card
                           </button>
+
+                          {/* WhatsApp Marketing Message to Customer - STRICTLY LOCKED UNTIL SETUP NUMBER IS ENTERED */}
+                          {verifiedCard.customer_phone && (
+                            bizMarketingPhone ? (
+                              <a
+                                href={getWhatsAppDispatchUrl(
+                                  verifiedCard.customer_phone,
+                                  verifiedCard.status === 'redeemed'
+                                    ? buildRewardReceiptMessage(verifiedCard)
+                                    : buildRewardMarketingMessage(verifiedCard)
+                                )}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-3 py-2 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-2xs"
+                                title={`Send WhatsApp from Store Account: ${business.business_name} (${bizMarketingPhone})`}
+                              >
+                                <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>{verifiedCard.status === 'redeemed' ? 'Send Bill Receipt (WhatsApp)' : 'Send Voucher (WhatsApp)'}</span>
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setQuickBizPhoneInput('');
+                                  setShowBizPhoneModal(true);
+                                }}
+                                className="px-3 py-2 text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-2xs"
+                                title="Setup number missing! Pehle setup number add karein. Super admin number se message nahi jayega."
+                              >
+                                <Lock className="w-3.5 h-3.5 text-rose-600" />
+                                <span>🔒 Setup Number to Send WhatsApp</span>
+                              </button>
+                            )
+                          )}
+
+                          {/* Copy SMS / Text message - LOCKED IF NO BUSINESS PHONE */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!bizMarketingPhone) {
+                                setQuickBizPhoneInput('');
+                                setShowBizPhoneModal(true);
+                                return;
+                              }
+                              const text = verifiedCard.status === 'redeemed'
+                                ? buildRewardReceiptMessage(verifiedCard)
+                                : buildRewardMarketingMessage(verifiedCard);
+                              navigator.clipboard.writeText(text);
+                              setCopiedRewardVoucherId(verifiedCard.id);
+                              setTimeout(() => setCopiedRewardVoucherId(null), 2500);
+                            }}
+                            className={`px-3 py-2 border rounded-xl text-xs font-semibold cursor-pointer flex items-center gap-1.5 ${
+                              !bizMarketingPhone
+                                ? 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
+                                : 'bg-white border-neutral-300 text-neutral-700 hover:bg-neutral-50'
+                            }`}
+                            title={!bizMarketingPhone ? "Setup business number required" : "Copy message to clipboard"}
+                          >
+                            {copiedRewardVoucherId === verifiedCard.id ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="text-emerald-700 font-bold">Copied!</span>
+                              </>
+                            ) : !bizMarketingPhone ? (
+                              <>
+                                <Lock className="w-3.5 h-3.5 text-rose-500" />
+                                <span>Setup Number to Copy</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5 text-neutral-500" />
+                                <span>Copy SMS</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Apply & Mark Redeemed */}
                           {verifiedCard.status === 'active' && new Date(verifiedCard.expires_at).getTime() >= Date.now() && (
                             <button
                               type="button"
@@ -2845,6 +3127,42 @@ Please generate:
                             </button>
                           )}
                         </div>
+                      </div>
+
+                      {/* Warning when business setup number is missing */}
+                      {!bizMarketingPhone && (
+                        <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-medium">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>
+                              <strong>Customer Message Blocked:</strong> Setup number missing! Jab tak setup number add nahi hota, tab tak koi message nahi jayega. Super Admin number is strictly blocked.
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuickBizPhoneInput('');
+                              setShowBizPhoneModal(true);
+                            }}
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer shadow-xs"
+                          >
+                            + Add Setup Number Now
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Business Separate Sender Note */}
+                      <div className="pt-2 border-t border-purple-200/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-purple-900">
+                        <span className="flex items-center gap-1">
+                          {bizMarketingPhone ? (
+                            <span>📱 <strong>Sender Identity:</strong> Messages dispatched with business contact: <strong>{bizMarketingPhone}</strong></span>
+                          ) : (
+                            <span className="text-rose-700 font-bold">🔒 Messages blocked until business setup number is configured</span>
+                          )}
+                        </span>
+                        <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          🔒 Super Admin number is NOT used
+                        </span>
                       </div>
                     </div>
                   )}
@@ -2977,17 +3295,32 @@ Please generate:
                                     <Eye className="w-3.5 h-3.5" />
                                   </button>
                                   {card.customer_phone && (
-                                    <a
-                                      href={`https://wa.me/${card.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                                        `Hello ${card.customer_name}! Thank you for your review on ${business?.business_name || 'our store'}. Your VIP reward code is: ${card.voucher_code} (${card.reward_title}). Show this message at billing counter to redeem!`
-                                      )}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-neutral-200"
-                                      title="Send WhatsApp Reminder"
-                                    >
-                                      <Phone className="w-3.5 h-3.5" />
-                                    </a>
+                                    bizMarketingPhone ? (
+                                      <a
+                                        href={getWhatsAppDispatchUrl(
+                                          card.customer_phone,
+                                          isRedeemed ? buildRewardReceiptMessage(card) : buildRewardMarketingMessage(card)
+                                        )}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-neutral-200"
+                                        title={`Send WhatsApp from Store Account: ${business?.business_name} (${bizMarketingPhone})`}
+                                      >
+                                        <Phone className="w-3.5 h-3.5" />
+                                      </a>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setQuickBizPhoneInput('');
+                                          setShowBizPhoneModal(true);
+                                        }}
+                                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-rose-200"
+                                        title="Setup business number required. Super admin number is blocked."
+                                      >
+                                        <Lock className="w-3.5 h-3.5 text-rose-600" />
+                                      </button>
+                                    )
                                   )}
                                   {!isRedeemed && !isExp && (
                                     <button
@@ -3263,6 +3596,91 @@ Please generate:
                     </div>
                   </div>
                 )}
+
+                {/* MODAL: EDIT BUSINESS OWNER SEPARATE MARKETING NUMBER */}
+                {showBizPhoneModal && (
+                  <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+                    <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-neutral-200 space-y-4">
+                      <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-purple-100 text-[#6C3BFF] flex items-center justify-center font-bold">
+                            <Phone className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-neutral-900">
+                              Connect Business Owner WhatsApp Account
+                            </h3>
+                            <p className="text-[11px] text-neutral-500">
+                              Official store marketing account for {business.business_name}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowBizPhoneModal(false)}
+                          className="w-7 h-7 rounded-lg hover:bg-neutral-100 flex items-center justify-center text-neutral-500 cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-purple-900 text-xs space-y-1">
+                        <p className="font-bold flex items-center gap-1.5">
+                          <span>🔒 Official Merchant Account Connection</span>
+                        </p>
+                        <p className="text-[11px] text-purple-800 leading-relaxed">
+                          POS Billing counter se customer ko bheje jane wale sabhi WhatsApp & SMS marketing messages, vouchers aur bill receipts <strong>aapke is business WhatsApp account</strong> se dispatch honge. <strong>Super Admin ka account kabhi bhi use nahi hoga.</strong>
+                        </p>
+                      </div>
+
+                      {bizPhoneSaveMsg && (
+                        <div className={`p-3 rounded-xl text-xs font-bold ${
+                          bizPhoneSaveMsg.includes('success')
+                            ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+                            : 'bg-rose-50 text-rose-900 border border-rose-200'
+                        }`}>
+                          {bizPhoneSaveMsg}
+                        </div>
+                      )}
+
+                      <form onSubmit={handleSaveQuickBizPhone} className="space-y-4">
+                        <div>
+                          <label className="text-xs font-bold text-neutral-700 block mb-1">
+                            Business Owner WhatsApp Number (Store Account) *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={quickBizPhoneInput}
+                            onChange={(e) => setQuickBizPhoneInput(e.target.value)}
+                            placeholder="e.g. +91 9876543210 or 9876543210"
+                            className="w-full px-3 py-2 text-xs bg-neutral-50 border border-neutral-300 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#6C3BFF]"
+                          />
+                          <p className="text-[10px] text-neutral-400 mt-1">
+                            Aapki dukaan / business ka apna WhatsApp number (e.g. +91 9876543210)
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100">
+                          <button
+                            type="button"
+                            onClick={() => setShowBizPhoneModal(false)}
+                            className="px-4 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isSavingBizPhone}
+                            className="px-5 py-2 text-xs font-bold text-white bg-[#6C3BFF] hover:bg-[#5A2DE2] disabled:opacity-50 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center gap-1.5"
+                          >
+                            {isSavingBizPhone ? 'Saving...' : 'Connect Business WhatsApp Account'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -3272,6 +3690,11 @@ Please generate:
             {activeTab === 'scratch_offers' && business && (
               <ScratchCampaignManager
                 business={business}
+                onUpdateBusiness={(updated) => {
+                  setBusiness(updated);
+                  setBizForm((prev) => ({ ...prev, phone: updated.phone || updated.whatsapp_number || '' }));
+                  onSessionUpdated({ ...session, business: updated });
+                }}
                 onPreviewOffer={(camp) => {
                   if (settings) {
                     onPreviewReviewFlow(business, settings);
@@ -3988,14 +4411,18 @@ Please generate:
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block font-semibold text-neutral-700 mb-1">
-                        Contact Phone (Optional)
+                        Business WhatsApp & Mobile Number (POS Marketing Sender Number)
                       </label>
                       <input
                         type="text"
                         value={bizForm.phone}
                         onChange={(e) => setBizForm({ ...bizForm, phone: e.target.value })}
+                        placeholder="e.g. +91 9876543210"
                         className="w-full px-3.5 py-2 bg-neutral-50 border border-neutral-300 rounded-lg focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#6C3BFF]"
                       />
+                      <p className="text-[11px] text-neutral-500 mt-1">
+                        Ye aapke business account ka separate number hai. Reward aur Scratch Card POS se marketing messages isi number se jayenge. <strong>Jab tak ye setup number nahi dala jata, tab tak koi customer message nahi jayega (Super Admin number strictly blocked hai).</strong>
+                      </p>
                     </div>
 
                     <div>

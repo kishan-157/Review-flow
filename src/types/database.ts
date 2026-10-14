@@ -30,6 +30,7 @@ export interface Business {
   google_review_url: string;
   logo_url?: string;
   phone?: string;
+  whatsapp_number?: string;
   address?: string;
   category?: string;
   ai_prompt?: string;

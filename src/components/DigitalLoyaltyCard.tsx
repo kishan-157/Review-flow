@@ -72,11 +72,14 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
 
   const handleShareWhatsApp = () => {
     const bizName = business?.business_name || 'Our Store';
+    const bizContact = business?.phone || business?.whatsapp_number;
+    const contactLine = bizContact ? `\n\n🏢 *Store:* ${bizName}\n📞 *Contact Store:* ${bizContact}` : `\n\n🏢 *Store:* ${bizName}`;
     const text = `🎁 Here is my VIP Loyalty Card for *${bizName}*!\n\n` +
       `🎟️ *Voucher Code:* ${card.voucher_code}\n` +
       `🎉 *Reward:* ${card.reward_title}\n` +
       `⏳ *Valid Till:* ${new Date(card.expires_at).toLocaleDateString()}\n` +
-      `📍 Show this message or code at the counter during billing to claim your reward!`;
+      `📍 Show this message or code at the counter during billing to claim your reward!` +
+      contactLine;
 
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');

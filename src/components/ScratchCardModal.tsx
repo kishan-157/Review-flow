@@ -248,7 +248,7 @@ export const ScratchCardModal: React.FC<ScratchCardModalProps> = ({ play, busine
               {play.customer_phone && (
                 <a
                   href={`https://wa.me/${play.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                    `🎉 Congratulations ${play.customer_name}! You won "${play.reward_title}" (${play.reward_value}) at ${business?.business_name || 'our store'}! Your Scratch & Win coupon code is: ${play.voucher_code}. Show this message or code at billing counter to claim! Valid till: ${new Date(play.expires_at).toLocaleDateString()}.`
+                    `🎉 Congratulations ${play.customer_name}! You won "${play.reward_title}" (${play.reward_value}) at ${business?.business_name || 'our store'}! Your Scratch & Win coupon code is: ${play.voucher_code}. Show this message or code at billing counter to claim! Valid till: ${new Date(play.expires_at).toLocaleDateString()}.\n\n🏢 Store: ${business?.business_name || 'Our Store'}${business?.phone || business?.whatsapp_number ? `\n📞 Store Contact: ${business.whatsapp_number || business.phone}` : ''}`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"

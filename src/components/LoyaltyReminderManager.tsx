@@ -87,7 +87,8 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
       const result = await syncAndGetReminders(
         business.id,
         loyaltyCards,
-        business.business_name
+        business.business_name,
+        business.phone || business.whatsapp_number
       );
       setReminders(result.reminders);
       setAuditLogs(result.auditLogs);
@@ -98,7 +99,7 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
       setIsLoading(false);
       setIsSyncing(false);
     }
-  }, [business.id, business.business_name, loyaltyCards]);
+  }, [business.id, business.business_name, business.phone, business.whatsapp_number, loyaltyCards]);
 
   useEffect(() => {
     loadReminders();
@@ -120,6 +121,14 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
 
   // Trigger WhatsApp link and open confirmation dialog
   const handleOpenWhatsAppReminder = (reminder: RewardReminder) => {
+    const bizPhone = business.whatsapp_number || business.phone;
+    if (!bizPhone || !bizPhone.trim()) {
+      setActionError(
+        '⚠️ Customer Reminders Blocked: Business setup number is missing! Jab tak business owner apna setup number nahi dalta tab tak koi message nahi ja sakta. Super admin number is strictly blocked. Please configure your business phone first.'
+      );
+      return;
+    }
+
     if (reminder.status === 'SENT') {
       setActionError(`Reminder for stage "${reminder.stage_label}" has already been sent! Duplicate sending is blocked.`);
       return;
@@ -337,6 +346,46 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* SENDER STATUS BAR: SEPARATE BUSINESS SETUP NUMBER */}
+      {!(business.phone || business.whatsapp_number) ? (
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold shrink-0">
+              <ShieldAlert className="w-5 h-5 text-rose-600" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-extrabold text-rose-950">Customer Expiry Reminders Strictly Blocked</span>
+                <span className="text-[10px] font-black bg-rose-200 text-rose-900 px-2 py-0.5 rounded-full border border-rose-300">
+                  🔒 Business Setup Number Missing
+                </span>
+                <span className="text-[10px] font-bold bg-neutral-900 text-white px-2 py-0.5 rounded-full">
+                  Super Admin Excluded
+                </span>
+              </div>
+              <p className="text-[11px] text-rose-800 mt-1">
+                Jab tak aap apna business setup number nahi dalte, tab tak <strong>koi bhi reminder message nahi ja sakta</strong>. Super Admin ke number se message bilkul nahi jayega.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-bold text-rose-800 bg-rose-100 px-3 py-1.5 rounded-xl border border-rose-300 self-start sm:self-auto shrink-0">
+            Configure in POS Billing or Settings
+          </span>
+        </div>
+      ) : (
+        <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <Phone className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="text-neutral-700 font-medium">
+              Reminder Sender Identity: <strong className="text-neutral-900">{business.business_name}</strong> · Contact: <strong className="font-mono text-emerald-900 bg-white px-1.5 py-0.5 rounded border border-emerald-200">{business.whatsapp_number || business.phone}</strong>
+            </span>
+          </div>
+          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
+            🔒 Super Admin Excluded (Store Number Active)
+          </span>
+        </div>
+      )}
 
       {/* Action Alerts */}
       {actionSuccess && (
@@ -615,14 +664,26 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
 
                     {/* WhatsApp Action Button */}
                     {isPending ? (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenWhatsAppReminder(reminder)}
-                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Send WhatsApp Reminder</span>
-                      </button>
+                      !(business.phone || business.whatsapp_number) ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenWhatsAppReminder(reminder)}
+                          className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                          title="Setup business number required. Super admin number is blocked."
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                          <span>🔒 Setup Number to Send</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenWhatsAppReminder(reminder)}
+                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>Send WhatsApp Reminder</span>
+                        </button>
+                      )
                     ) : isSent ? (
                       <button
                         type="button"
