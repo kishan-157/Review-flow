@@ -36,6 +36,7 @@ import {
   syncAndGetReminders,
   confirmReminderSentApi,
   manuallyCorrectReminderStatusApi,
+  isReminderStageEligible,
 } from '../lib/reminderService';
 
 interface LoyaltyReminderManagerProps {
@@ -56,8 +57,10 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [stageFilter, setStageFilter] = useState<'all' | ReminderStage>('all');
+  const [stageFilter, setStageFilter] = useState<'all' | ReminderStage | 'upcoming'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ReminderStatus>('all');
+  const [exactDaysMode, setExactDaysMode] = useState<boolean>(true); // Strict 7d = only 7 days, 3d = only 3 days
+  const [showUpcoming, setShowUpcoming] = useState<boolean>(false);
 
   // Confirmation Flow Modal state
   const [activeConfirmReminder, setActiveConfirmReminder] = useState<RewardReminder | null>(null);
@@ -232,22 +235,52 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
 
   // Metrics summary
   const metrics = useMemo(() => {
-    const total = reminders.length;
-    const pending = reminders.filter((r) => r.status === 'PENDING').length;
-    const sent = reminders.filter((r) => r.status === 'SENT').length;
-    const stopped = reminders.filter((r) => r.status === 'STOPPED').length;
-    return { total, pending, sent, stopped };
-  }, [reminders]);
+    // 7 Days count: cards where days_remaining is 7 (or 4-7 in window mode)
+    const count7Days = reminders.filter(
+      (r) => r.stage === '7_days' && isReminderStageEligible('7_days', r.days_remaining, exactDaysMode)
+    ).length;
 
-  // Filtered reminders list
+    // 3 Days count: cards where days_remaining is 3 (or 1-3 in window mode)
+    const count3Days = reminders.filter(
+      (r) => r.stage === '3_days' && isReminderStageEligible('3_days', r.days_remaining, exactDaysMode)
+    ).length;
+
+    // Expiry Day count: cards where days_remaining is 0
+    const countExpiry = reminders.filter(
+      (r) => r.stage === 'expiry_day' && isReminderStageEligible('expiry_day', r.days_remaining, exactDaysMode)
+    ).length;
+
+    // Upcoming: cards with > 7 days remaining
+    const countUpcoming = reminders.filter(
+      (r) => r.stage === '7_days' && r.days_remaining > 7
+    ).length;
+
+    // Due reminders
+    const dueReminders = reminders.filter((r) =>
+      isReminderStageEligible(r.stage, r.days_remaining, exactDaysMode)
+    );
+
+    const total = dueReminders.length;
+    const pending = dueReminders.filter((r) => r.status === 'PENDING').length;
+    const sent = dueReminders.filter((r) => r.status === 'SENT').length;
+    const stopped = reminders.filter((r) => r.status === 'STOPPED').length;
+
+    return {
+      total,
+      pending,
+      sent,
+      stopped,
+      count7Days,
+      count3Days,
+      countExpiry,
+      countUpcoming,
+      allTotal: reminders.length,
+    };
+  }, [reminders, exactDaysMode]);
+
+  // Filtered reminders list with strict days remaining enforcement
   const filteredReminders = useMemo(() => {
     return reminders.filter((r) => {
-      // Stage filter
-      if (stageFilter !== 'all' && r.stage !== stageFilter) return false;
-
-      // Status filter
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -259,9 +292,41 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
         if (!matches) return false;
       }
 
+      // Status filter
+      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+
+      // Stage filter with strict days remaining logic
+      if (stageFilter === '7_days') {
+        if (r.stage !== '7_days') return false;
+        // MUST NEVER SHOW cards with 8 or more days remaining!
+        return isReminderStageEligible('7_days', r.days_remaining, exactDaysMode);
+      }
+
+      if (stageFilter === '3_days') {
+        if (r.stage !== '3_days') return false;
+        // MUST NEVER SHOW cards with 4 or more days remaining!
+        return isReminderStageEligible('3_days', r.days_remaining, exactDaysMode);
+      }
+
+      if (stageFilter === 'expiry_day') {
+        if (r.stage !== 'expiry_day') return false;
+        return isReminderStageEligible('expiry_day', r.days_remaining, exactDaysMode);
+      }
+
+      if (stageFilter === 'upcoming') {
+        // Future vouchers that have more than 7 days left
+        return r.days_remaining > 7 && r.stage === '7_days';
+      }
+
+      // If 'all':
+      // Only show reminders that are currently due/eligible (unless showUpcoming is checked)
+      if (!showUpcoming) {
+        return isReminderStageEligible(r.stage, r.days_remaining, exactDaysMode);
+      }
+
       return true;
     });
-  }, [reminders, stageFilter, statusFilter, searchQuery]);
+  }, [reminders, stageFilter, statusFilter, searchQuery, exactDaysMode, showUpcoming]);
 
   return (
     <div className="space-y-6">
@@ -447,8 +512,130 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
         </div>
       </div>
 
+      {/* Strict Mode Indicator & Settings Strip */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-amber-50/80 border border-amber-200/90 rounded-2xl text-xs">
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+          <span className="font-bold text-neutral-800">
+            {exactDaysMode ? (
+              <>
+                🎯 <strong>Strict Exact Days Active:</strong> 7 Day stage mein sirf <strong>7 din baaki</strong> wale show honge (8+ days blocked), aur 3 Day stage mein sirf <strong>3 din baaki</strong> wale (4+ days blocked).
+              </>
+            ) : (
+              <>
+                📊 <strong>Window Mode Active:</strong> 7 Day stage mein 4–7 din baaki wale aur 3 Day stage mein 1–3 din baaki wale show honge.
+              </>
+            )}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 cursor-pointer font-bold text-neutral-800 hover:text-neutral-950 select-none bg-white px-2.5 py-1 rounded-xl border border-amber-200 shadow-2xs">
+            <input
+              type="checkbox"
+              checked={exactDaysMode}
+              onChange={(e) => setExactDaysMode(e.target.checked)}
+              className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
+            />
+            <span>Strict Exact Days (7d & 3d only)</span>
+          </label>
+          {stageFilter === 'all' && (
+            <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-neutral-600 hover:text-neutral-900 select-none text-[11px]">
+              <input
+                type="checkbox"
+                checked={showUpcoming}
+                onChange={(e) => setShowUpcoming(e.target.checked)}
+                className="w-3.5 h-3.5 text-purple-600 rounded cursor-pointer"
+              />
+              <span>Show future (&gt;7d)</span>
+            </label>
+          )}
+        </div>
+      </div>
+
       {/* Filters and Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-xs space-y-3">
+      <div className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-xs space-y-3.5">
+        {/* Stage Quick Filter Tabs (Fast 1-Click Stage Switcher) */}
+        <div className="flex flex-wrap items-center gap-1.5 pb-1 border-b border-neutral-100">
+          <button
+            type="button"
+            onClick={() => setStageFilter('all')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              stageFilter === 'all'
+                ? 'bg-neutral-900 text-white shadow-xs'
+                : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+            }`}
+          >
+            <span>⚡ All Due Now</span>
+            <span className="px-1.5 py-0.2 rounded-md bg-white/20 text-[10px]">{metrics.total}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStageFilter('7_days')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              stageFilter === '7_days'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200/80'
+            }`}
+          >
+            <span>📅 7 Days Remaining</span>
+            <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+              stageFilter === '7_days' ? 'bg-white/20 text-white' : 'bg-blue-200 text-blue-900'
+            }`}>
+              {metrics.count7Days}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStageFilter('3_days')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              stageFilter === '3_days'
+                ? 'bg-amber-500 text-neutral-950 shadow-xs'
+                : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200/80'
+            }`}
+          >
+            <span>⏰ 3 Days Remaining</span>
+            <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+              stageFilter === '3_days' ? 'bg-black/20 text-neutral-950' : 'bg-amber-200 text-amber-950'
+            }`}>
+              {metrics.count3Days}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStageFilter('expiry_day')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              stageFilter === 'expiry_day'
+                ? 'bg-rose-600 text-white shadow-xs'
+                : 'bg-rose-50 text-rose-800 hover:bg-rose-100 border border-rose-200/80'
+            }`}
+          >
+            <span>🚨 Expiry Day (Today)</span>
+            <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+              stageFilter === 'expiry_day' ? 'bg-white/20 text-white' : 'bg-rose-200 text-rose-900'
+            }`}>
+              {metrics.countExpiry}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStageFilter('upcoming')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              stageFilter === 'upcoming'
+                ? 'bg-purple-700 text-white shadow-xs'
+                : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200/80'
+            }`}
+          >
+            <span>⏳ Future Vouchers (&gt;7d)</span>
+            <span className="px-1.5 py-0.2 rounded-md bg-purple-200 text-purple-900 text-[10px]">
+              {metrics.countUpcoming}
+            </span>
+          </button>
+        </div>
+
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
           {/* Search Box */}
           <div className="relative flex-1">
@@ -472,10 +659,11 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
                 onChange={(e) => setStageFilter(e.target.value as any)}
                 className="bg-transparent text-neutral-800 font-semibold focus:outline-hidden cursor-pointer"
               >
-                <option value="all">All Stages</option>
-                <option value="7_days">7 Days Remaining</option>
-                <option value="3_days">3 Days Remaining</option>
-                <option value="expiry_day">Expiry Day (Today)</option>
+                <option value="all">⚡ All Due Now ({metrics.total})</option>
+                <option value="7_days">📅 7 Days Remaining ({metrics.count7Days})</option>
+                <option value="3_days">⏰ 3 Days Remaining ({metrics.count3Days})</option>
+                <option value="expiry_day">🚨 Expiry Day (Today) ({metrics.countExpiry})</option>
+                <option value="upcoming">⏳ Future Reminders ({metrics.countUpcoming})</option>
               </select>
             </div>
 
@@ -606,11 +794,25 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
                         Expiry: {new Date(reminder.expires_at).toLocaleDateString()}
                       </span>
                       <span>·</span>
-                      <span className="text-neutral-500">
-                        {reminder.days_remaining > 0
-                          ? `⏳ ${reminder.days_remaining} days remaining`
+                      <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                        reminder.days_remaining === 7
+                          ? 'bg-blue-100 text-blue-900 border border-blue-300 font-black'
+                          : reminder.days_remaining === 3
+                          ? 'bg-amber-100 text-amber-950 border border-amber-300 font-black'
                           : reminder.days_remaining === 0
-                          ? '🚨 Expiring Today'
+                          ? 'bg-rose-100 text-rose-900 border border-rose-300 font-black'
+                          : reminder.days_remaining > 7
+                          ? 'bg-purple-50 text-purple-800'
+                          : 'bg-neutral-100 text-neutral-700'
+                      }`}>
+                        {reminder.days_remaining === 7
+                          ? '⏳ Exactly 7 Days Remaining (Due Now)'
+                          : reminder.days_remaining === 3
+                          ? '⏰ Exactly 3 Days Remaining (Due Now)'
+                          : reminder.days_remaining === 0
+                          ? '🚨 Expiring Today (Due Now)'
+                          : reminder.days_remaining > 0
+                          ? `⏳ ${reminder.days_remaining} days remaining`
                           : '⚠️ Expired'}
                       </span>
                     </div>

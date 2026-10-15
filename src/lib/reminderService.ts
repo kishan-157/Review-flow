@@ -16,13 +16,61 @@ export const REMINDER_STAGES: { stage: ReminderStage; label: string; daysTarget:
 ];
 
 /**
- * Calculates calendar days remaining until expiry.
+ * Calculates exact calendar days remaining until expiry by comparing calendar midnights.
+ * This avoids fractional hour rounding errors (e.g. 7 days + 2 hours becoming 8 days).
  */
 export function calculateDaysRemaining(expiresAtIso: string): number {
   const expiryDate = new Date(expiresAtIso);
   const now = new Date();
-  const diffMs = expiryDate.getTime() - now.getTime();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  // Normalize to local calendar midnight for accurate integer day differences
+  const expMidnight = new Date(
+    expiryDate.getFullYear(),
+    expiryDate.getMonth(),
+    expiryDate.getDate()
+  ).getTime();
+  const nowMidnight = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
+
+  const diffDays = Math.round((expMidnight - nowMidnight) / (1000 * 60 * 60 * 24));
+  return diffDays;
+}
+
+/**
+ * Checks whether a reminder is active/due for its stage based on days remaining:
+ * - '7_days': Due when days remaining is <= 7 (and >= 4). If exactOnly is true: strictly 7 days!
+ *             Cards with 8 or more days remaining are STRICTLY EXCLUDED.
+ * - '3_days': Due when days remaining is <= 3 (and >= 1). If exactOnly is true: strictly 3 days!
+ *             Cards with 4 or more days remaining are STRICTLY EXCLUDED.
+ * - 'expiry_day': Due on expiry day (days remaining === 0).
+ */
+export function isReminderStageEligible(
+  stage: ReminderStage,
+  daysRemaining: number,
+  exactOnly: boolean = true
+): boolean {
+  if (exactOnly) {
+    if (stage === '7_days') return daysRemaining === 7;
+    if (stage === '3_days') return daysRemaining === 3;
+    if (stage === 'expiry_day') return daysRemaining === 0;
+    return false;
+  }
+
+  if (stage === '7_days') {
+    // Strictly block 8 days or more!
+    return daysRemaining <= 7 && daysRemaining >= 4;
+  }
+  if (stage === '3_days') {
+    // Strictly block 4 days or more!
+    return daysRemaining <= 3 && daysRemaining >= 1;
+  }
+  if (stage === 'expiry_day') {
+    return daysRemaining === 0 || daysRemaining < 0;
+  }
+  return false;
 }
 
 /**

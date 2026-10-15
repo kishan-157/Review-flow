@@ -37,6 +37,7 @@ import {
   buildFastRewardWhatsAppMessage,
 } from '../lib/rewardCardGenerator';
 import { getScratchPlaysByBusiness } from '../lib/db';
+import { calculateDaysRemaining } from '../lib/reminderService';
 
 interface WhatsAppMarketingHubProps {
   business: Business;
@@ -44,6 +45,7 @@ interface WhatsAppMarketingHubProps {
   bizMarketingPhone: string;
   onOpenBizPhoneModal: () => void;
   onOpenShareModal: (voucher: any, mode: 'fast' | 'image' | 'text') => void;
+  onNavigateToReminders?: () => void;
 }
 
 export const WhatsAppMarketingHub: React.FC<WhatsAppMarketingHubProps> = ({
@@ -52,6 +54,7 @@ export const WhatsAppMarketingHub: React.FC<WhatsAppMarketingHubProps> = ({
   bizMarketingPhone,
   onOpenBizPhoneModal,
   onOpenShareModal,
+  onNavigateToReminders,
 }) => {
   // Scratch plays state
   const [scratchPlays, setScratchPlays] = useState<ScratchPlay[]>([]);
@@ -94,6 +97,24 @@ export const WhatsAppMarketingHub: React.FC<WhatsAppMarketingHubProps> = ({
       isMounted = false;
     };
   }, [business?.id]);
+
+  // Real-time calculation of strictly 7 days, 3 days, and today remaining cards
+  const reminderCounts = useMemo(() => {
+    let sevenDays = 0;
+    let threeDays = 0;
+    let today = 0;
+
+    loyaltyCards.forEach((c) => {
+      if (c.status === 'active') {
+        const days = calculateDaysRemaining(c.expires_at);
+        if (days === 7) sevenDays++;
+        if (days === 3) threeDays++;
+        if (days === 0) today++;
+      }
+    });
+
+    return { sevenDays, threeDays, today };
+  }, [loyaltyCards]);
 
   // Combined rewards list from loyalty cards and scratch plays
   const combinedRewards = useMemo(() => {
