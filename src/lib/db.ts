@@ -32,8 +32,9 @@ import {
   ScratchCampaignStatus,
 } from '../types/database';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
+export { getSupabaseClient, isSupabaseConfigured };
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   PROFILES: 'lb_profiles',
   BUSINESSES: 'lb_businesses',
   REVIEW_SETTINGS: 'lb_review_settings',
@@ -202,7 +203,7 @@ export function checkCustomerAccessStatus(profile: Profile): {
 }
 
 // Storage helpers
-function getStorage<T>(key: string, defaultValue: T): T {
+export function getStorage<T>(key: string, defaultValue: T): T {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return defaultValue;
@@ -212,7 +213,7 @@ function getStorage<T>(key: string, defaultValue: T): T {
   }
 }
 
-function setStorage<T>(key: string, value: T): void {
+export function setStorage<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
@@ -1590,7 +1591,7 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
 
 export async function updateBusiness(
   businessId: string,
-  updates: Partial<Pick<Business, 'business_name' | 'google_review_url' | 'logo_url' | 'phone' | 'whatsapp_number' | 'address' | 'category' | 'unique_slug' | 'ai_prompt' | 'ai_keywords' | 'ai_suggestions_preview' | 'ai_summary' | 'ai_last_generated_at' | 'gps_verification_enabled' | 'latitude' | 'longitude' | 'gps_radius_meters'>>
+  updates: Partial<Pick<Business, 'business_name' | 'google_review_url' | 'logo_url' | 'phone' | 'whatsapp_number' | 'address' | 'category' | 'unique_slug' | 'ai_prompt' | 'ai_keywords' | 'ai_suggestions_preview' | 'ai_summary' | 'ai_last_generated_at' | 'gps_verification_enabled' | 'latitude' | 'longitude' | 'gps_radius_meters' | 'review_reward_mode'>>
 ): Promise<Business> {
   const supabase = getSupabaseClient();
   if (supabase) {

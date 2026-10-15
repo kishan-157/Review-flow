@@ -16,6 +16,7 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { AuthModal } from './components/AuthModal';
 import { LoginPage } from './components/LoginPage';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
+import { RewardVerifyModal } from './components/RewardVerifyModal';
 
 export default function App() {
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -23,6 +24,7 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'forgot'>('login');
   const [supabaseModalOpen, setSupabaseModalOpen] = useState(false);
+  const [verifyVoucherCode, setVerifyVoucherCode] = useState<string | null>(null);
 
   // Review Experience Preview / Live route state
   const [activeReviewSlug, setActiveReviewSlug] = useState<string | null>(null);
@@ -78,6 +80,12 @@ export default function App() {
           setCurrentView('review');
           return;
         }
+      }
+
+      // Check for QR reward inspection parameter (?verify_reward=CODE or ?verify_voucher=CODE)
+      const verifyCode = search.get('verify_reward') || search.get('verify_voucher') || (hash.startsWith('#verify/') ? hash.replace(/^#verify\//, '') : null);
+      if (verifyCode) {
+        setVerifyVoucherCode(verifyCode.trim());
       }
 
       if (hash === '#login' || pathname === '/login' || search.get('view') === 'login') {
@@ -278,6 +286,31 @@ export default function App() {
           // Refreshed
         }}
       />
+
+      {/* QR Reward Verification Modal (Triggered by phone camera QR scan) */}
+      {verifyVoucherCode && (
+        <RewardVerifyModal
+          voucherCode={verifyVoucherCode}
+          session={session}
+          onClose={() => {
+            setVerifyVoucherCode(null);
+            const url = new URL(window.location.href);
+            url.searchParams.delete('verify_reward');
+            url.searchParams.delete('verify_voucher');
+            if (window.location.hash.startsWith('#verify/')) {
+              window.location.hash = '';
+            }
+            window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+          }}
+          onGoToDashboard={() => {
+            if (session?.user?.role === 'customer') {
+              setCurrentView('dashboard');
+            } else if (session?.user?.role === 'admin') {
+              setCurrentView('admin');
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

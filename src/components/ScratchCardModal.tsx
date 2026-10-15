@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Sparkles, Trophy, Gift, Check, Clock, ShieldCheck, Tag, ShoppingBag, Percent, Phone } from 'lucide-react';
+import QRCode from 'qrcode';
+import { Sparkles, Trophy, Gift, Check, Clock, ShieldCheck, Tag, ShoppingBag, Percent, Phone, Calendar, Download } from 'lucide-react';
 import { ScratchPlay, Business } from '../types/database';
+import { downloadRewardPassImage } from '../lib/rewardCardGenerator';
 
 interface ScratchCardModalProps {
   play: ScratchPlay;
@@ -10,10 +12,60 @@ interface ScratchCardModalProps {
 
 export const ScratchCardModal: React.FC<ScratchCardModalProps> = ({ play, business, onClose }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isScratched, setIsScratched] = useState(false);
+  const qrCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isScratched, setIsScratched] = useState(Boolean(play.scratched_at || play.status === 'redeemed'));
   const [scratchPercent, setScratchPercent] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
+  const handleDownloadPass = async () => {
+    setIsDownloading(true);
+    try {
+      await downloadRewardPassImage({
+        businessName: business.business_name || 'VIP Store',
+        rewardTitle: play.reward_title,
+        rewardValue: play.reward_value || undefined,
+        voucherCode: play.voucher_code,
+        customerName: play.customer_name,
+        customerPhone: play.customer_phone,
+        expiresAt: play.expires_at,
+        createdAt: play.scratched_at || play.created_at,
+        terms: play.terms_conditions || 'Present this pass at billing counter to redeem.',
+        rewardType: 'scratch',
+        originLabel: '🎲 Scratch & Win Lucky Draw',
+      });
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (err) {
+      console.error('Failed to download scratch reward image', err);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // Generate QR code when scratched
+  useEffect(() => {
+    if (!isScratched || !qrCanvasRef.current) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const qrData = `${origin}/?verify_reward=${encodeURIComponent(play.voucher_code)}`;
+    QRCode.toCanvas(
+      qrCanvasRef.current,
+      qrData,
+      {
+        width: 110,
+        margin: 1,
+        color: {
+          dark: '#1e1b4b',
+          light: '#ffffff',
+        },
+      },
+      (err) => {
+        if (err) console.error('QR generation error in ScratchCardModal:', err);
+      }
+    );
+  }, [isScratched, play.voucher_code]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -244,22 +296,90 @@ export const ScratchCardModal: React.FC<ScratchCardModalProps> = ({ play, busine
                 )}
               </div>
 
-              {/* Direct WhatsApp Share & Save */}
-              {play.customer_phone && (
-                <a
-                  href={`https://wa.me/${play.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                    `🎉 Congratulations ${play.customer_name}! You won "${play.reward_title}" (${play.reward_value}) at ${business?.business_name || 'our store'}! Your Scratch & Win coupon code is: ${play.voucher_code}. Show this message or code at billing counter to claim! Valid till: ${new Date(play.expires_at).toLocaleDateString()}.\n\n🏢 Store: ${business?.business_name || 'Our Store'}${business?.phone || business?.whatsapp_number ? `\n📞 Store Contact: ${business.whatsapp_number || business.phone}` : ''}`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Phone className="w-4 h-4" />
-                  <span>Send Voucher to WhatsApp</span>
-                </a>
-              )}
+              {/* Counter Scan QR Code for Business Owner */}
+              <div className="p-3 bg-white border border-purple-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+                <div className="bg-neutral-50 p-1.5 rounded-xl border border-neutral-200 shrink-0">
+                  <canvas ref={qrCanvasRef} className="rounded-lg w-24 h-24" />
+                </div>
+                <div className="flex-1 text-left space-y-1">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wide text-purple-800 bg-purple-100 px-2 py-0.5 rounded-md">
+                    📱 Counter Scan QR
+                  </span>
+                  <h5 className="text-xs font-bold text-neutral-900 leading-tight">
+                    Scan to verify origin & validity
+                  </h5>
+                  <p className="text-[10px] text-neutral-500 leading-snug">
+                    Business owner is QR ko scan karke dekh sakte hain yeh reward kab aur kaise mila.
+                  </p>
+                </div>
+              </div>
 
-              <div className="text-[11px] text-neutral-600 space-y-1 text-left bg-neutral-50 p-3 rounded-xl border border-neutral-200">
+              {/* Action Buttons: Download Reward Pass & WhatsApp Share */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleDownloadPass}
+                  disabled={isDownloading}
+                  className="flex-1 py-2.5 px-3 bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-900/20 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                  title="Download reward pass with verification QR code as image"
+                >
+                  {downloadSuccess ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-300" />
+                      <span>Pass Saved! (इनाम सेव हुआ)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 text-amber-300" />
+                      <span>{isDownloading ? 'Saving...' : 'Download Pass (इनाम डाउनलोड करें)'}</span>
+                    </>
+                  )}
+                </button>
+
+                {play.customer_phone && (
+                  <a
+                    href={`https://wa.me/${play.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                      `🎉 Congratulations ${play.customer_name}! You won "${play.reward_title}" (${play.reward_value}) at ${business?.business_name || 'our store'}! Your Scratch & Win coupon code is: ${play.voucher_code}. Show this message or code at billing counter to claim! Valid till: ${new Date(play.expires_at).toLocaleDateString()}.\n\n🏢 Store: ${business?.business_name || 'Our Store'}${business?.phone || business?.whatsapp_number ? `\n📞 Store Contact: ${business.whatsapp_number || business.phone}` : ''}`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-2.5 px-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                  >
+                    <Phone className="w-4 h-4" />
+                    <span>WhatsApp</span>
+                  </a>
+                )}
+              </div>
+
+              {/* Detailed Origin & Timeline Box (Kab Mila & Kaise Mila) */}
+              <div className="text-[11px] text-neutral-600 space-y-1.5 text-left bg-neutral-50 p-3 rounded-xl border border-neutral-200">
+                <div className="flex items-center justify-between pb-1 border-b border-neutral-200">
+                  <span className="text-neutral-500 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-purple-600" />
+                    <strong>कब मिला (Issued):</strong>
+                  </span>
+                  <strong className="text-neutral-900 font-mono text-[10px]">
+                    {new Date(play.scratched_at || play.created_at).toLocaleString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true,
+                    })}
+                  </strong>
+                </div>
+
+                <div className="flex items-center justify-between pb-1 border-b border-neutral-200">
+                  <span className="text-neutral-500 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <strong>कैसे मिला (How):</strong>
+                  </span>
+                  <span className="text-purple-700 font-bold text-[10px] bg-purple-50 px-1.5 py-0.5 rounded">
+                    🎲 Scratch & Win Lucky Draw
+                  </span>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <span className="text-neutral-500">Issued to:</span>
                   <strong className="text-neutral-800">{play.customer_name} ({play.customer_phone})</strong>

@@ -23,6 +23,13 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Set Permissions-Policy and Feature-Policy to allow geolocation, camera, and mic in browsers and embedded iframes
+app.use((_req, res, next) => {
+  res.setHeader('Permissions-Policy', 'geolocation=(self "*"), camera=(self "*"), microphone=(self "*")');
+  res.setHeader('Feature-Policy', 'geolocation *; camera *; microphone *');
+  next();
+});
+
 // Server health check for mobile and cross-device testing
 app.get('/api/health', (_req, res) => {
   res.json({
@@ -31,6 +38,208 @@ app.get('/api/health', (_req, res) => {
     environment: process.env.NODE_ENV || 'development',
     service: 'LocalBoost AI Backend Server',
   });
+});
+
+// Geocoding and Address Coordinate Lookup (OpenStreetMap Nominatim + Direct Coordinates & Maps Link Parsing)
+app.get('/api/geo/lookup', async (req, res) => {
+  try {
+    const query = String(req.query.q || '').trim();
+    if (!query) {
+      return res.status(400).json({ error: 'Query parameter q is required' });
+    }
+
+    // 1. Direct coordinates format: "21.1702, 72.8311" or "21.170245,72.831123"
+    const coordMatch = query.match(/([-+]?\d{1,2}(?:\.\d+)?)[,\s]+([-+]?\d{1,3}(?:\.\d+)?)/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lng = parseFloat(coordMatch[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return res.json({
+          success: true,
+          latitude: Number(lat.toFixed(6)),
+          longitude: Number(lng.toFixed(6)),
+          displayName: `Exact Coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+          source: 'direct_coordinates',
+        });
+      }
+    }
+
+    // 2. Google Maps URL with @lat,lng e.g. maps.google.com/.../@21.1702,72.8311
+    const mapsAtMatch = query.match(/@([-+]?\d{1,2}\.\d+),([-+]?\d{1,3}\.\d+)/);
+    if (mapsAtMatch) {
+      const lat = parseFloat(mapsAtMatch[1]);
+      const lng = parseFloat(mapsAtMatch[2]);
+      return res.json({
+        success: true,
+        latitude: Number(lat.toFixed(6)),
+        longitude: Number(lng.toFixed(6)),
+        displayName: `Google Maps Pin: ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        source: 'google_maps_url',
+      });
+    }
+
+    // 3. Google Maps URL with ?q=lat,lng
+    const mapsQMatch = query.match(/[?&]q=([-+]?\d{1,2}\.\d+)[,+]+([-+]?\d{1,3}\.\d+)/);
+    if (mapsQMatch) {
+      const lat = parseFloat(mapsQMatch[1]);
+      const lng = parseFloat(mapsQMatch[2]);
+      return res.json({
+        success: true,
+        latitude: Number(lat.toFixed(6)),
+        longitude: Number(lng.toFixed(6)),
+        displayName: `Google Maps Query: ${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        source: 'google_maps_url',
+      });
+    }
+
+    // 4. Free OpenStreetMap Nominatim Geocoding
+    const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+    const nomRes = await fetch(nomUrl, {
+      headers: {
+        'User-Agent': 'LocalBoostAI/1.0 (GoogleReviewQRPlatform)',
+        'Accept': 'application/json',
+      },
+    });
+
+    if (nomRes.ok) {
+      const data = await nomRes.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const item = data[0];
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lon);
+        return res.json({
+          success: true,
+          latitude: Number(lat.toFixed(6)),
+          longitude: Number(lng.toFixed(6)),
+          displayName: item.display_name,
+          source: 'nominatim_geocode',
+        });
+      }
+    }
+
+    // 5. Free Photon Komoot Geocoding fallback (instant OpenStreetMap index)
+    try {
+      const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1`;
+      const photonRes = await fetch(photonUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'LocalBoostAI/1.0',
+        },
+      });
+      if (photonRes.ok) {
+        const pData = await photonRes.json();
+        if (pData?.features && pData.features.length > 0) {
+          const feat = pData.features[0];
+          const [lon, lat] = feat.geometry.coordinates;
+          const props = feat.properties || {};
+          const label = [props.name, props.city, props.state, props.country].filter(Boolean).join(', ');
+          return res.json({
+            success: true,
+            latitude: Number(lat.toFixed(6)),
+            longitude: Number(lon.toFixed(6)),
+            displayName: label || query,
+            source: 'photon_geocode',
+          });
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    return res.status(404).json({
+      error: `Could not find coordinates for "${query}". Try entering City and Area (e.g. "Vesu Surat" or "Connaught Place Delhi").`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Geocoding failed' });
+  }
+});
+
+// Network / IP Geolocation Detection (Fallback when browser GPS is blocked by iframe policy)
+app.get('/api/geo/detect', async (req, res) => {
+  try {
+    const rawIp = req.headers['cf-connecting-ip'] ||
+      req.headers['x-real-ip'] ||
+      req.headers['x-forwarded-for'] ||
+      req.socket.remoteAddress || '';
+    const ipStr = (Array.isArray(rawIp) ? rawIp[0] : String(rawIp).split(',')[0]).trim();
+    const isPublicIp = ipStr &&
+      ipStr !== '::1' &&
+      ipStr !== '127.0.0.1' &&
+      !ipStr.startsWith('10.') &&
+      !ipStr.startsWith('192.168.') &&
+      !ipStr.startsWith('172.16.') &&
+      !ipStr.startsWith('172.17.') &&
+      !ipStr.startsWith('172.18.') &&
+      !ipStr.startsWith('172.19.') &&
+      !ipStr.startsWith('172.2') &&
+      !ipStr.startsWith('172.3');
+
+    // 1. Try ipwho.is
+    try {
+      const targetUrl = isPublicIp ? `https://ipwho.is/${ipStr}` : 'https://ipwho.is/';
+      const ipRes = await fetch(targetUrl, { headers: { 'Accept': 'application/json' } });
+      if (ipRes.ok) {
+        const data = await ipRes.json();
+        if (data.success && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+          return res.json({
+            success: true,
+            latitude: Number(data.latitude.toFixed(6)),
+            longitude: Number(data.longitude.toFixed(6)),
+            city: data.city || data.region || 'Nearby Area',
+            country: data.country || '',
+            source: 'ip_geolocation',
+          });
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 2. Try ip-api.com
+    try {
+      const ipApiUrl = isPublicIp ? `http://ip-api.com/json/${ipStr}` : 'http://ip-api.com/json/';
+      const ipRes2 = await fetch(ipApiUrl);
+      if (ipRes2.ok) {
+        const data2 = await ipRes2.json();
+        if (data2.status === 'success' && typeof data2.lat === 'number' && typeof data2.lon === 'number') {
+          return res.json({
+            success: true,
+            latitude: Number(data2.lat.toFixed(6)),
+            longitude: Number(data2.lon.toFixed(6)),
+            city: data2.city || data2.regionName || 'Nearby Area',
+            country: data2.country || '',
+            source: 'ip_geolocation',
+          });
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 3. Try ipapi.co
+    try {
+      const ipApiRes = await fetch('https://ipapi.co/json/', { headers: { 'User-Agent': 'LocalBoost/1.0' } });
+      if (ipApiRes.ok) {
+        const data = await ipApiRes.json();
+        if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+          return res.json({
+            success: true,
+            latitude: Number(data.latitude.toFixed(6)),
+            longitude: Number(data.longitude.toFixed(6)),
+            city: data.city || data.region || 'Nearby Area',
+            country: data.country_name || '',
+            source: 'ip_geolocation',
+          });
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    return res.status(503).json({ error: 'Network location service unavailable. Please search by store address or choose your city.' });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Network location detection failed' });
+  }
 });
 
 // Universal bootstrap data for all devices
@@ -899,6 +1108,14 @@ app.post('/api/scratch/campaign/:businessId', (req, res) => {
         per_customer_play_limit: Number(updates.per_customer_play_limit) || 1,
         status: updates.status || 'draft',
         terms_conditions: updates.terms_conditions || 'One coupon per customer/bill. Present code at billing.',
+        lucky_draw_enabled: updates.lucky_draw_enabled ?? true,
+        prize_pool: updates.prize_pool || [
+          { id: 'p1', name: 'Branded Executive Pen 🖊️', reward_value: 'Free Pen', reward_type: 'free_item' },
+          { id: 'p2', name: '5% Instant Savings 🏷️', reward_value: '5% OFF', reward_type: 'discount_percentage' },
+          { id: 'p3', name: '10% Savings Voucher 🎟️', reward_value: '10% OFF', reward_type: 'discount_percentage' },
+          { id: 'p4', name: '15% Mega Discount 🎉', reward_value: '15% OFF', reward_type: 'discount_percentage' },
+          { id: 'p5', name: '20% Bumper Lucky Winner 🏆', reward_value: '20% OFF', reward_type: 'discount_percentage' },
+        ],
         created_at: now,
         updated_at: now,
       };
@@ -1018,11 +1235,32 @@ app.post('/api/scratch/play', (req, res) => {
       return res.status(410).json({ error: 'All rewards for this campaign have been claimed.' });
     }
 
-    // SERVER-SIDE PRIZE DETERMINATION (Client never dictates prize)
-    // Server dynamically resolves the verified prize parameters
+    // SERVER-SIDE PRIZE DETERMINATION (Lucky Draw Prize Pool vs Fixed Offer)
+    // Supports multi-tier prizes (e.g. from pen to 20% discount)
     let prizeTitle = campaign.reward_headline;
     let prizeValue = campaign.reward_value;
-    if (campaign.reward_type === 'free_item' && campaign.free_item_name) {
+    let prizeType = campaign.reward_type;
+
+    const prizePool = (Array.isArray(campaign.prize_pool) && campaign.prize_pool.length > 0)
+      ? campaign.prize_pool
+      : (campaign.lucky_draw_enabled
+          ? [
+              { id: 'p1', name: 'Branded Executive Pen 🖊️', reward_value: 'Free Pen', reward_type: 'free_item' as const },
+              { id: 'p2', name: '5% Instant Savings 🏷️', reward_value: '5% OFF', reward_type: 'discount_percentage' as const },
+              { id: 'p3', name: '10% Savings Voucher 🎟️', reward_value: '10% OFF', reward_type: 'discount_percentage' as const },
+              { id: 'p4', name: '15% Mega Discount 🎉', reward_value: '15% OFF', reward_type: 'discount_percentage' as const },
+              { id: 'p5', name: '20% Bumper Lucky Winner 🏆', reward_value: '20% OFF', reward_type: 'discount_percentage' as const },
+            ]
+          : null);
+
+    if (prizePool && prizePool.length > 0) {
+      // Pick random prize from Lucky Draw pool
+      const randomIndex = Math.floor(Math.random() * prizePool.length);
+      const chosen = prizePool[randomIndex];
+      prizeTitle = chosen.name;
+      prizeValue = chosen.reward_value;
+      prizeType = chosen.reward_type;
+    } else if (campaign.reward_type === 'free_item' && campaign.free_item_name) {
       prizeTitle = `Free ${campaign.free_item_name}`;
       prizeValue = `1 Free ${campaign.free_item_name}`;
     }
@@ -1050,7 +1288,7 @@ app.post('/api/scratch/play', (req, res) => {
       customer_email: customerEmail || undefined,
       voucher_code: voucherCode,
       reward_title: prizeTitle,
-      reward_type: campaign.reward_type,
+      reward_type: prizeType,
       reward_value: prizeValue,
       min_purchase_amount: campaign.min_purchase_amount,
       terms_conditions: campaign.terms_conditions,
@@ -1151,6 +1389,143 @@ app.post('/api/scratch/redeem', (req, res) => {
     return res.json({ success: true, message: 'Coupon redeemed successfully!', play });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'Redemption failed' });
+  }
+});
+
+// 7. Universal Reward Inspector Endpoint: "Kab Mila, Kaise Mila" Audit
+app.get('/api/reward/inspect/:code', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const rawCode = (req.params.code || '').trim();
+    const { businessId } = req.query;
+
+    if (!rawCode) {
+      return res.status(400).json({ error: 'Reward code is required' });
+    }
+
+    let cleanCode = rawCode;
+    if (cleanCode.includes('verify_reward=')) {
+      const match = cleanCode.match(/verify_reward=([^&#\s]+)/i);
+      if (match?.[1]) cleanCode = decodeURIComponent(match[1]);
+    } else if (cleanCode.startsWith('LOCALBOOST-VOUCHER:')) {
+      const parts = cleanCode.split(':');
+      if (parts[1]) cleanCode = parts[1];
+    }
+
+    const cleanUpper = cleanCode.trim().toUpperCase();
+    const digitsOnly = cleanCode.replace(/\D/g, '');
+
+    // 1. Search in Loyalty Cards
+    if (Array.isArray(db.loyaltyCards)) {
+      const card = db.loyaltyCards.find((c) => {
+        if (businessId && c.business_id !== businessId) return false;
+        if (c.voucher_code.trim().toUpperCase() === cleanUpper) return true;
+        if (digitsOnly.length >= 7 && c.customer_phone.replace(/\D/g, '').endsWith(digitsOnly)) return true;
+        return false;
+      });
+
+      if (card) {
+        const biz = db.businesses.find((b) => b.id === card.business_id);
+        const isExpired = new Date(card.expires_at).getTime() < Date.now();
+        const isRedeemed = card.status === 'redeemed';
+        const stars = card.issue_rating || 5;
+
+        const audit = {
+          voucher_code: card.voucher_code,
+          type: 'loyalty',
+          reward_title: card.reward_title,
+          reward_value: card.reward_value,
+          reward_description: card.reward_description,
+          customer_name: card.customer_name || 'Valued Guest',
+          customer_phone: card.customer_phone,
+          business_id: card.business_id,
+          business_name: biz?.business_name,
+          status: isRedeemed ? 'redeemed' : isExpired ? 'expired' : 'active',
+          created_at: card.created_at,
+          kab_mila_formatted: new Date(card.created_at).toLocaleString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          }),
+          kab_mila_relative: 'Registered on system',
+          kaise_mila_type: 'google_review',
+          kaise_mila_title: `⭐ ${stars}-Star Google Review Reward`,
+          kaise_mila_desc: `Customer submitted verified ${stars}-Star rating via Google Review standee.`,
+          kaise_mila_stars: stars,
+          terms_conditions: card.terms_conditions || 'Valid at billing counter.',
+          expires_at: card.expires_at,
+          expires_at_formatted: new Date(card.expires_at).toLocaleDateString(),
+          redeemed_at: card.redeemed_at,
+          redeemed_at_formatted: card.redeemed_at ? new Date(card.redeemed_at).toLocaleString() : undefined,
+          redeemed_by: card.redeemed_by,
+          is_expired: isExpired,
+          is_redeemed: isRedeemed,
+          is_valid: !isExpired && !isRedeemed,
+        };
+
+        return res.json({ success: true, audit });
+      }
+    }
+
+    // 2. Search in Scratch Plays
+    if (Array.isArray(db.scratchPlays)) {
+      const play = db.scratchPlays.find((p) => {
+        if (businessId && p.business_id !== businessId) return false;
+        if (p.voucher_code.trim().toUpperCase() === cleanUpper) return true;
+        if (digitsOnly.length >= 7 && p.customer_phone.replace(/\D/g, '').endsWith(digitsOnly)) return true;
+        return false;
+      });
+
+      if (play) {
+        const biz = db.businesses.find((b) => b.id === play.business_id);
+        const isExpired = new Date(play.expires_at).getTime() < Date.now();
+        const isRedeemed = play.status === 'redeemed';
+
+        const audit = {
+          voucher_code: play.voucher_code,
+          type: 'scratch',
+          reward_title: play.reward_title,
+          reward_value: play.reward_value,
+          customer_name: play.customer_name || 'Valued Guest',
+          customer_phone: play.customer_phone,
+          business_id: play.business_id,
+          business_name: biz?.business_name,
+          status: isRedeemed ? 'redeemed' : isExpired ? 'expired' : 'active',
+          created_at: play.scratched_at || play.created_at,
+          kab_mila_formatted: new Date(play.scratched_at || play.created_at).toLocaleString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+          }),
+          kab_mila_relative: 'Registered on system',
+          kaise_mila_type: 'scratch_win',
+          kaise_mila_title: '🎲 Scratch & Win Lucky Draw Winner',
+          kaise_mila_desc: 'Customer scratched lucky promotional card and won this reward.',
+          min_purchase_amount: play.min_purchase_amount,
+          terms_conditions: play.terms_conditions || 'Valid at billing counter.',
+          expires_at: play.expires_at,
+          expires_at_formatted: new Date(play.expires_at).toLocaleDateString(),
+          redeemed_at: play.redeemed_at,
+          redeemed_at_formatted: play.redeemed_at ? new Date(play.redeemed_at).toLocaleString() : undefined,
+          redeemed_by: play.redeemed_by,
+          is_expired: isExpired,
+          is_redeemed: isRedeemed,
+          is_valid: !isExpired && !isRedeemed,
+        };
+
+        return res.json({ success: true, audit });
+      }
+    }
+
+    return res.status(404).json({ error: `No reward found matching code "${rawCode}".` });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Inspection failed' });
   }
 });
 

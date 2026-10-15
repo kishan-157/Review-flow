@@ -55,6 +55,8 @@ import {
   MessageSquare,
   Receipt,
   Trophy,
+  Camera,
+  Info,
 } from 'lucide-react';
 import {
   AuthSession,
@@ -103,6 +105,15 @@ import { DigitalLoyaltyCard } from './DigitalLoyaltyCard';
 import { DailyReviewAccessTrend } from './DailyReviewAccessTrend';
 import { LoyaltyReminderManager } from './LoyaltyReminderManager';
 import { ScratchCampaignManager } from './ScratchCampaignManager';
+import { RewardQRScannerModal } from './RewardQRScannerModal';
+import { RewardAuditCard } from './RewardAuditCard';
+import {
+  findRewardAuditDetails,
+  RewardAuditDetails,
+  buildLoyaltyAuditDetails,
+  extractVoucherCode,
+} from '../lib/rewardAudit';
+import { downloadRewardPassImage } from '../lib/rewardCardGenerator';
 
 interface CustomerDashboardProps {
   session: AuthSession;
@@ -149,6 +160,8 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   // GPS detection state
   const [isDetectingGps, setIsDetectingGps] = useState(false);
   const [gpsDetectMsg, setGpsDetectMsg] = useState<string | null>(null);
+  const [geoSearchInput, setGeoSearchInput] = useState('');
+  const [isGeocodingSearch, setIsGeocodingSearch] = useState(false);
 
   // Business form state
   const [bizForm, setBizForm] = useState({
@@ -263,6 +276,30 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [isSavingLoyalty, setIsSavingLoyalty] = useState(false);
   const [loyaltySaveSuccess, setLoyaltySaveSuccess] = useState<string | null>(null);
 
+  // Proactive Review Reward Mode: Guaranteed Loyalty Card VS Scratch & Win Lucky Draw
+  const [rewardModeNotice, setRewardModeNotice] = useState<string | null>(null);
+  const [isUpdatingRewardMode, setIsUpdatingRewardMode] = useState<boolean>(false);
+
+  const handleSwitchRewardMode = async (mode: 'loyalty_card' | 'scratch_card') => {
+    if (!business) return;
+    setIsUpdatingRewardMode(true);
+    try {
+      const updated = await updateBusiness(business.id, { review_reward_mode: mode });
+      setBusiness(updated);
+      onSessionUpdated({ ...session, business: updated });
+      setRewardModeNotice(
+        mode === 'scratch_card'
+          ? '🎲 Review Reward set to: Scratch & Win Lucky Draw (पेन से 20% तक)!'
+          : '🏆 Review Reward set to: Guaranteed VIP Loyalty Pass (फिक्स डिस्काउंट)!'
+      );
+      setTimeout(() => setRewardModeNotice(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to update reward mode:', err);
+    } finally {
+      setIsUpdatingRewardMode(false);
+    }
+  };
+
   // Counter Staff Voucher Verification State (Mobile / Name / Code / Smart Search)
   const [verifyCodeInput, setVerifyCodeInput] = useState('');
   const [cashierSearchMode, setCashierSearchMode] = useState<'all' | 'phone' | 'name' | 'code'>('all');
@@ -271,6 +308,10 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [redeemSuccessMsg, setRedeemSuccessMsg] = useState<string | null>(null);
+
+  // Live Camera QR Scanner & Detailed "Kab Mila & Kaise Mila" Audit
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [rewardAudit, setRewardAudit] = useState<RewardAuditDetails | null>(null);
 
   // Business Owner Dedicated Marketing Number for POS
   const [showBizPhoneModal, setShowBizPhoneModal] = useState(false);
@@ -474,32 +515,262 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
   };
 
+  // City presets for instant 1-click coordinate setup without manual typing
+  const POPULAR_CITY_PRESETS = [
+    { name: 'Surat', lat: 21.1702, lng: 72.8311 },
+    { name: 'Mumbai', lat: 19.0760, lng: 72.8777 },
+    { name: 'Delhi / NCR', lat: 28.6139, lng: 77.2090 },
+    { name: 'Ahmedabad', lat: 23.0225, lng: 72.5714 },
+    { name: 'Bengaluru', lat: 12.9716, lng: 77.5946 },
+    { name: 'Pune', lat: 18.5204, lng: 73.8567 },
+    { name: 'Jaipur', lat: 26.9124, lng: 75.7873 },
+    { name: 'Hyderabad', lat: 17.3850, lng: 78.4867 },
+    { name: 'Kolkata', lat: 22.5726, lng: 88.3639 },
+    { name: 'Chennai', lat: 13.0827, lng: 80.2707 },
+    { name: 'Indore', lat: 22.7196, lng: 75.8577 },
+    { name: 'Lucknow', lat: 26.8467, lng: 80.9462 },
+  ];
+
+  const handleSelectCityPreset = (city: { name: string; lat: number; lng: number }) => {
+    setBizForm((prev) => ({
+      ...prev,
+      latitude: String(city.lat),
+      longitude: String(city.lng),
+      gps_verification_enabled: true,
+    }));
+    setGpsDetectMsg(`✅ Store location set to ${city.name}: ${city.lat}, ${city.lng}`);
+  };
+
+  // Fallback location resolver when browser GPS is blocked by iframe permissions policy
+  const resolveLocationFallback = async (_reasonNotice?: string) => {
+    // 1. Try resolving using store address if available
+    const addressToTry = (bizForm.address || bizForm.business_name || '').trim();
+    if (addressToTry) {
+      try {
+        setGpsDetectMsg(`Resolving coordinates for store address "${addressToTry}"...`);
+        const res = await fetch(`/api/geo/lookup?q=${encodeURIComponent(addressToTry)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.latitude && data.longitude) {
+            setBizForm((prev) => ({
+              ...prev,
+              latitude: String(data.latitude),
+              longitude: String(data.longitude),
+              gps_verification_enabled: true,
+            }));
+            setGpsDetectMsg(
+              `✅ Coordinates auto-resolved from store address "${addressToTry}": ${data.latitude}, ${data.longitude} (Auto-geocoded)`
+            );
+            return;
+          }
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    // 2. Try client-side direct browser IP location (queries from user's local network/ISP)
+    try {
+      setGpsDetectMsg('Detecting location via local network IP...');
+      const ipRes = await fetch('https://ipwho.is/', { headers: { Accept: 'application/json' } });
+      if (ipRes.ok) {
+        const ipData = await ipRes.json();
+        if (ipData.success && typeof ipData.latitude === 'number' && typeof ipData.longitude === 'number') {
+          const lat = Number(ipData.latitude.toFixed(6));
+          const lng = Number(ipData.longitude.toFixed(6));
+          setBizForm((prev) => ({
+            ...prev,
+            latitude: String(lat),
+            longitude: String(lng),
+            gps_verification_enabled: true,
+          }));
+          setGpsDetectMsg(
+            `✅ Location detected via Network (${ipData.city || ipData.region || 'Local Area'}, ${ipData.country || ''}): ${lat}, ${lng}`
+          );
+          return;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 3. Try resolving via server backend network/IP location
+    try {
+      setGpsDetectMsg('Detecting location via network service...');
+      const res = await fetch('/api/geo/detect');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.latitude && data.longitude) {
+          setBizForm((prev) => ({
+            ...prev,
+            latitude: String(data.latitude),
+            longitude: String(data.longitude),
+            gps_verification_enabled: true,
+          }));
+          setGpsDetectMsg(
+            `✅ Coordinates auto-detected via network (${data.city || 'Nearby Area'}): ${data.latitude}, ${data.longitude}`
+          );
+          return;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 4. Default to primary city hub so latitude/longitude are NEVER blank
+    const defaultCity = POPULAR_CITY_PRESETS[0];
+    setBizForm((prev) => ({
+      ...prev,
+      latitude: prev.latitude || String(defaultCity.lat),
+      longitude: prev.longitude || String(defaultCity.lng),
+      gps_verification_enabled: true,
+    }));
+    setGpsDetectMsg(
+      `🛡️ Browser hardware GPS restricted in iframe preview. Auto-selected ${defaultCity.name} (${defaultCity.lat}, ${defaultCity.lng}). Click any city preset below to change instantly.`
+    );
+  };
+
   const handleDetectGps = () => {
+    setIsDetectingGps(true);
+    setGpsDetectMsg('Detecting store coordinates...');
+
     if (!navigator.geolocation) {
-      setGpsDetectMsg('HTML5 Geolocation is not supported on this browser.');
+      resolveLocationFallback('HTML5 Geolocation is not supported on this browser.');
+      setIsDetectingGps(false);
       return;
     }
-    setIsDetectingGps(true);
-    setGpsDetectMsg(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
+
+    let resolved = false;
+    const fallbackTimer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolveLocationFallback('Browser GPS request timed out. Using address/network geocoding...');
         setIsDetectingGps(false);
-        const lat = Number(pos.coords.latitude.toFixed(6));
-        const lng = Number(pos.coords.longitude.toFixed(6));
+      }
+    }, 3000);
+
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (resolved) return;
+          resolved = true;
+          clearTimeout(fallbackTimer);
+          setIsDetectingGps(false);
+          const lat = Number(pos.coords.latitude.toFixed(6));
+          const lng = Number(pos.coords.longitude.toFixed(6));
+          setBizForm((prev) => ({
+            ...prev,
+            latitude: String(lat),
+            longitude: String(lng),
+            gps_verification_enabled: true,
+          }));
+          setGpsDetectMsg(`✅ Store location detected via GPS: ${lat}, ${lng} (Accuracy: ±${Math.round(pos.coords.accuracy)}m)`);
+        },
+        async (err) => {
+          if (resolved) return;
+          resolved = true;
+          clearTimeout(fallbackTimer);
+          // Auto fallback to Address Geocoding or Network Geolocation without exposing raw permission error
+          await resolveLocationFallback(err.message);
+          setIsDetectingGps(false);
+        },
+        { enableHighAccuracy: true, timeout: 3000, maximumAge: 60000 }
+      );
+    } catch (e: any) {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(fallbackTimer);
+      resolveLocationFallback(e?.message || 'GPS access error');
+      setIsDetectingGps(false);
+    }
+  };
+
+  const handleGeocodeAddress = async (queryText?: string) => {
+    const target = (queryText || geoSearchInput || bizForm.address || bizForm.business_name || '').trim();
+    if (!target) {
+      setGpsDetectMsg('Please enter an address, city, or place name to lookup coordinates.');
+      return;
+    }
+    setIsGeocodingSearch(true);
+    setGpsDetectMsg(`Looking up coordinates for "${target}"...`);
+    try {
+      const res = await fetch(`/api/geo/lookup?q=${encodeURIComponent(target)}`);
+      const data = await res.json();
+      if (res.ok && data.success && data.latitude && data.longitude) {
         setBizForm((prev) => ({
           ...prev,
-          latitude: String(lat),
-          longitude: String(lng),
+          latitude: String(data.latitude),
+          longitude: String(data.longitude),
           gps_verification_enabled: true,
         }));
-        setGpsDetectMsg(`✅ Store location detected: ${lat}, ${lng} (Accuracy: ±${Math.round(pos.coords.accuracy)}m)`);
-      },
-      (err) => {
-        setIsDetectingGps(false);
-        setGpsDetectMsg(`Location detection notice: ${err.message}. You can manually enter latitude and longitude.`);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+        setGpsDetectMsg(`✅ Coordinates found for "${target}": ${data.latitude}, ${data.longitude}`);
+        setGeoSearchInput('');
+      } else {
+        setGpsDetectMsg(data.error || `Could not find coordinates for "${target}". Try entering City and State.`);
+      }
+    } catch (err: any) {
+      setGpsDetectMsg(err.message || 'Geocoding request failed. Please check your internet connection.');
+    } finally {
+      setIsGeocodingSearch(false);
+    }
+  };
+
+  const handlePasteMapsInput = (inputStr: string) => {
+    const clean = inputStr.trim();
+    if (!clean) return;
+
+    // Direct coordinates: "21.1702, 72.8311"
+    const coordMatch = clean.match(/([-+]?\d{1,2}(?:\.\d+)?)[,\s]+([-+]?\d{1,3}(?:\.\d+)?)/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lng = parseFloat(coordMatch[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        setBizForm((prev) => ({
+          ...prev,
+          latitude: String(Number(lat.toFixed(6))),
+          longitude: String(Number(lng.toFixed(6))),
+          gps_verification_enabled: true,
+        }));
+        setGpsDetectMsg(`✅ Coordinates set from input: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        setGeoSearchInput('');
+        return;
+      }
+    }
+
+    // Google Maps URL with @lat,lng
+    const atMatch = clean.match(/@([-+]?\d{1,2}\.\d+),([-+]?\d{1,3}\.\d+)/);
+    if (atMatch) {
+      const lat = parseFloat(atMatch[1]);
+      const lng = parseFloat(atMatch[2]);
+      setBizForm((prev) => ({
+        ...prev,
+        latitude: String(Number(lat.toFixed(6))),
+        longitude: String(Number(lng.toFixed(6))),
+        gps_verification_enabled: true,
+      }));
+      setGpsDetectMsg(`✅ Extracted Google Maps pin coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      setGeoSearchInput('');
+      return;
+    }
+
+    // Google Maps URL with ?q=lat,lng
+    const qMatch = clean.match(/[?&]q=([-+]?\d{1,2}\.\d+)[,+]+([-+]?\d{1,3}\.\d+)/);
+    if (qMatch) {
+      const lat = parseFloat(qMatch[1]);
+      const lng = parseFloat(qMatch[2]);
+      setBizForm((prev) => ({
+        ...prev,
+        latitude: String(Number(lat.toFixed(6))),
+        longitude: String(Number(lng.toFixed(6))),
+        gps_verification_enabled: true,
+      }));
+      setGpsDetectMsg(`✅ Extracted Google Maps pin coordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      setGeoSearchInput('');
+      return;
+    }
+
+    // Otherwise geocode the search query
+    handleGeocodeAddress(clean);
   };
 
   const handleSaveBusiness = async (e: React.FormEvent) => {
@@ -634,25 +905,49 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         }
       }
 
-      if (matches.length === 0) {
+      // 3. Populate detailed "Kab Mila & Kaise Mila" audit
+      const audit = await findRewardAuditDetails(term, business.id, business);
+
+      if (matches.length === 0 && !audit) {
         setVerifiedCard(null);
+        setRewardAudit(null);
         setVerifyError(
           `No voucher found matching "${term}". Please check the mobile number, name, or voucher code.`
         );
+      } else if (audit) {
+        setRewardAudit(audit);
+        if (audit.raw_loyalty_card) {
+          setVerifiedCard(audit.raw_loyalty_card);
+          setMatchingCards([]);
+        } else if (matches.length > 0) {
+          setVerifiedCard(matches[0]);
+          setMatchingCards(matches.length > 1 ? matches : []);
+        } else {
+          setVerifiedCard(null);
+          setMatchingCards([]);
+        }
       } else if (matches.length === 1) {
         setVerifiedCard(matches[0]);
         setMatchingCards([]);
+        setRewardAudit(buildLoyaltyAuditDetails(matches[0], business));
       } else {
         // Multiple customer cards found
         setMatchingCards(matches);
         const activeOne = matches.find((m) => m.status === 'active') || matches[0];
         setVerifiedCard(activeOne);
+        setRewardAudit(buildLoyaltyAuditDetails(activeOne, business));
       }
     } catch (err: any) {
       setVerifyError(err.message || 'Error searching voucher.');
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  const handleScanQRSuccess = async (decoded: string) => {
+    const cleanCode = extractVoucherCode(decoded);
+    setVerifyCodeInput(cleanCode);
+    await handleVerifyVoucher(undefined, cleanCode);
   };
 
   const handleSaveQuickBizPhone = async (e: React.FormEvent) => {
@@ -681,15 +976,66 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
   };
 
-  const handleRedeemVoucher = async (cardId: string) => {
+  const handleRedeemVoucher = async (cardId?: string) => {
     if (!business) return;
     try {
-      const redeemed = await redeemLoyaltyCard(cardId, business.id, session.user.full_name || 'Staff');
+      // 1. If it is a scratch play
+      if (rewardAudit?.type === 'scratch') {
+        const res = await fetch('/api/scratch/redeem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: rewardAudit.voucher_code,
+            businessId: business.id,
+            redeemedBy: session.user.full_name || 'Counter Staff',
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setRewardAudit((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: 'redeemed',
+                  is_redeemed: true,
+                  is_valid: false,
+                  redeemed_at: new Date().toISOString(),
+                  redeemed_at_formatted: new Date().toLocaleString(),
+                  redeemed_by: session.user.full_name || 'Counter Staff',
+                }
+              : null
+          );
+          setRedeemSuccessMsg(`Scratch reward "${rewardAudit.voucher_code}" redeemed successfully! Discount applied.`);
+          setTimeout(() => setRedeemSuccessMsg(null), 4000);
+        } else {
+          setVerifyError(data.error || 'Failed to redeem scratch coupon');
+        }
+        return;
+      }
+
+      // 2. Loyalty card
+      const targetId = cardId || verifiedCard?.id || rewardAudit?.raw_loyalty_card?.id;
+      if (!targetId) return;
+
+      const redeemed = await redeemLoyaltyCard(targetId, business.id, session.user.full_name || 'Staff');
       if (redeemed) {
-        setLoyaltyCards((prev) => prev.map((c) => (c.id === cardId ? redeemed : c)));
-        if (verifiedCard?.id === cardId) {
+        setLoyaltyCards((prev) => prev.map((c) => (c.id === targetId ? redeemed : c)));
+        if (verifiedCard?.id === targetId) {
           setVerifiedCard(redeemed);
         }
+        setRewardAudit((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: 'redeemed',
+                is_redeemed: true,
+                is_valid: false,
+                redeemed_at: new Date().toISOString(),
+                redeemed_at_formatted: new Date().toLocaleString(),
+                redeemed_by: session.user.full_name || 'Staff',
+              }
+            : null
+        );
         setRedeemSuccessMsg(`Card "${redeemed.voucher_code}" redeemed successfully! Reward applied.`);
         setTimeout(() => setRedeemSuccessMsg(null), 4000);
       }
@@ -2574,6 +2920,152 @@ Please generate:
                   );
                 })()}
 
+                {/* PROACTIVE REVIEW REWARD MODE SELECTOR: BUSINESS OWNER CHOICE */}
+                {/* Donon option mein se koi bhi ek select kar sakte hain business owner */}
+                <div className="bg-white rounded-2xl border-2 border-purple-200 p-5 shadow-xs space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-purple-700 bg-purple-100 px-2 py-0.5 rounded-md">
+                          Proactive Reward Selection
+                        </span>
+                        <span className="text-xs font-bold text-neutral-800">
+                          कस्टमर को क्या रिवॉर्ड देना चाहते हैं?
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-black text-neutral-900 mt-1">
+                        Review Reward Experience Mode (रिवॉर्ड का विकल्प चुनें)
+                      </h3>
+                      <p className="text-[11px] text-neutral-500">
+                        Review submit hone ke baad customer ko niche reward section mein kaunsa reward dikhana hai? Donon options mein se koi bhi ek proactively choose karein:
+                      </p>
+                    </div>
+
+                    {rewardModeNotice && (
+                      <span className="px-3 py-1 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl animate-in fade-in shrink-0">
+                        {rewardModeNotice}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {/* OPTION 1: GUARANTEED VIP LOYALTY CARD */}
+                    <div
+                      onClick={() => handleSwitchRewardMode('loyalty_card')}
+                      className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
+                        (business?.review_reward_mode || 'loyalty_card') === 'loyalty_card'
+                          ? 'bg-amber-50/70 border-amber-500 ring-2 ring-amber-400/30 shadow-md'
+                          : 'bg-neutral-50 border-neutral-200 hover:border-amber-300 hover:bg-amber-50/30'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-amber-400 text-neutral-950 flex items-center justify-center font-black shadow-xs shrink-0">
+                            <Gift className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded">
+                              Option 1: Guaranteed Offer
+                            </span>
+                            <h4 className="text-xs font-black text-neutral-900 mt-0.5">
+                              Guaranteed VIP Loyalty Card
+                            </h4>
+                          </div>
+                        </div>
+
+                        {(business?.review_reward_mode || 'loyalty_card') === 'loyalty_card' ? (
+                          <span className="px-2.5 py-0.5 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center gap-1 shadow-xs shrink-0">
+                            <Check className="w-3 h-3" /> Selected
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-neutral-200 text-neutral-600 text-[10px] font-bold rounded-full shrink-0">
+                            Select Option
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-neutral-600 leading-snug">
+                        Har 5-star review dene wale customer ko <strong>fixed guaranteed VIP discount</strong> (e.g. {loyaltyForm.reward_title || 'Flat 15% OFF'}) milta hai. Single-use voucher code aur QR pass generate hota hai.
+                      </p>
+
+                      <div className="mt-3 pt-2.5 border-t border-amber-200/70 flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-amber-900">
+                          Reward: {loyaltyForm.reward_value || '15%'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLoyaltySubTab('cards');
+                            const el = document.getElementById('loyalty-settings-form');
+                            if (el) el.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="text-purple-700 font-bold hover:underline cursor-pointer"
+                        >
+                          Edit Fixed Offer Settings ↓
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* OPTION 2: SCRATCH & WIN LUCKY DRAW */}
+                    <div
+                      onClick={() => handleSwitchRewardMode('scratch_card')}
+                      className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
+                        business?.review_reward_mode === 'scratch_card'
+                          ? 'bg-purple-50/80 border-[#6C3BFF] ring-2 ring-purple-400/30 shadow-md'
+                          : 'bg-neutral-50 border-neutral-200 hover:border-purple-300 hover:bg-purple-50/30'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#6C3BFF] to-purple-800 text-white flex items-center justify-center font-black shadow-xs shrink-0">
+                            <Trophy className="w-5 h-5 text-amber-300" />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-black uppercase text-purple-900 bg-purple-200/80 px-2 py-0.5 rounded">
+                              Option 2: Mystery Lucky Draw
+                            </span>
+                            <h4 className="text-xs font-black text-neutral-900 mt-0.5">
+                              Scratch & Win Lucky Draw
+                            </h4>
+                          </div>
+                        </div>
+
+                        {business?.review_reward_mode === 'scratch_card' ? (
+                          <span className="px-2.5 py-0.5 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center gap-1 shadow-xs shrink-0">
+                            <Check className="w-3 h-3" /> Selected
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-neutral-200 text-neutral-600 text-[10px] font-bold rounded-full shrink-0">
+                            Select Option
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-neutral-600 leading-snug">
+                        Review submit hone ke baad <strong>niche reward section mein interactive scratch card</strong> khulega — jisme <strong>पेन से लेकर 20% तक कुछ भी खुल सकता है</strong>! (Multi-tier mystery lucky draw).
+                      </p>
+
+                      <div className="mt-3 pt-2.5 border-t border-purple-200/70 flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-purple-900">
+                          Prize: Pen se 20% Discount
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveTab('scratch_offers');
+                          }}
+                          className="text-purple-700 font-bold hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <span>Customize Lucky Draw Prizes</span>
+                          <span>→</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Loyalty Module Sub-Navigation: POS Billing VS WhatsApp Reminders */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-2">
                   <div className="flex items-center gap-1.5 p-1 bg-neutral-100 rounded-xl overflow-x-auto no-scrollbar w-full sm:w-auto snap-x">
@@ -2881,6 +3373,15 @@ Please generate:
                       <Search className="w-3.5 h-3.5" />
                       <span>{isVerifying ? 'Searching...' : 'Search & Verify'}</span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowQRScanner(true)}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-bold shadow-md shadow-neutral-900/20 transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0 hover:scale-[1.02]"
+                      title="Scan Customer's Reward QR Code with Live Camera"
+                    >
+                      <Camera className="w-4 h-4 text-amber-300" />
+                      <span>📷 Scan QR Code</span>
+                    </button>
                   </form>
 
                   {/* Quick-Pick Pills: Recent Active Cards */}
@@ -3026,6 +3527,36 @@ Please generate:
                           <p className="text-xs text-neutral-600">
                             Customer: <strong className="text-neutral-900">{verifiedCard.customer_name}</strong> (📱 {verifiedCard.customer_phone})
                           </p>
+
+                          {/* Rich Origin & Timeline: Kab Mila & Kaise Mila */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 my-2.5">
+                            <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs space-y-0.5">
+                              <span className="text-[10px] uppercase font-extrabold text-blue-900 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-blue-600" />
+                                कब मिला? (Issued Time)
+                              </span>
+                              <p className="font-bold text-blue-950 font-mono text-[11px]">
+                                {new Date(verifiedCard.created_at).toLocaleString('en-IN', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: true,
+                                })}
+                              </p>
+                            </div>
+                            <div className="p-2.5 bg-purple-50/80 border border-purple-200 rounded-xl text-xs space-y-0.5">
+                              <span className="text-[10px] uppercase font-extrabold text-purple-900 flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-amber-500" />
+                                कैसे मिला? (How Earned)
+                              </span>
+                              <p className="font-bold text-purple-950 text-[11px]">
+                                {verifiedCard.issue_rating ? '⭐ 5-Star Google Review Reward' : '🏆 VIP Loyalty Program'}
+                              </p>
+                            </div>
+                          </div>
+
                           <p className="text-[11px] text-neutral-500 mt-0.5">
                             Valid Until: {new Date(verifiedCard.expires_at).toLocaleDateString()} · {verifiedCard.terms_conditions || 'Present at counter'}
                           </p>
@@ -3038,6 +3569,34 @@ Please generate:
                             className="px-3 py-2 bg-white border border-neutral-200 text-neutral-800 rounded-xl text-xs font-semibold hover:bg-neutral-50 cursor-pointer"
                           >
                             View Digital Card
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await downloadRewardPassImage({
+                                  businessName: business.business_name || 'Store Partner',
+                                  rewardTitle: verifiedCard.reward_title,
+                                  rewardValue: verifiedCard.reward_value || undefined,
+                                  voucherCode: verifiedCard.voucher_code,
+                                  customerName: verifiedCard.customer_name,
+                                  customerPhone: verifiedCard.customer_phone,
+                                  expiresAt: verifiedCard.expires_at,
+                                  createdAt: verifiedCard.created_at,
+                                  terms: verifiedCard.terms_conditions || 'Present this pass at billing counter to redeem.',
+                                  rewardType: 'loyalty',
+                                  originLabel: verifiedCard.issue_rating ? '⭐ 5-Star Google Review Reward' : '🏆 VIP Loyalty Program',
+                                });
+                              } catch (err) {
+                                console.error('Failed to download pass image', err);
+                              }
+                            }}
+                            className="px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5 transition-all hover:scale-[1.01]"
+                            title="Download verified digital reward pass image with QR code"
+                          >
+                            <Download className="w-3.5 h-3.5 text-amber-300" />
+                            <span>Download Pass</span>
                           </button>
 
                           {/* WhatsApp Marketing Message to Customer - STRICTLY LOCKED UNTIL SETUP NUMBER IS ENTERED */}
@@ -3681,6 +4240,14 @@ Please generate:
                     </div>
                   </div>
                 )}
+
+                {/* Live Camera QR Scanner Modal */}
+                <RewardQRScannerModal
+                  isOpen={showQRScanner}
+                  onClose={() => setShowQRScanner(false)}
+                  onScanSuccess={handleScanQRSuccess}
+                  title="Scan Customer Reward QR Code"
+                />
               </>
             )}
           </div>
@@ -4479,16 +5046,111 @@ Please generate:
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#6C3BFF] hover:bg-[#5A2DE2] rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50"
                           >
                             <Navigation className={`w-3.5 h-3.5 ${isDetectingGps ? 'animate-spin' : ''}`} />
-                            <span>{isDetectingGps ? 'Detecting Store Location...' : '📍 Auto-Detect Store Coordinates (Free)'}</span>
+                            <span>{isDetectingGps ? 'Detecting Store Location...' : '📍 Auto-Detect (GPS / Network)'}</span>
                           </button>
+
+                          {bizForm.address && (
+                            <button
+                              type="button"
+                              onClick={() => handleGeocodeAddress(bizForm.address)}
+                              disabled={isGeocodingSearch}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-all cursor-pointer shadow-2xs"
+                              title="Resolve coordinates automatically from your store address"
+                            >
+                              <MapPin className="w-3.5 h-3.5 text-[#6C3BFF]" />
+                              <span>Geocode from Address</span>
+                            </button>
+                          )}
+
                           <span className="text-[11px] text-neutral-500">
-                            (Stand inside your shop/restaurant and click to auto-detect current GPS coordinates)
+                            (Auto-detects via device GPS or geocodes your store address)
                           </span>
                         </div>
 
+                        {/* Search Address, City, Landmark, or Paste Google Maps URL */}
+                        <div className="p-3 bg-neutral-50/80 border border-neutral-200 rounded-xl space-y-2">
+                          <span className="text-[10px] font-bold text-neutral-600 uppercase tracking-wider block">
+                            Or Search Address / City / Paste Google Maps Link:
+                          </span>
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                            <div className="relative flex-1">
+                              <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-2.5" />
+                              <input
+                                type="text"
+                                value={geoSearchInput}
+                                onChange={(e) => setGeoSearchInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handlePasteMapsInput(geoSearchInput);
+                                  }
+                                }}
+                                placeholder="Search area/city (e.g. Vesu Surat) or paste Google Maps link / coordinates..."
+                                className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-neutral-300 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-[#6C3BFF]"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handlePasteMapsInput(geoSearchInput)}
+                              disabled={isGeocodingSearch || !geoSearchInput.trim()}
+                              className="px-3.5 py-1.5 text-xs font-bold text-white bg-neutral-900 hover:bg-neutral-800 rounded-xl transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0"
+                            >
+                              <Search className="w-3.5 h-3.5" />
+                              <span>{isGeocodingSearch ? 'Searching...' : 'Lookup Coordinates'}</span>
+                            </button>
+                            <a
+                              href="https://www.google.com/maps"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1.5 text-xs font-bold text-neutral-700 bg-white hover:bg-neutral-100 border border-neutral-300 rounded-xl transition-all flex items-center justify-center gap-1 shrink-0"
+                              title="Open Google Maps to find your store pin"
+                            >
+                              <ExternalLink className="w-3 h-3 text-neutral-500" />
+                              <span>Open Maps</span>
+                            </a>
+                          </div>
+                        </div>
+
+                        {/* 1-Click Popular City & Hub Presets */}
+                        <div className="p-2.5 bg-purple-50/50 rounded-xl border border-purple-100 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-neutral-700 uppercase tracking-wider flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-[#6C3BFF]" />
+                              1-Click City Presets (Auto-fills Coordinates instantly):
+                            </span>
+                            <span className="text-[10px] text-purple-700 font-semibold">Zero manual entry</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {POPULAR_CITY_PRESETS.map((city) => (
+                              <button
+                                key={city.name}
+                                type="button"
+                                onClick={() => handleSelectCityPreset(city)}
+                                className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer shadow-2xs flex items-center gap-1 ${
+                                  bizForm.latitude === String(city.lat) && bizForm.longitude === String(city.lng)
+                                    ? 'bg-[#6C3BFF] text-white border border-[#6C3BFF]'
+                                    : 'bg-white hover:bg-purple-100 text-neutral-700 hover:text-[#6C3BFF] border border-neutral-200'
+                                }`}
+                              >
+                                <MapPin className="w-2.5 h-2.5" />
+                                <span>{city.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                         {gpsDetectMsg && (
-                          <div className="text-xs p-2.5 bg-white border border-purple-200 rounded-xl text-purple-900 font-medium">
-                            {gpsDetectMsg}
+                          <div
+                            className={`text-xs p-2.5 rounded-xl border font-medium flex items-start gap-2 ${
+                              gpsDetectMsg.startsWith('✅')
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                                : gpsDetectMsg.startsWith('🛡️')
+                                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                                : 'bg-purple-50 border-purple-200 text-purple-900'
+                            }`}
+                          >
+                            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span className="flex-1 leading-relaxed">{gpsDetectMsg}</span>
                           </div>
                         )}
 
@@ -4535,6 +5197,24 @@ Please generate:
                             </select>
                           </div>
                         </div>
+
+                        {bizForm.latitude && bizForm.longitude && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-emerald-50/70 rounded-xl border border-emerald-200 text-xs text-emerald-900">
+                            <span className="flex items-center gap-1.5 font-bold">
+                              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                              Store Location Configured: {bizForm.latitude}, {bizForm.longitude}
+                            </span>
+                            <a
+                              href={`https://www.google.com/maps?q=${bizForm.latitude},${bizForm.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-[#6C3BFF] hover:underline shrink-0"
+                            >
+                              <span>View Pin on Google Maps</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )}
 
                         <div className="p-2.5 bg-white/80 rounded-xl border border-purple-100 text-[11px] text-neutral-600 space-y-1">
                           <p className="font-bold text-neutral-800 flex items-center gap-1">

@@ -16,6 +16,7 @@ import {
   BadgeCheck,
 } from 'lucide-react';
 import { LoyaltyCard, Business } from '../types/database';
+import { downloadRewardPassImage } from '../lib/rewardCardGenerator';
 
 interface DigitalLoyaltyCardProps {
   card: LoyaltyCard;
@@ -33,14 +34,17 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [qrRendered, setQrRendered] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   // Generate QR verification code for this specific card
   useEffect(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
 
-    // QR data encodes voucher code and business id for counter scanning
-    const qrData = `LOCALBOOST-VOUCHER:${card.voucher_code}:${card.business_id}`;
+    // QR data encodes direct verification URL so phone camera or counter scanner instantly inspects Kab Mila & Kaise Mila
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const qrData = `${origin}/?verify_reward=${encodeURIComponent(card.voucher_code)}`;
     QRCode.toCanvas(
       canvas,
       qrData,
@@ -83,6 +87,30 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
 
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
+  };
+
+  const handleDownloadPass = async () => {
+    setIsDownloading(true);
+    try {
+      await downloadRewardPassImage({
+        businessName: business?.business_name || 'Our Store',
+        rewardTitle: card.reward_title,
+        rewardValue: card.reward_value,
+        voucherCode: card.voucher_code,
+        customerName: card.customer_name,
+        customerPhone: card.customer_phone,
+        expiresAt: card.expires_at,
+        createdAt: card.created_at,
+        terms: card.terms_conditions,
+        originLabel: card.issue_rating ? '⭐ 5-Star Google Review Reward' : '🏆 VIP Loyalty Program',
+      });
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 2500);
+    } catch (err) {
+      console.error('Download error:', err);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const isExpired = new Date(card.expires_at).getTime() < Date.now();
@@ -176,7 +204,7 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
         </div>
 
         {/* Customer & Voucher Code Details */}
-        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
           {/* Customer Info */}
           <div className="bg-purple-950/40 rounded-xl p-3 border border-purple-400/20">
             <span className="text-[10px] uppercase font-bold text-purple-300 tracking-wider block">
@@ -205,13 +233,28 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
           </div>
         </div>
 
+        {/* Origin Audit Bar: Kab Mila & Kaise Mila */}
+        <div className="relative z-10 bg-white/10 backdrop-blur-md rounded-xl p-2.5 border border-white/15 mb-4 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+          <div className="flex items-center gap-1.5 text-purple-200">
+            <Clock className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+            <span>Kab Mila: <strong className="text-white">{new Date(card.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong></span>
+          </div>
+          <div className="flex items-center gap-1.5 text-purple-200">
+            <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+            <span>Kaise: <strong className="text-amber-300">{card.issue_rating ? '⭐ 5-Star Google Review' : '🏆 VIP Loyalty Program'}</strong></span>
+          </div>
+        </div>
+
         {/* QR Code and Counter Redemption Section */}
         <div className="relative z-10 bg-white rounded-2xl p-4 text-neutral-900 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
           {/* QR Code for Staff Scanner */}
           <div className="bg-neutral-50 p-2 rounded-xl border border-neutral-200 shadow-inner flex flex-col items-center shrink-0">
             <canvas ref={canvasRef} className="rounded-lg w-28 h-28" />
-            <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wider mt-1">
-              Counter Scan QR
+            <span className="text-[9px] font-bold text-purple-950 uppercase tracking-wider mt-1 text-center">
+              📱 Scan to Check
+            </span>
+            <span className="text-[8px] text-neutral-400 font-semibold text-center">
+              Kab Mila & Kaise Mila
             </span>
           </div>
 
@@ -259,12 +302,32 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
         </div>
       </div>
 
-      {/* ACTION BUTTONS (Share, Save to WhatsApp) */}
-      <div className="mt-4 flex items-center gap-2.5">
+      {/* ACTION BUTTONS (Share, Save to WhatsApp, Download Pass) */}
+      <div className="mt-4 flex flex-wrap items-center gap-2.5">
+        <button
+          type="button"
+          onClick={handleDownloadPass}
+          disabled={isDownloading}
+          className="flex-1 min-w-[130px] py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-60 text-white rounded-2xl text-xs font-bold shadow-md shadow-purple-900/30 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+          title="Download printable digital pass image with QR code"
+        >
+          {downloadSuccess ? (
+            <>
+              <Check className="w-4 h-4 text-emerald-300" />
+              <span>Pass Saved!</span>
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4 text-amber-300" />
+              <span>{isDownloading ? 'Saving...' : 'Download Pass'}</span>
+            </>
+          )}
+        </button>
+
         <button
           type="button"
           onClick={handleShareWhatsApp}
-          className="flex-1 py-3 px-4 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-2xl text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+          className="flex-1 min-w-[130px] py-3 px-4 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-2xl text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
         >
           <Share2 className="w-4 h-4" />
           <span>Save to WhatsApp</span>

@@ -23,8 +23,23 @@ import {
   Edit3,
   Lock,
   AlertTriangle,
+  Camera,
+  Download,
+  Plus,
+  Trash2,
+  Gift,
+  RefreshCw,
+  Shuffle,
 } from 'lucide-react';
-import { Business, ScratchCampaign, ScratchPlay, RewardType, ScratchCampaignStatus } from '../types/database';
+import {
+  Business,
+  ScratchCampaign,
+  ScratchPlay,
+  RewardType,
+  ScratchCampaignStatus,
+  ScratchPrizeItem,
+  ReviewRewardMode,
+} from '../types/database';
 import {
   getScratchCampaign,
   updateScratchCampaign,
@@ -33,6 +48,23 @@ import {
   updateBusiness,
 } from '../lib/db';
 import { ScratchCardModal } from './ScratchCardModal';
+import { RewardQRScannerModal } from './RewardQRScannerModal';
+import { RewardAuditCard } from './RewardAuditCard';
+import {
+  findRewardAuditDetails,
+  RewardAuditDetails,
+  buildScratchAuditDetails,
+  extractVoucherCode,
+} from '../lib/rewardAudit';
+import { downloadRewardPassImage } from '../lib/rewardCardGenerator';
+
+const DEFAULT_LUCKY_DRAW_PRIZES: ScratchPrizeItem[] = [
+  { id: 'p1', name: 'Branded Executive Pen 🖊️', reward_value: 'Free Pen', reward_type: 'free_item' },
+  { id: 'p2', name: '5% Instant Savings 🏷️', reward_value: '5% OFF', reward_type: 'discount_percentage' },
+  { id: 'p3', name: '10% Savings Voucher 🎟️', reward_value: '10% OFF', reward_type: 'discount_percentage' },
+  { id: 'p4', name: '15% Mega Discount 🎉', reward_value: '15% OFF', reward_type: 'discount_percentage' },
+  { id: 'p5', name: '20% Bumper Lucky Winner 🏆', reward_value: '20% OFF', reward_type: 'discount_percentage' },
+];
 
 interface ScratchCampaignManagerProps {
   business: Business;
@@ -52,6 +84,17 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Proactive Review Reward Mode: Option 1 (Loyalty Card) vs Option 2 (Scratch & Win Lucky Draw)
+  const [rewardMode, setRewardMode] = useState<ReviewRewardMode>(business.review_reward_mode || 'loyalty_card');
+  const [switchingMode, setSwitchingMode] = useState(false);
+  const [modeNotice, setModeNotice] = useState<string | null>(null);
+
+  // Lucky Draw Prize Pool Add Item state
+  const [newPrizeName, setNewPrizeName] = useState('');
+  const [newPrizeType, setNewPrizeType] = useState<RewardType>('discount_percentage');
+  const [newPrizeValue, setNewPrizeValue] = useState('');
+  const [prizeInputError, setPrizeInputError] = useState<string | null>(null);
+
   // Form state
   const [formData, setFormData] = useState<{
     campaign_name: string;
@@ -68,6 +111,8 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
     per_customer_play_limit: number;
     status: ScratchCampaignStatus;
     terms_conditions: string;
+    lucky_draw_enabled: boolean;
+    prize_pool: ScratchPrizeItem[];
   }>({
     campaign_name: 'Summer Scratch & Win Fiesta',
     description: 'Scratch and reveal an instant surprise discount or free item on your bill!',
@@ -83,6 +128,8 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
     per_customer_play_limit: 1,
     status: 'draft',
     terms_conditions: 'Valid on dine-in & takeaway. Show the revealed digital coupon at billing. Single use only.',
+    lucky_draw_enabled: true,
+    prize_pool: DEFAULT_LUCKY_DRAW_PRIZES,
   });
 
   // Cashier verification state
@@ -93,6 +140,10 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
   const [redeemResult, setRedeemResult] = useState<ScratchPlay | null>(null);
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [redeemSuccess, setRedeemSuccess] = useState<string | null>(null);
+
+  // Live Camera Scanner & Detailed "Kab Mila & Kaise Mila" Audit
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [scratchAudit, setScratchAudit] = useState<RewardAuditDetails | null>(null);
 
   // Business Owner Separate Phone Configuration state for POS marketing
   const [showPhoneModal, setShowPhoneModal] = useState(false);
@@ -202,6 +253,10 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
         per_customer_play_limit: camp.per_customer_play_limit || 1,
         status: camp.status || 'draft',
         terms_conditions: camp.terms_conditions || '',
+        lucky_draw_enabled: camp.lucky_draw_enabled ?? true,
+        prize_pool: Array.isArray(camp.prize_pool) && camp.prize_pool.length > 0
+          ? camp.prize_pool
+          : DEFAULT_LUCKY_DRAW_PRIZES,
       });
 
       const customerPlays = await getScratchPlaysByBusiness(business.id);
@@ -216,8 +271,31 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
   useEffect(() => {
     if (business) {
       loadData();
+      if (business.review_reward_mode) {
+        setRewardMode(business.review_reward_mode);
+      }
     }
-  }, [business.id]);
+  }, [business.id, business.review_reward_mode]);
+
+  const handleSwitchReviewRewardMode = async (mode: ReviewRewardMode) => {
+    setSwitchingMode(true);
+    setModeNotice(null);
+    try {
+      const updated = await updateBusiness(business.id, { review_reward_mode: mode });
+      setRewardMode(mode);
+      if (onUpdateBusiness) onUpdateBusiness(updated);
+      setModeNotice(
+        mode === 'scratch_card'
+          ? '🎲 Option 2 (Scratch & Win Lucky Draw) is now active for Google Review customers!'
+          : '🎁 Option 1 (Guaranteed VIP Loyalty Card) is now active for Google Review customers!'
+      );
+      setTimeout(() => setModeNotice(null), 4000);
+    } catch (err: any) {
+      setModeNotice(err.message || 'Failed to update review reward mode');
+    } finally {
+      setSwitchingMode(false);
+    }
+  };
 
   const handleSaveCampaign = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,9 +319,11 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
         per_customer_play_limit: Number(formData.per_customer_play_limit),
         status: formData.status,
         terms_conditions: formData.terms_conditions.trim(),
+        lucky_draw_enabled: formData.lucky_draw_enabled,
+        prize_pool: formData.prize_pool,
       });
       setCampaign(updated);
-      setSaveSuccess('Scratch & Win Campaign settings updated successfully!');
+      setSaveSuccess('Scratch & Win Campaign & Lucky Draw settings saved successfully!');
       setTimeout(() => setSaveSuccess(null), 4000);
     } catch (err: any) {
       setSaveError(err.message || 'Failed to save campaign settings.');
@@ -306,21 +386,66 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
         setMatchingPlays(localMatches);
         const activeOne = localMatches.find((m) => m.status === 'active') || localMatches[0];
         setRedeemResult(activeOne);
+        setScratchAudit(buildScratchAuditDetails(activeOne, business));
       } else if (localMatches.length === 1) {
         setRedeemResult(localMatches[0]);
         setMatchingPlays([]);
+        setScratchAudit(buildScratchAuditDetails(localMatches[0], business));
       } else {
-        // Call backend server directly to search and verify
-        const redeemed = await redeemScratchVoucher(term, business.id, 'Counter Staff');
-        setRedeemResult(redeemed);
-        setMatchingPlays([]);
-        setRedeemSuccess(`Voucher ${redeemed.voucher_code} successfully applied and marked REDEEMED!`);
-        const freshPlays = await getScratchPlaysByBusiness(business.id);
-        setPlays(freshPlays);
+        // Check audit or call backend server directly to search and verify
+        const audit = await findRewardAuditDetails(term, business.id, business);
+        if (audit) {
+          setScratchAudit(audit);
+          if (audit.raw_scratch_play) {
+            setRedeemResult(audit.raw_scratch_play);
+            setMatchingPlays([]);
+          }
+        } else {
+          const redeemed = await redeemScratchVoucher(term, business.id, 'Counter Staff');
+          setRedeemResult(redeemed);
+          setMatchingPlays([]);
+          setScratchAudit(buildScratchAuditDetails(redeemed, business));
+          setRedeemSuccess(`Voucher ${redeemed.voucher_code} successfully applied and marked REDEEMED!`);
+          const freshPlays = await getScratchPlaysByBusiness(business.id);
+          setPlays(freshPlays);
+        }
       }
     } catch (err: any) {
       setRedeemError(err.message || `No Scratch & Win coupon found matching "${term}".`);
       setRedeemResult(null);
+      setScratchAudit(null);
+    } finally {
+      setRedeemLoading(false);
+    }
+  };
+
+  const handleScanQRSuccess = async (decoded: string) => {
+    const cleanCode = extractVoucherCode(decoded);
+    setRedeemCode(cleanCode);
+    setRedeemError(null);
+    setRedeemSuccess(null);
+    setRedeemLoading(true);
+
+    try {
+      const audit = await findRewardAuditDetails(cleanCode, business.id, business);
+      if (audit) {
+        setScratchAudit(audit);
+        if (audit.raw_scratch_play) {
+          setRedeemResult(audit.raw_scratch_play);
+          setMatchingPlays([]);
+        }
+      } else {
+        // Fallback to voucher code search
+        const local = plays.find((p) => p.voucher_code.toUpperCase() === cleanCode.toUpperCase());
+        if (local) {
+          setRedeemResult(local);
+          setScratchAudit(buildScratchAuditDetails(local, business));
+        } else {
+          setRedeemError(`No Scratch voucher found matching scanned QR: "${cleanCode}"`);
+        }
+      }
+    } catch (err: any) {
+      setRedeemError(err.message || 'Error processing scanned QR code');
     } finally {
       setRedeemLoading(false);
     }
@@ -436,6 +561,123 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
               <Eye className="w-3.5 h-3.5 text-[#6C3BFF]" />
               <span>Interactive Scratch Preview</span>
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* PROACTIVE REVIEW REWARD MODE SELECTOR (Dono option mein se koi bhi ek select kar sakte hain business owner proactive) */}
+      <div className="bg-white rounded-2xl border-2 border-purple-200 p-5 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-black uppercase tracking-wider text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md">
+                Proactive Mode Selection (रिवॉर्ड चयन)
+              </span>
+              <span className="text-[10px] font-bold text-neutral-500">
+                Google Review Bottom Reward Section
+              </span>
+            </div>
+            <h3 className="text-sm font-bold text-neutral-900 mt-1">
+              Dono Option Mein Se Koi Bhi Ek Reward Option Select Karein
+            </h3>
+            <p className="text-[11px] text-neutral-500">
+              Customer ko Google Review ke baad review page ke niche reward section mein kya milna chahiye? Business owner proactively koi bhi ek option chun sakte hain.
+            </p>
+          </div>
+          {modeNotice && (
+            <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-xl border border-emerald-200 animate-in fade-in self-start sm:self-auto">
+              {modeNotice}
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+          {/* OPTION 1: Guaranteed VIP Loyalty Card */}
+          <div
+            onClick={() => handleSwitchReviewRewardMode('loyalty_card')}
+            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
+              rewardMode === 'loyalty_card'
+                ? 'bg-amber-50/70 border-amber-500 ring-2 ring-amber-400/30 shadow-md'
+                : 'bg-neutral-50 border-neutral-200 hover:border-amber-300 hover:bg-amber-50/30'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-400 text-neutral-950 flex items-center justify-center font-black shadow-xs shrink-0">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded">
+                    Option 1: Guaranteed Offer
+                  </span>
+                  <h4 className="text-xs font-black text-neutral-900 mt-0.5">
+                    Guaranteed VIP Loyalty Card
+                  </h4>
+                </div>
+              </div>
+
+              {rewardMode === 'loyalty_card' ? (
+                <span className="px-2.5 py-0.5 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center gap-1 shadow-xs shrink-0">
+                  <Check className="w-3 h-3" /> Active Now
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={switchingMode}
+                  className="px-2.5 py-0.5 bg-white border border-neutral-300 text-neutral-700 text-[10px] font-bold rounded-full hover:bg-neutral-100 cursor-pointer"
+                >
+                  Select Option 1
+                </button>
+              )}
+            </div>
+
+            <p className="text-[11px] text-neutral-600 leading-snug">
+              Har 5-star review submit karne wale customer ko <strong>fixed guaranteed VIP discount card</strong> milta hai. Single-use voucher code aur QR pass generate hota hai.
+            </p>
+          </div>
+
+          {/* OPTION 2: Scratch & Win Lucky Draw */}
+          <div
+            onClick={() => handleSwitchReviewRewardMode('scratch_card')}
+            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
+              rewardMode === 'scratch_card'
+                ? 'bg-purple-50/80 border-[#6C3BFF] ring-2 ring-purple-400/30 shadow-md'
+                : 'bg-neutral-50 border-neutral-200 hover:border-purple-300 hover:bg-purple-50/30'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#6C3BFF] to-purple-800 text-white flex items-center justify-center font-black shadow-xs shrink-0">
+                  <Trophy className="w-5 h-5 text-amber-300" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase text-purple-900 bg-purple-200/80 px-2 py-0.5 rounded">
+                    Option 2: Mystery Lucky Draw
+                  </span>
+                  <h4 className="text-xs font-black text-neutral-900 mt-0.5">
+                    Scratch & Win Lucky Draw (लकी ड्रॉ)
+                  </h4>
+                </div>
+              </div>
+
+              {rewardMode === 'scratch_card' ? (
+                <span className="px-2.5 py-0.5 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center gap-1 shadow-xs shrink-0">
+                  <Check className="w-3 h-3" /> Active Now
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={switchingMode}
+                  className="px-2.5 py-0.5 bg-white border border-neutral-300 text-neutral-700 text-[10px] font-bold rounded-full hover:bg-neutral-100 cursor-pointer"
+                >
+                  Select Option 2
+                </button>
+              )}
+            </div>
+
+            <p className="text-[11px] text-neutral-600 leading-snug">
+              Review submit hone ke baad <strong>niche reward section mein interactive scratch card</strong> khulega — jisme <strong>पेन से लेकर 20% डिस्काउंट तक कुछ भी खुल सकता है</strong>!
+            </p>
           </div>
         </div>
       </div>
@@ -754,6 +996,15 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
             <Search className="w-3.5 h-3.5" />
             <span>{redeemLoading ? 'Searching...' : 'Search & Verify'}</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setShowQRScanner(true)}
+            className="w-full sm:w-auto px-5 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2 shrink-0 hover:scale-[1.02]"
+            title="Scan Customer's Scratch Reward QR Code with Live Camera"
+          >
+            <Camera className="w-4 h-4 text-amber-300" />
+            <span>📷 Scan QR Code</span>
+          </button>
         </form>
 
         {/* Quick Pick: Recent Active Scratch Winners */}
@@ -899,6 +1150,36 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                 <p className="text-xs text-neutral-600">
                   Customer: <strong className="text-neutral-900">{redeemResult.customer_name}</strong> (📱 {redeemResult.customer_phone})
                 </p>
+
+                {/* Rich Origin & Timeline: Kab Mila & Kaise Mila */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 my-2.5">
+                  <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs space-y-0.5">
+                    <span className="text-[10px] uppercase font-extrabold text-blue-900 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-blue-600" />
+                      कब मिला? (Issued Time)
+                    </span>
+                    <p className="font-bold text-blue-950 font-mono text-[11px]">
+                      {new Date(redeemResult.scratched_at || redeemResult.created_at).toLocaleString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true,
+                      })}
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-purple-50/80 border border-purple-200 rounded-xl text-xs space-y-0.5">
+                    <span className="text-[10px] uppercase font-extrabold text-purple-900 flex items-center gap-1">
+                      <Trophy className="w-3 h-3 text-amber-500" />
+                      कैसे मिला? (How Earned)
+                    </span>
+                    <p className="font-bold text-purple-950 text-[11px]">
+                      🎲 Scratch & Win Lucky Draw
+                    </p>
+                  </div>
+                </div>
+
                 <p className="text-[11px] text-neutral-500 mt-0.5">
                   Valid Until: {new Date(redeemResult.expires_at).toLocaleDateString()} · {redeemResult.min_purchase_amount || 'Present at counter'}
                 </p>
@@ -911,6 +1192,34 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                   className="px-3 py-2 bg-white border border-neutral-300 text-neutral-800 rounded-xl text-xs font-semibold hover:bg-neutral-50 cursor-pointer"
                 >
                   View Digital Card
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await downloadRewardPassImage({
+                        businessName: business.business_name || 'Store Partner',
+                        rewardTitle: redeemResult.reward_title,
+                        rewardValue: redeemResult.reward_value || undefined,
+                        voucherCode: redeemResult.voucher_code,
+                        customerName: redeemResult.customer_name,
+                        customerPhone: redeemResult.customer_phone,
+                        expiresAt: redeemResult.expires_at,
+                        createdAt: redeemResult.scratched_at || redeemResult.created_at,
+                        terms: redeemResult.terms_conditions || 'Present this pass at billing counter to redeem.',
+                        rewardType: 'scratch',
+                        originLabel: '🎲 Scratch & Win Lucky Draw',
+                      });
+                    } catch (err) {
+                      console.error('Failed to download scratch reward image', err);
+                    }
+                  }}
+                  className="px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5 transition-all hover:scale-[1.01]"
+                  title="Download verified digital reward pass image with QR code"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Download Pass</span>
                 </button>
 
                 {/* WhatsApp Marketing Message to Customer - STRICTLY LOCKED UNTIL SETUP NUMBER IS ENTERED */}
@@ -1174,6 +1483,175 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                 placeholder="e.g. 🎉 You Won Flat 20% OFF!"
                 className="w-full px-3 py-2 text-xs bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#6C3BFF]"
               />
+            </div>
+
+            {/* LUCKY DRAW MYSTERY PRIZE POOL CUSTOMIZER (PEN SE 20% TAK KUCH BHI KHUL SAKTA HAI) */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50 via-amber-50/40 to-purple-50 border-2 border-purple-300 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shrink-0">
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-neutral-900 flex items-center gap-1.5 flex-wrap">
+                      <span>🎲 Lucky Draw Mode (लकी ड्रॉ सरप्राइज पूल)</span>
+                      <span className="text-[10px] font-extrabold text-purple-700 bg-purple-200/80 px-2 py-0.5 rounded-full">
+                        पेन से 20% तक कुछ भी
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-neutral-600 leading-tight mt-0.5">
+                      Customer jab scratch karega to random mystery prize khulega (jaise Executive Pen, 5%, 10%, 15%, ya 20% discount). Business owner yahan se customize kar sakte hain.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Toggle Switch */}
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={formData.lucky_draw_enabled}
+                    onChange={(e) => setFormData({ ...formData, lucky_draw_enabled: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-neutral-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+
+              {formData.lucky_draw_enabled && (
+                <div className="space-y-3 pt-2 border-t border-purple-200">
+                  {/* Current Prize Pool */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                      <span className="text-[11px] font-bold text-neutral-700">
+                        Configured Lucky Draw Prizes ({formData.prize_pool.length} items):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            prize_pool: [...DEFAULT_LUCKY_DRAW_PRIZES],
+                          })
+                        }
+                        className="text-[10px] font-bold text-purple-700 hover:text-purple-900 underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Reset to Default (Pen to 20% OFF)</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {formData.prize_pool.map((item, idx) => (
+                        <div
+                          key={item.id || idx}
+                          className="flex items-center justify-between p-2.5 bg-white border border-purple-200 rounded-xl shadow-2xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+                            <span className="w-5 h-5 rounded-md bg-purple-100 text-purple-800 text-[10px] font-black flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs font-bold text-neutral-900 truncate">
+                              {item.name}
+                            </span>
+                            <span className="text-[10px] font-black text-purple-700 bg-purple-100 px-2 py-0.5 rounded font-mono shrink-0">
+                              {item.reward_value}
+                            </span>
+                            <span className="text-[9px] font-semibold text-neutral-500 uppercase px-1.5 py-0.5 bg-neutral-100 rounded shrink-0">
+                              {item.reward_type.replace('_', ' ')}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updatedPool = formData.prize_pool.filter((_, i) => i !== idx);
+                              setFormData({ ...formData, prize_pool: updatedPool });
+                            }}
+                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
+                            title="Remove prize"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Add New Lucky Prize */}
+                  <div className="p-3 bg-white/80 border border-purple-200 rounded-xl space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-900 block">
+                      ➕ Add Another Prize to Lucky Draw Pool:
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <input
+                          type="text"
+                          value={newPrizeName}
+                          onChange={(e) => {
+                            setNewPrizeName(e.target.value);
+                            setPrizeInputError(null);
+                          }}
+                          placeholder="Prize Name (e.g. Smart Pen 🖊️, 25% OFF)"
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-purple-600"
+                        />
+                      </div>
+                      <div>
+                        <select
+                          value={newPrizeType}
+                          onChange={(e) => setNewPrizeType(e.target.value as RewardType)}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-purple-600"
+                        >
+                          <option value="discount_percentage">Percentage Discount</option>
+                          <option value="free_item">Free Item / Gift</option>
+                          <option value="discount_fixed">Fixed Amount Off</option>
+                          <option value="custom">Custom Prize</option>
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newPrizeValue}
+                          onChange={(e) => {
+                            setNewPrizeValue(e.target.value);
+                            setPrizeInputError(null);
+                          }}
+                          placeholder="Value Badge (e.g. 25% OFF, Free Pen)"
+                          className="w-full px-2.5 py-1.5 text-xs bg-white border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-purple-600"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newPrizeName.trim() || !newPrizeValue.trim()) {
+                              setPrizeInputError('Please enter prize name and prize value');
+                              return;
+                            }
+                            const newItem: ScratchPrizeItem = {
+                              id: `prize_${Date.now()}`,
+                              name: newPrizeName.trim(),
+                              reward_type: newPrizeType,
+                              reward_value: newPrizeValue.trim(),
+                            };
+                            setFormData({
+                              ...formData,
+                              prize_pool: [...formData.prize_pool, newItem],
+                            });
+                            setNewPrizeName('');
+                            setNewPrizeValue('');
+                            setPrizeInputError(null);
+                          }}
+                          className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add</span>
+                        </button>
+                      </div>
+                    </div>
+                    {prizeInputError && (
+                      <p className="text-[10px] text-rose-600 font-bold">{prizeInputError}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -1551,6 +2029,14 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
           onClose={() => setPreviewPlay(null)}
         />
       )}
+
+      {/* Live Camera QR Scanner Modal */}
+      <RewardQRScannerModal
+        isOpen={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onScanSuccess={handleScanQRSuccess}
+        title="Scan Customer Scratch Reward QR"
+      />
     </div>
   );
 };

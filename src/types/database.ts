@@ -47,10 +47,13 @@ export interface Business {
   latitude?: number;
   longitude?: number;
   gps_radius_meters?: number; // e.g., 200 (meters)
+  // Proactive Review Reward Mode: Guaranteed Loyalty Card vs Scratch & Win Lucky Draw
+  review_reward_mode?: ReviewRewardMode;
   created_at: string;
   updated_at: string;
 }
 
+export type ReviewRewardMode = 'loyalty_card' | 'scratch_card';
 export type SupportedLanguage = 'en' | 'hi' | 'gu';
 export type QRLogoBorderStyle = 'circular' | 'square';
 
@@ -249,6 +252,14 @@ export interface ReminderAuditLog {
 
 export type ScratchCampaignStatus = 'draft' | 'active' | 'paused' | 'expired';
 
+export interface ScratchPrizeItem {
+  id: string;
+  name: string; // e.g. "Executive Pen 🖊️", "20% OFF", "10% OFF"
+  reward_type: RewardType;
+  reward_value: string; // e.g. "Free Pen", "20% OFF", "10% OFF"
+  probability_weight?: number; // e.g. 1
+}
+
 export interface ScratchCampaign {
   id: string;
   business_id: string;
@@ -267,6 +278,9 @@ export interface ScratchCampaign {
   per_customer_play_limit: number; // e.g. 1 or 2 plays per customer phone
   status: ScratchCampaignStatus;
   terms_conditions?: string;
+  // Lucky Draw Mystery Prize Pool (e.g. from pen to 20% discount)
+  lucky_draw_enabled?: boolean;
+  prize_pool?: ScratchPrizeItem[];
   created_at: string;
   updated_at: string;
 }
