@@ -682,49 +682,43 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
         </div>
       </div>
 
-      {/* KPI Metrics: Mobile Touch Slider Carousel + Desktop Grid */}
-      <div className="space-y-1.5">
-        <div className="flex sm:grid sm:grid-cols-4 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1.5 pt-0.5">
-          <div className="min-w-[65vw] sm:min-w-0 snap-center bg-white rounded-2xl border border-neutral-200 p-4 shadow-2xs shrink-0 sm:shrink flex flex-col justify-between">
-            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
-              Prize Pool Cap
-            </span>
-            <span className="text-xl font-black text-neutral-900 mt-1 block">
-              {formData.total_reward_quantity}
-            </span>
-            <span className="text-[10px] text-neutral-500 mt-1 block">Max coupons available</span>
-          </div>
-          <div className="min-w-[65vw] sm:min-w-0 snap-center bg-white rounded-2xl border border-neutral-200 p-4 shadow-2xs shrink-0 sm:shrink flex flex-col justify-between">
-            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
-              Coupons Revealed
-            </span>
-            <span className="text-xl font-black text-purple-700 mt-1 block">
-              {plays.length}
-            </span>
-            <span className="text-[10px] text-neutral-500 mt-1 block">By customer plays</span>
-          </div>
-          <div className="min-w-[65vw] sm:min-w-0 snap-center bg-white rounded-2xl border border-neutral-200 p-4 shadow-2xs shrink-0 sm:shrink flex flex-col justify-between">
-            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
-              Redeemed at Counter
-            </span>
-            <span className="text-xl font-black text-emerald-700 mt-1 block">
-              {plays.filter((p) => p.status === 'redeemed').length}
-            </span>
-            <span className="text-[10px] text-neutral-500 mt-1 block">Verified by cashier</span>
-          </div>
-          <div className="min-w-[65vw] sm:min-w-0 snap-center bg-white rounded-2xl border border-neutral-200 p-4 shadow-2xs shrink-0 sm:shrink flex flex-col justify-between">
-            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
-              Play Limit / Customer
-            </span>
-            <span className="text-xl font-black text-amber-700 mt-1 block">
-              {formData.per_customer_play_limit} Play
-            </span>
-            <span className="text-[10px] text-neutral-500 mt-1 block">Duplicate prevention</span>
-          </div>
+      {/* KPI Metrics: Clean Responsive 2x2 and 4-col Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white rounded-2xl border border-neutral-200 p-4 shadow-2xs flex flex-col justify-between">
+          <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+            Prize Pool Cap
+          </span>
+          <span className="text-xl font-black text-neutral-900 mt-1 block">
+            {formData.total_reward_quantity}
+          </span>
+          <span className="text-[10px] text-neutral-500 mt-1 block">Max coupons available</span>
         </div>
-        <div className="flex sm:hidden items-center justify-between text-[10px] text-neutral-400 px-1">
-          <span>👈 Swipe scratch stats 👉</span>
-          <span className="font-semibold text-purple-700">4 Cards</span>
+        <div className="bg-white rounded-2xl border border-neutral-200 p-4 shadow-2xs flex flex-col justify-between">
+          <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+            Coupons Revealed
+          </span>
+          <span className="text-xl font-black text-purple-700 mt-1 block">
+            {plays.length}
+          </span>
+          <span className="text-[10px] text-neutral-500 mt-1 block">By customer plays</span>
+        </div>
+        <div className="bg-white rounded-2xl border border-neutral-200 p-4 shadow-2xs flex flex-col justify-between">
+          <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+            Redeemed at Counter
+          </span>
+          <span className="text-xl font-black text-emerald-700 mt-1 block">
+            {plays.filter((p) => p.status === 'redeemed').length}
+          </span>
+          <span className="text-[10px] text-neutral-500 mt-1 block">Verified by cashier</span>
+        </div>
+        <div className="bg-white rounded-2xl border border-neutral-200 p-4 shadow-2xs flex flex-col justify-between">
+          <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider block">
+            Play Limit / Customer
+          </span>
+          <span className="text-xl font-black text-amber-700 mt-1 block">
+            {formData.per_customer_play_limit} Play
+          </span>
+          <span className="text-[10px] text-neutral-500 mt-1 block">Duplicate prevention</span>
         </div>
       </div>
 

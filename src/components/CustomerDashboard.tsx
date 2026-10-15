@@ -133,6 +133,21 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<
     'dashboard' | 'loyalty' | 'scratch_offers' | 'ai_agent' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
   >('dashboard');
+  const [mobileCategory, setMobileCategory] = useState<'core' | 'rewards' | 'intelligence' | 'store'>('core');
+  const [showAllModulesModal, setShowAllModulesModal] = useState<boolean>(false);
+
+  const handleSelectTab = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (tab === 'dashboard' || tab === 'qrcode' || tab === 'ai_agent') {
+      setMobileCategory('core');
+    } else if (tab === 'loyalty' || tab === 'scratch_offers') {
+      setMobileCategory('rewards');
+    } else if (tab === 'analytics' || tab === 'feedback') {
+      setMobileCategory('intelligence');
+    } else {
+      setMobileCategory('store');
+    }
+  };
 
   const [business, setBusiness] = useState<Business | null>(session.business || null);
   const [settings, setSettings] = useState<ReviewSettings | null>(null);
@@ -1573,99 +1588,185 @@ Please generate:
           const accessStatus = checkCustomerAccessStatus(session.user);
           return (
             <>
-              {/* Top Header Card - Executive Merchant Banner */}
-              <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-xs mb-6 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all">
-                <div className="flex items-center gap-4">
-                  {business.logo_url ? (
-                    <img
-                      src={business.logo_url}
-                      alt={business.business_name}
-                      className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shadow-2xs shrink-0"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-slate-900 to-[#6C3BFF] text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0">
-                      {business.business_name.substring(0, 2).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-                        {business.business_name}
-                      </h1>
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>Live QR Station</span>
-                      </div>
-                      {accessStatus.isLifetime ? (
-                        <span className="px-2.5 py-0.5 text-[11px] font-bold text-[#6C3BFF] bg-purple-50 border border-purple-200/80 rounded-full flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-[#6C3BFF]" />
-                          Lifetime License
-                        </span>
-                      ) : accessStatus.isExpired ? (
-                        <span className="px-2.5 py-0.5 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-full flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          Access Expired
-                        </span>
+              {/* Top Branded Executive Black Profile Header */}
+              <div className="bg-gradient-to-br from-neutral-950 via-slate-950 to-neutral-900 text-white rounded-3xl p-6 sm:p-7 border border-neutral-800/90 shadow-2xl mb-6 relative overflow-hidden transition-all">
+                {/* Ambient glow effects */}
+                <div className="absolute -top-32 -right-32 w-80 h-80 bg-[#6C3BFF]/20 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                  {/* Brand Identity: Logo + Name + Metadata */}
+                  <div className="flex items-start sm:items-center gap-4 sm:gap-5">
+                    {/* Brand Avatar with verified ring */}
+                    <div className="relative shrink-0">
+                      {business.logo_url ? (
+                        <img
+                          src={business.logo_url}
+                          alt={business.business_name}
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-neutral-700/80 shadow-lg bg-neutral-900"
+                        />
                       ) : (
-                        <span className="px-2.5 py-0.5 text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-full flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-500" />
-                          {accessStatus.daysRemaining} Days Left
-                        </span>
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-neutral-800 via-neutral-900 to-[#6C3BFF] text-white flex items-center justify-center font-black text-2xl border-2 border-neutral-700/80 shadow-lg shrink-0">
+                          {business.business_name.substring(0, 2).toUpperCase()}
+                        </div>
                       )}
+                      <span
+                        className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-neutral-950 flex items-center justify-center text-white shadow-xs"
+                        title="Live Review Station Active"
+                      >
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      </span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium">
-                      <span>Owner: <strong className="text-slate-700 font-semibold">{session.user.full_name}</strong></span>
-                      <span aria-hidden="true">·</span>
-                      <span>Category: <span className="text-slate-700 font-semibold">{business.category || 'Retail & Hospitality'}</span></span>
-                      <span aria-hidden="true">·</span>
-                      <span>Expires: <span className="text-slate-600 font-mono">{accessStatus.expiresFormatted}</span></span>
+
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight truncate max-w-[320px] sm:max-w-md">
+                          {business.business_name}
+                        </h1>
+
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span>Live QR Station</span>
+                        </span>
+
+                        {accessStatus.isLifetime ? (
+                          <span className="px-2.5 py-0.5 text-[11px] font-bold text-purple-300 bg-purple-950/70 border border-purple-800/80 rounded-full flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-purple-400" />
+                            Lifetime License
+                          </span>
+                        ) : accessStatus.isExpired ? (
+                          <span className="px-2.5 py-0.5 text-[11px] font-bold text-rose-300 bg-rose-950/70 border border-rose-800 rounded-full flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-rose-400" />
+                            Access Expired
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 text-[11px] font-bold text-neutral-300 bg-neutral-900 border border-neutral-800 rounded-full flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-neutral-400" />
+                            {accessStatus.daysRemaining} Days Left
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Clean Unboxed Metadata */}
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400 font-medium">
+                        <span>Category: <strong className="text-neutral-200 font-semibold">{business.category || 'Retail & Hospitality'}</strong></span>
+                        <span aria-hidden="true" className="text-neutral-600">·</span>
+                        <span>Owner: <strong className="text-neutral-200 font-semibold">{session.user.full_name}</strong></span>
+                        <span aria-hidden="true" className="text-neutral-600">·</span>
+                        <span>Valid Thru: <span className="text-neutral-300 font-mono">{accessStatus.expiresFormatted}</span></span>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Brand Action Controls */}
+                  <div className="flex flex-wrap items-center gap-2.5 pt-2 lg:pt-0 border-t border-neutral-800/70 lg:border-t-0">
+                    {/* Customer Code Box in Dark Aesthetic */}
+                    <div className="flex items-center gap-2 bg-neutral-900/90 border border-neutral-800 px-3 py-2 rounded-xl">
+                      <span className="text-[11px] text-neutral-400 font-semibold uppercase tracking-wider">Store ID:</span>
+                      <span className="text-xs font-black font-mono text-purple-300">
+                        {session.user.unique_customer_code}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCopyCode}
+                        title="Copy Customer ID"
+                        className="p-1 text-neutral-400 hover:text-white rounded-md hover:bg-neutral-800 transition-colors cursor-pointer"
+                      >
+                        {copiedCode ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Preview Review Flow */}
+                    {settings && (
+                      <button
+                        type="button"
+                        onClick={() => onPreviewReviewFlow(business, settings)}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-neutral-200 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 rounded-xl shadow-xs transition-all cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Preview Flow</span>
+                      </button>
+                    )}
+
+                    {/* Direct Google Review Link */}
+                    <a
+                      href={business.google_review_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-extrabold text-neutral-950 bg-white hover:bg-neutral-100 rounded-xl shadow-md transition-all cursor-pointer"
+                    >
+                      <span>Google Reviews</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
-                  {/* Customer Code Box */}
-                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl">
-                    <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">Store ID:</span>
-                    <span className="text-xs font-black font-mono text-[#6C3BFF]">
-                      {session.user.unique_customer_code}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleCopyCode}
-                      title="Copy Customer ID"
-                      className="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-200/50 transition-colors cursor-pointer"
-                    >
-                      {copiedCode ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
+                {/* Integrated Executive Brand Metrics Strip */}
+                <div className="mt-6 pt-5 border-t border-neutral-800/80 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-purple-400 shrink-0">
+                      <QrCode className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight tabular-nums block">
+                        {analytics.totalScans}
+                      </span>
+                      <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
+                        Total QR Scans
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Test Review Flow Button */}
-                  {settings && (
-                    <button
-                      type="button"
-                      onClick={() => onPreviewReviewFlow(business, settings)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs transition-all cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-[#6C3BFF]" />
-                      <span>Preview Flow</span>
-                    </button>
-                  )}
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-amber-400 shrink-0">
+                      <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xl sm:text-2xl font-black font-mono text-amber-400 tracking-tight tabular-nums">
+                          {analytics.averageRating > 0 ? analytics.averageRating : '5.0'}
+                        </span>
+                        <div className="flex items-center text-amber-400">
+                          <Star className="w-3.5 h-3.5 fill-amber-400" />
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
+                        Store Rating
+                      </span>
+                    </div>
+                  </div>
 
-                  {/* Direct Google Review Link */}
-                  <a
-                    href={business.google_review_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-slate-950 hover:bg-[#6C3BFF] rounded-xl shadow-xs transition-all cursor-pointer"
-                  >
-                    <span>Google Reviews</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400 shrink-0">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-xl sm:text-2xl font-black font-mono text-emerald-400 tracking-tight tabular-nums block">
+                        {analytics.googleClicks}
+                      </span>
+                      <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
+                        5★ Google Clicks
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-amber-400 shrink-0">
+                      <Gift className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight tabular-nums block">
+                        {loyaltyCards.length > 0 ? `${loyaltyCards.length} Active` : 'Ready'}
+                      </span>
+                      <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
+                        Loyalty Program
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1697,62 +1798,590 @@ Please generate:
           );
         })()}
 
-        {/* MOBILE SLIDER NAVIGATION BAR - Clean Brand Segments */}
-        <div className="block lg:hidden mb-4 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/80 p-2.5 shadow-xs sticky top-2 z-20">
-          <div className="flex items-center justify-between pb-2 px-1 border-b border-slate-100 text-[11px]">
-            <div className="flex items-center gap-1.5 font-bold text-slate-800">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-[#6C3BFF]" />
-              <span>Workspace Modules</span>
+        {/* BRAND NAVIGATION: Organized Category Hubs (Fixes jumbled slider) */}
+        <div className="block lg:hidden mb-6 bg-white rounded-2xl border border-slate-200/90 p-3 shadow-xs space-y-3 sticky top-2 z-30">
+          {/* Header row: Active Section Info + All Modules Drawer Button */}
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-[#6C3BFF] animate-pulse" />
+              <span className="font-bold text-slate-800">
+                {activeTab === 'dashboard' && 'Overview & Metrics'}
+                {activeTab === 'qrcode' && 'QR Standee & Code'}
+                {activeTab === 'ai_agent' && 'AI Review Engine'}
+                {activeTab === 'loyalty' && 'Loyalty & Stamp Cards'}
+                {activeTab === 'scratch_offers' && 'Scratch & Win Game'}
+                {activeTab === 'analytics' && 'Traffic & Scans'}
+                {activeTab === 'feedback' && 'Private Feedback Shield'}
+                {activeTab === 'business' && 'Store Profile & GPS'}
+                {activeTab === 'settings' && 'Review Customizer'}
+                {activeTab === 'announcements' && 'Broadcasts'}
+                {activeTab === 'security' && 'Security & Password'}
+                {activeTab === 'support' && 'WhatsApp Support'}
+              </span>
             </div>
-            <div className="flex items-center gap-1 text-[10px] text-slate-500 font-semibold">
-              <span>Swipe horizontally</span>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowAllModulesModal(true)}
+              className="px-2.5 py-1 text-[11px] font-bold text-[#6C3BFF] bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span>All 12 Modules</span>
+              <ChevronDown className="w-3 h-3" />
+            </button>
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth snap-x pt-2.5 pb-1 px-0.5">
-            {[
-              { tab: 'dashboard', label: 'Overview', icon: LayoutDashboard },
-              { tab: 'qrcode', label: 'QR Standee', icon: QrCode },
-              { tab: 'loyalty', label: 'Loyalty Cards', icon: Gift },
-              { tab: 'scratch_offers', label: 'Scratch & Win', icon: Trophy },
-              { tab: 'ai_agent', label: 'AI Engine', icon: Bot },
-              { tab: 'analytics', label: 'Analytics', icon: BarChart3 },
-              { tab: 'feedback', label: 'Private Shield', icon: MessageSquareText },
-              { tab: 'business', label: 'Store Profile', icon: Store },
-              { tab: 'settings', label: 'Customizer', icon: Sliders },
-              { tab: 'announcements', label: 'Broadcasts', icon: Bell },
-              { tab: 'security', label: 'Security', icon: Lock },
-              { tab: 'support', label: 'Support', icon: HelpCircle },
-            ].map(({ tab, label, icon: Icon }) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab as any)}
-                className={`snap-start shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === tab
-                    ? 'bg-slate-950 text-white shadow-xs'
-                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/70'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{label}</span>
-              </button>
-            ))}
+          {/* 4 Clean Brand Pillar Tabs */}
+          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/90 rounded-xl text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => {
+                setMobileCategory('core');
+                if (!['dashboard', 'qrcode', 'ai_agent'].includes(activeTab)) {
+                  handleSelectTab('dashboard');
+                }
+              }}
+              className={`py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                mobileCategory === 'core'
+                  ? 'bg-slate-950 text-white shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Core</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMobileCategory('rewards');
+                if (!['loyalty', 'scratch_offers'].includes(activeTab)) {
+                  handleSelectTab('loyalty');
+                }
+              }}
+              className={`py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                mobileCategory === 'rewards'
+                  ? 'bg-amber-500 text-neutral-950 shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Gift className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Rewards</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMobileCategory('intelligence');
+                if (!['analytics', 'feedback'].includes(activeTab)) {
+                  handleSelectTab('analytics');
+                }
+              }}
+              className={`py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                mobileCategory === 'intelligence'
+                  ? 'bg-slate-950 text-white shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Insights</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMobileCategory('store');
+                if (!['business', 'settings', 'announcements', 'security', 'support'].includes(activeTab)) {
+                  handleSelectTab('business');
+                }
+              }}
+              className={`py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                mobileCategory === 'store'
+                  ? 'bg-slate-950 text-white shadow-xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Store</span>
+            </button>
+          </div>
+
+          {/* Sub-items for the active category - cleanly laid out, no horizontal mess */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            {mobileCategory === 'core' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('dashboard')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'dashboard'
+                      ? 'bg-slate-950 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  <span>Overview & Metrics</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('qrcode')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'qrcode'
+                      ? 'bg-slate-950 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>QR Standee</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('ai_agent')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'ai_agent'
+                      ? 'bg-[#6C3BFF] text-white shadow-xs'
+                      : 'bg-purple-50 text-[#6C3BFF] hover:bg-purple-100 border border-purple-200/60'
+                  }`}
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>AI Prompt Engine</span>
+                  <span className="px-1 text-[9px] bg-white/20 rounded">Auto</span>
+                </button>
+              </>
+            )}
+
+            {mobileCategory === 'rewards' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('loyalty')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'loyalty'
+                      ? 'bg-amber-500 text-neutral-950 shadow-xs font-black'
+                      : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200/70'
+                  }`}
+                >
+                  <Gift className="w-3.5 h-3.5" />
+                  <span>Loyalty & Stamp Cards</span>
+                  {loyaltyCards.length > 0 && (
+                    <span className="px-1 text-[9px] bg-neutral-950 text-white rounded">
+                      {loyaltyCards.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('scratch_offers')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'scratch_offers'
+                      ? 'bg-purple-700 text-white shadow-xs'
+                      : 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200/70'
+                  }`}
+                >
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Scratch & Win Draw</span>
+                  <span className="px-1 text-[9px] bg-white/30 rounded">20% Win</span>
+                </button>
+              </>
+            )}
+
+            {mobileCategory === 'intelligence' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('analytics')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'analytics'
+                      ? 'bg-slate-950 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>Live Traffic ({analytics.totalScans})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('feedback')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'feedback'
+                      ? 'bg-slate-950 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <MessageSquareText className="w-3.5 h-3.5" />
+                  <span>Private Shield</span>
+                  {feedbacks.length > 0 && (
+                    <span className="px-1.5 text-[9px] bg-rose-500 text-white rounded-full">
+                      {feedbacks.length}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
+
+            {mobileCategory === 'store' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('business')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'business'
+                      ? 'bg-slate-950 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>Profile & GPS</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('settings')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'settings'
+                      ? 'bg-slate-950 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  <span>Customizer</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('announcements')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'announcements'
+                      ? 'bg-slate-950 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                  <span>Broadcasts</span>
+                  {unreadAnnouncementsCount > 0 && (
+                    <span className="px-1.5 text-[9px] bg-rose-500 text-white rounded-full">
+                      {unreadAnnouncementsCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('security')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'security'
+                      ? 'bg-slate-950 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Security</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('support')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'support'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/60'
+                  }`}
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Support</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
+
+        {/* ALL 12 MODULES MODAL SHEET (Mobile/Tablet Quick Switcher) */}
+        {showAllModulesModal && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+            <div className="bg-white w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-2xl p-5 sm:p-6 max-h-[88vh] overflow-y-auto space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-slate-950 text-white flex items-center justify-center font-bold text-xs">
+                    LB
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-sm">Workspace Directory</h3>
+                    <p className="text-[11px] text-slate-500">Jump to any of the 12 merchant tools</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAllModulesModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* 4 Categorized Sections in Grid */}
+              <div className="space-y-4">
+                {/* Core */}
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                    Core Operations
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('dashboard');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'dashboard' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                      }`}
+                    >
+                      <LayoutDashboard className="w-5 h-5 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Overview & Metrics</div>
+                        <div className={`text-[10px] ${activeTab === 'dashboard' ? 'text-slate-300' : 'text-slate-500'}`}>Live scans & review counters</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('qrcode');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'qrcode' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                      }`}
+                    >
+                      <QrCode className="w-5 h-5 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">QR Code & Standees</div>
+                        <div className={`text-[10px] ${activeTab === 'qrcode' ? 'text-slate-300' : 'text-slate-500'}`}>Print-ready table tents & stickers</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('ai_agent');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer sm:col-span-2 ${
+                        activeTab === 'ai_agent' ? 'bg-[#6C3BFF] text-white border-[#6C3BFF]' : 'bg-purple-50/70 hover:bg-purple-100 border-purple-200/70 text-purple-900'
+                      }`}
+                    >
+                      <Bot className="w-5 h-5 text-purple-500 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">AI Prompt Engine</div>
+                        <div className={`text-[10px] ${activeTab === 'ai_agent' ? 'text-purple-200' : 'text-purple-700'}`}>Keyword extraction & 12 custom drafts</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Rewards */}
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                    Growth & Retention
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('loyalty');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'loyalty' ? 'bg-amber-500 text-neutral-950 border-amber-600 font-bold' : 'bg-amber-50/70 hover:bg-amber-100 border-amber-200/70 text-amber-950'
+                      }`}
+                    >
+                      <Gift className="w-5 h-5 text-amber-600 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Loyalty & Stamp Cards</div>
+                        <div className="text-[10px] text-amber-800">Punch cards for repeat visits</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('scratch_offers');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'scratch_offers' ? 'bg-purple-700 text-white border-purple-800 font-bold' : 'bg-purple-50/70 hover:bg-purple-100 border-purple-200/70 text-purple-950'
+                      }`}
+                    >
+                      <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Scratch & Win Draw</div>
+                        <div className={`text-[10px] ${activeTab === 'scratch_offers' ? 'text-purple-200' : 'text-purple-800'}`}>Gamified reward vouchers</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Intelligence */}
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                    Intelligence & Reputation
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('analytics');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'analytics' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                      }`}
+                    >
+                      <BarChart3 className="w-5 h-5 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Live Traffic & Scans</div>
+                        <div className={`text-[10px] ${activeTab === 'analytics' ? 'text-slate-300' : 'text-slate-500'}`}>Scan trends & customer insights</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('feedback');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'feedback' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                      }`}
+                    >
+                      <MessageSquareText className="w-5 h-5 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Private Feedback Shield</div>
+                        <div className={`text-[10px] ${activeTab === 'feedback' ? 'text-slate-300' : 'text-slate-500'}`}>Intercept negative reviews privately</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Store Settings */}
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                    Store Settings & Security
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('business');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'business' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                      }`}
+                    >
+                      <Store className="w-5 h-5 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Store Profile & GPS</div>
+                        <div className={`text-[10px] ${activeTab === 'business' ? 'text-slate-300' : 'text-slate-500'}`}>Store address & location shield</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('settings');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'settings' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                      }`}
+                    >
+                      <Sliders className="w-5 h-5 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Review Customizer</div>
+                        <div className={`text-[10px] ${activeTab === 'settings' ? 'text-slate-300' : 'text-slate-500'}`}>Brand colors & welcome text</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('announcements');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'announcements' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                      }`}
+                    >
+                      <Bell className="w-5 h-5 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Broadcasts</div>
+                        <div className={`text-[10px] ${activeTab === 'announcements' ? 'text-slate-300' : 'text-slate-500'}`}>System updates & notices</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('security');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'security' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                      }`}
+                    >
+                      <Lock className="w-5 h-5 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Password & Security</div>
+                        <div className={`text-[10px] ${activeTab === 'security' ? 'text-slate-300' : 'text-slate-500'}`}>Credential protection & login keys</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('support');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer sm:col-span-2 ${
+                        activeTab === 'support' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200/80 text-emerald-900'
+                      }`}
+                    >
+                      <HelpCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">WhatsApp Support</div>
+                        <div className={`text-[10px] ${activeTab === 'support' ? 'text-emerald-100' : 'text-emerald-700'}`}>Direct super admin contact</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Workspace Layout: Sidebar Nav + Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Navigation Sidebar (Desktop view) - Structured Brand Hierarchy */}
-          <aside className="hidden lg:block lg:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-xs space-y-4">
+          <aside className="hidden lg:block lg:col-span-3 bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-5 sticky top-20">
+            {/* Quick Brand Mini Header inside Sidebar */}
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+              <div className="w-9 h-9 rounded-xl bg-slate-950 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+                {business.business_name.substring(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs font-black text-slate-900 block truncate">
+                  {business.business_name}
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono block">
+                  {session.user.unique_customer_code} · Verified
+                </span>
+              </div>
+            </div>
+
             {/* Section 1: Growth Engine */}
             <div className="space-y-1">
               <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
-                Growth Engine
+                Core Operations
               </span>
               <button
-                onClick={() => setActiveTab('dashboard')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('dashboard')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'dashboard'
                     ? 'bg-slate-950 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -1765,8 +2394,8 @@ Please generate:
               </button>
 
               <button
-                onClick={() => setActiveTab('qrcode')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('qrcode')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'qrcode'
                     ? 'bg-slate-950 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -1779,8 +2408,8 @@ Please generate:
               </button>
 
               <button
-                onClick={() => setActiveTab('ai_agent')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('ai_agent')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'ai_agent'
                     ? 'bg-[#6C3BFF] text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:bg-purple-50 hover:text-[#6C3BFF]'
@@ -1801,11 +2430,11 @@ Please generate:
             {/* Section 2: Customer Retention */}
             <div className="space-y-1 pt-2 border-t border-slate-100">
               <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
-                Customer Retention
+                Growth & Retention
               </span>
               <button
-                onClick={() => setActiveTab('loyalty')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('loyalty')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'loyalty'
                     ? 'bg-amber-500 text-neutral-950 font-black shadow-xs'
                     : 'text-slate-700 hover:bg-amber-50/80 hover:text-amber-900'
@@ -1823,8 +2452,8 @@ Please generate:
               </button>
 
               <button
-                onClick={() => setActiveTab('scratch_offers')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('scratch_offers')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'scratch_offers'
                     ? 'bg-purple-700 text-white font-bold shadow-xs'
                     : 'text-slate-700 hover:bg-purple-50/80 hover:text-purple-900'
@@ -1832,7 +2461,7 @@ Please generate:
               >
                 <div className="flex items-center gap-2.5">
                   <Trophy className="w-4 h-4 text-amber-400" />
-                  <span>Scratch & Win Lucky Draw</span>
+                  <span>Scratch & Win Draw</span>
                 </div>
                 <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
                   activeTab === 'scratch_offers' ? 'bg-white text-purple-900' : 'bg-purple-100 text-purple-800'
@@ -1848,8 +2477,8 @@ Please generate:
                 Intelligence & Reviews
               </span>
               <button
-                onClick={() => setActiveTab('analytics')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('analytics')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'analytics'
                     ? 'bg-slate-950 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -1865,8 +2494,8 @@ Please generate:
               </button>
 
               <button
-                onClick={() => setActiveTab('feedback')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('feedback')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'feedback'
                     ? 'bg-slate-950 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -1890,8 +2519,8 @@ Please generate:
                 Store Settings
               </span>
               <button
-                onClick={() => setActiveTab('business')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('business')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'business'
                     ? 'bg-slate-950 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -1904,8 +2533,8 @@ Please generate:
               </button>
 
               <button
-                onClick={() => setActiveTab('settings')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('settings')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'settings'
                     ? 'bg-slate-950 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -1918,8 +2547,8 @@ Please generate:
               </button>
 
               <button
-                onClick={() => setActiveTab('announcements')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('announcements')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'announcements'
                     ? 'bg-slate-950 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -1937,22 +2566,8 @@ Please generate:
               </button>
 
               <button
-                onClick={() => setActiveTab('support')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'support'
-                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <HelpCircle className="w-4 h-4 text-emerald-500" />
-                  <span>WhatsApp Support</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('security')}
-                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                onClick={() => handleSelectTab('security')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                   activeTab === 'security'
                     ? 'bg-slate-950 text-white font-bold shadow-xs'
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
@@ -1963,12 +2578,26 @@ Please generate:
                   <span>Password & Security</span>
                 </div>
               </button>
+
+              <button
+                onClick={() => handleSelectTab('support')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'support'
+                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <HelpCircle className="w-4 h-4 text-emerald-500" />
+                  <span>WhatsApp Support</span>
+                </div>
+              </button>
             </div>
 
             <div className="pt-3 mt-2 border-t border-neutral-100">
               <button
                 onClick={onSignOut}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-medium text-neutral-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-medium text-neutral-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Sign Out</span>
@@ -4167,85 +4796,85 @@ Please generate:
             {/* TAB: DASHBOARD OVERVIEW */}
             {activeTab === 'dashboard' && (
               <div className="space-y-6">
-                {/* Metrics Cards: Mobile Touch Slider Carousel + Desktop 4-col Grid */}
+                {/* Metrics Cards: Clean Responsive Grid (No horizontal overflow slider) */}
                 <div className="space-y-1.5">
-                  <div className="flex sm:grid sm:grid-cols-4 gap-3.5 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1.5 pt-0.5">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     {/* Stat 1: Total QR Scans */}
-                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs shrink-0 sm:shrink flex flex-col justify-between hover:border-slate-300 transition-colors">
+                    <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-colors">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                           Total QR Scans
                         </span>
-                        <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
                           <QrCode className="w-4 h-4" />
                         </div>
                       </div>
-                      <div className="mt-3">
-                        <span className="text-3xl font-black text-slate-900 font-mono tracking-tight tabular-nums">
+                      <div className="mt-2.5 sm:mt-3">
+                        <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight tabular-nums block">
                           {analytics.totalScans}
                         </span>
-                        <span className="text-[11px] text-slate-400 block mt-1 font-medium">Customer camera scans</span>
+                        <span className="text-[10px] sm:text-[11px] text-slate-400 block mt-0.5 font-medium">Customer camera scans</span>
                       </div>
                     </div>
 
                     {/* Stat 2: Rating Interactions */}
-                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs shrink-0 sm:shrink flex flex-col justify-between hover:border-slate-300 transition-colors">
+                    <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-colors">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                           Ratings Selected
                         </span>
-                        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
                           <CheckCircle2 className="w-4 h-4" />
                         </div>
                       </div>
-                      <div className="mt-3">
-                        <span className="text-3xl font-black text-slate-900 font-mono tracking-tight tabular-nums">
+                      <div className="mt-2.5 sm:mt-3">
+                        <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight tabular-nums block">
                           {analytics.totalRatings}
                         </span>
-                        <span className="text-[11px] text-slate-400 block mt-1 font-medium">1 to 5 star taps logged</span>
+                        <span className="text-[10px] sm:text-[11px] text-slate-400 block mt-0.5 font-medium">1 to 5 star taps</span>
                       </div>
                     </div>
 
                     {/* Stat 3: Avg Rating */}
-                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs shrink-0 sm:shrink flex flex-col justify-between hover:border-slate-300 transition-colors">
+                    <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-colors">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                           Store Rating
                         </span>
-                        <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
                           <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
                         </div>
                       </div>
-                      <div className="mt-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-3xl font-black text-slate-900 font-mono tracking-tight tabular-nums">
+                      <div className="mt-2.5 sm:mt-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight tabular-nums">
                             {analytics.averageRating > 0 ? analytics.averageRating : '5.0'}
                           </span>
                           <div className="flex items-center text-amber-400">
                             {[1, 2, 3, 4, 5].map((i) => (
-                              <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                              <Star key={i} className="w-3 sm:w-3.5 h-3 sm:h-3.5 fill-amber-400 text-amber-400" />
                             ))}
                           </div>
                         </div>
-                        <span className="text-[11px] text-slate-400 block mt-1 font-medium">Verified customer feedback</span>
+                        <span className="text-[10px] sm:text-[11px] text-slate-400 block mt-0.5 font-medium">Verified customer score</span>
                       </div>
                     </div>
 
                     {/* Stat 4: Google Review Redirects */}
-                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs shrink-0 sm:shrink flex flex-col justify-between hover:border-slate-300 transition-colors">
+                    <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-colors">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                          Google Review Clicks
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Google 5★ Clicks
                         </span>
-                        <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center shrink-0">
                           <Sparkles className="w-4 h-4" />
                         </div>
                       </div>
-                      <div className="mt-3">
-                        <span className="text-3xl font-black text-[#6C3BFF] font-mono tracking-tight tabular-nums">
+                      <div className="mt-2.5 sm:mt-3">
+                        <span className="text-2xl sm:text-3xl font-black text-[#6C3BFF] font-mono tracking-tight tabular-nums block">
                           {analytics.googleClicks}
                         </span>
-                        <span className="text-[11px] text-slate-400 block mt-1 font-medium">5-Star Google redirects</span>
+                        <span className="text-[10px] sm:text-[11px] text-slate-400 block mt-0.5 font-medium">5-Star Google redirects</span>
                       </div>
                     </div>
                   </div>
@@ -4381,79 +5010,9 @@ Please generate:
                         </div>
                       </div>
 
-                      {/* Mobile Setup Checklist Slider */}
-                      <div className="block sm:hidden">
-                        <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 no-scrollbar pb-2 pt-0.5">
-                          {checklistItems.map((item, idx) => (
-                            <div
-                              key={item.id}
-                              onClick={() => handleChecklistAction(item)}
-                              className={`min-w-[82vw] snap-center p-4 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-3 shrink-0 ${
-                                item.isDone
-                                  ? 'bg-neutral-50/80 border-neutral-200'
-                                  : 'bg-amber-50/40 border-amber-300 shadow-2xs'
-                              }`}
-                            >
-                              <div className="flex items-start gap-2.5">
-                                <button
-                                  type="button"
-                                  title={item.isDone ? 'Mark Incomplete' : 'Mark Completed'}
-                                  onClick={(e) => handleToggleItemCheck(item.id, e)}
-                                  className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 cursor-pointer ${
-                                    item.isDone
-                                      ? 'bg-emerald-100 text-emerald-600'
-                                      : 'bg-amber-100 text-amber-700'
-                                  }`}
-                                >
-                                  {item.isDone ? (
-                                    <Check className="w-3.5 h-3.5" />
-                                  ) : (
-                                    <Clock className="w-3 h-3" />
-                                  )}
-                                </button>
-                                <div>
-                                  <div className="flex items-center gap-1.5 mb-0.5">
-                                    <span className="text-[10px] font-bold text-neutral-400">Step {idx + 1} of {totalCount}</span>
-                                    {item.isDone && (
-                                      <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">Completed</span>
-                                    )}
-                                  </div>
-                                  <span className="font-bold text-neutral-900 text-xs block">
-                                    {item.title}
-                                  </span>
-                                  <span className="text-[11px] text-neutral-500 line-clamp-2 mt-0.5 block">
-                                    {item.desc}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleChecklistAction(item);
-                                }}
-                                className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                                  item.isDone
-                                    ? 'bg-white border border-neutral-200 text-neutral-700'
-                                    : 'bg-[#6C3BFF] text-white shadow-xs'
-                                }`}
-                              >
-                                <span>{item.actionLabel}</span>
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex justify-between items-center text-[10px] text-neutral-400 px-1 pt-1">
-                          <span>👈 Swipe steps horizontally 👉</span>
-                          <span className="font-bold text-[#6C3BFF]">{completedCount} of {totalCount} Done</span>
-                        </div>
-                      </div>
-
-                      {/* Desktop Setup Checklist Grid */}
-                      <div className="hidden sm:grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                        {checklistItems.map((item) => (
+                      {/* Setup Checklist Grid (Clean Responsive Layout) */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-3 text-xs">
+                        {checklistItems.map((item, idx) => (
                           <div
                             key={item.id}
                             onClick={() => handleChecklistAction(item)}
@@ -4463,7 +5022,7 @@ Please generate:
                                 : 'bg-amber-50/30 border-amber-200/80 hover:border-amber-400 hover:bg-amber-50/60'
                             }`}
                           >
-                            <div className="flex items-start gap-2.5">
+                            <div className="flex items-start gap-2.5 min-w-0">
                               <button
                                 type="button"
                                 title={item.isDone ? 'Mark Incomplete' : 'Mark Completed'}
@@ -4480,31 +5039,29 @@ Please generate:
                                   <Clock className="w-3 h-3" />
                                 )}
                               </button>
-                              <div>
-                                <span className="font-bold text-neutral-900 group-hover:text-[#6C3BFF] transition-colors block">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className="text-[10px] font-bold text-neutral-400">Step {idx + 1} of {totalCount}</span>
+                                  {item.isDone && (
+                                    <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">Completed</span>
+                                  )}
+                                </div>
+                                <span className={`font-bold block truncate text-xs ${item.isDone ? 'line-through text-neutral-400' : 'text-neutral-900 group-hover:text-[#6C3BFF]'}`}>
                                   {item.title}
                                 </span>
-                                <span className="text-[11px] text-neutral-500 line-clamp-1">
+                                <span className="text-[11px] text-neutral-500 line-clamp-1 mt-0.5 block">
                                   {item.desc}
                                 </span>
                               </div>
                             </div>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleChecklistAction(item);
-                              }}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 ml-2 cursor-pointer flex items-center gap-1 ${
-                                item.isDone
-                                  ? 'bg-white border border-neutral-200 text-neutral-600 group-hover:bg-[#6C3BFF] group-hover:text-white group-hover:border-[#6C3BFF]'
-                                  : 'bg-amber-500 text-white shadow-2xs group-hover:bg-amber-600'
-                              }`}
-                            >
+                            <span className={`text-[11px] font-bold shrink-0 ml-3 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 ${
+                              item.isDone
+                                ? 'bg-neutral-100 text-neutral-500'
+                                : 'bg-[#6C3BFF] text-white shadow-xs group-hover:bg-[#5929e2]'
+                            }`}>
                               <span>{item.actionLabel}</span>
                               <ChevronRight className="w-3 h-3" />
-                            </button>
+                            </span>
                           </div>
                         ))}
                       </div>
