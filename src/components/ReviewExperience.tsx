@@ -9,6 +9,7 @@ import {
   Heart,
   ChevronRight,
   Shield,
+  ShieldCheck,
   ArrowLeft,
   Sparkles,
   Gift,
@@ -1374,10 +1375,14 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
             )}
           </div>
 
-          {/* Footer note */}
-          <div className="px-6 py-3.5 bg-neutral-50 border-t border-neutral-100 text-center">
-            <p className="text-[10px] text-neutral-400">
-              Powered by LocalBoost AI · Trusted feedback verification
+          {/* Brand trust footer */}
+          <div className="px-6 py-4 bg-slate-50/90 border-t border-slate-100 text-center flex flex-col items-center justify-center gap-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Verified On-Premise Review Experience</span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium">
+              Powered by <strong className="text-slate-600 font-semibold">LocalBoost AI</strong> · 100% Genuine Customer Feedback
             </p>
           </div>
         </div>

@@ -959,22 +959,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 pb-16">
-      {/* Top Banner */}
-      <div className="bg-neutral-900 text-white px-6 py-4 border-b border-neutral-800">
+      {/* Top Banner - Executive Brand Control */}
+      <div className="bg-slate-950 text-white px-4 sm:px-6 py-4 border-b border-slate-800">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-[#6C3BFF] text-white rounded-xl">
-              <Shield className="w-5 h-5" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-linear-to-br from-[#6C3BFF] to-indigo-600 text-white rounded-xl flex items-center justify-center shadow-xs shrink-0">
+              <Shield className="w-5 h-5 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold">Super Admin Control Center</h1>
+                <h1 className="text-base font-black tracking-tight text-white">Super Admin Control Center</h1>
                 <span className="px-2 py-0.5 text-[10px] font-bold bg-purple-500/20 text-purple-300 rounded border border-purple-500/30">
                   Platform RBAC
                 </span>
               </div>
-              <p className="text-xs text-neutral-400">
-                Logged in as {session.user.full_name} ({session.user.email})
+              <p className="text-xs text-slate-400 font-medium">
+                Administrator: <span className="text-slate-200 font-semibold">{session.user.full_name}</span> ({session.user.email})
               </p>
             </div>
           </div>
@@ -983,21 +983,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={handleCopyMobileLink}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#6C3BFF] hover:bg-[#5A2DE2] rounded-lg transition-colors shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#6C3BFF] hover:bg-[#5A2DE2] rounded-xl transition-all shadow-xs cursor-pointer"
             >
               <Smartphone className="w-3.5 h-3.5" />
               <span>{copiedMobileLink ? '✓ Copied Link!' : 'Share Mobile Link'}</span>
             </button>
             <button
               onClick={loadAll}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-300 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-xl transition-colors cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Refresh Metrics</span>
             </button>
             <button
               onClick={onSignOut}
-              className="px-3 py-1.5 text-xs font-medium text-rose-400 hover:bg-neutral-800 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-xs font-semibold text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/20 rounded-xl transition-colors cursor-pointer"
             >
               Sign Out
             </button>
@@ -1006,7 +1006,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {notice && (
-        <div className="max-w-7xl mx-auto mt-4 px-6">
+        <div className="max-w-7xl mx-auto mt-4 px-4 sm:px-6">
           <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium rounded-xl flex items-center justify-between">
             <span>{notice}</span>
             <button onClick={() => setNotice(null)} className="text-emerald-600 hover:text-emerald-900">
@@ -1018,14 +1018,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-6">
-        {/* Navigation Tabs - Mobile Touch Slider */}
-        <div className="flex items-center gap-2 border-b border-neutral-200 pb-3 mb-6 overflow-x-auto no-scrollbar scroll-smooth snap-x">
+        {/* Navigation Tabs - Brand Segmented Bar */}
+        <div className="p-1 bg-slate-100/80 border border-slate-200/70 rounded-2xl flex items-center gap-1 mb-6 overflow-x-auto no-scrollbar scroll-smooth snap-x">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap shrink-0 snap-start cursor-pointer ${
               activeTab === 'overview'
-                ? 'bg-[#6C3BFF] text-white shadow-xs'
-                : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                ? 'bg-slate-950 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-white/60'
             }`}
           >
             Global Analytics
@@ -1033,43 +1033,43 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => setActiveTab('customers')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap shrink-0 snap-start cursor-pointer ${
               activeTab === 'customers'
-                ? 'bg-[#6C3BFF] text-white shadow-xs'
-                : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                ? 'bg-slate-950 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-white/60'
             }`}
           >
-            Customer Management & Settings ({customerRows.length})
+            Customer Management ({customerRows.length})
           </button>
 
           <button
             onClick={() => setActiveTab('announcements')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap shrink-0 snap-start cursor-pointer ${
               activeTab === 'announcements'
-                ? 'bg-[#6C3BFF] text-white shadow-xs'
-                : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                ? 'bg-slate-950 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-white/60'
             }`}
           >
-            Announcements ({announcements.length})
+            Broadcasts ({announcements.length})
           </button>
 
           <button
             onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap shrink-0 snap-start cursor-pointer ${
               activeTab === 'settings'
-                ? 'bg-[#6C3BFF] text-white shadow-xs'
-                : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                ? 'bg-slate-950 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-white/60'
             }`}
           >
-            Platform & Global Settings
+            Platform Settings & Supabase
           </button>
 
           <button
             onClick={() => setActiveTab('audit')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors whitespace-nowrap shrink-0 snap-start ${
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap shrink-0 snap-start cursor-pointer ${
               activeTab === 'audit'
-                ? 'bg-[#6C3BFF] text-white shadow-xs'
-                : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+                ? 'bg-slate-950 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-white/60'
             }`}
           >
             Inspection Audit Logs ({auditLogs.length})

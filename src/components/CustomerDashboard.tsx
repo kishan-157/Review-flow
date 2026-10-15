@@ -1573,47 +1573,68 @@ Please generate:
           const accessStatus = checkCustomerAccessStatus(session.user);
           return (
             <>
-              {/* Top Header Card */}
-              <div className="bg-white rounded-2xl p-6 border border-neutral-200 shadow-xs mb-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-bold text-neutral-900 tracking-tight">
-                      {business.business_name}
-                    </h1>
-                    {accessStatus.isLifetime ? (
-                      <span className="px-2.5 py-0.5 text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 rounded-md flex items-center gap-1">
-                        <Sparkles className="w-3 h-3 text-[#6C3BFF]" />
-                        Lifetime Access
-                      </span>
-                    ) : accessStatus.isExpired ? (
-                      <span className="px-2.5 py-0.5 text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-md flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3 text-rose-600" />
-                        Access Expired
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-emerald-600" />
-                        {accessStatus.daysRemaining} Days Left
-                      </span>
-                    )}
+              {/* Top Header Card - Executive Merchant Banner */}
+              <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-xs mb-6 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all">
+                <div className="flex items-center gap-4">
+                  {business.logo_url ? (
+                    <img
+                      src={business.logo_url}
+                      alt={business.business_name}
+                      className="w-14 h-14 rounded-2xl object-cover border border-slate-200 shadow-2xs shrink-0"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-slate-900 to-[#6C3BFF] text-white flex items-center justify-center font-black text-xl shadow-xs shrink-0">
+                      {business.business_name.substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+                        {business.business_name}
+                      </h1>
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/80">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Live QR Station</span>
+                      </div>
+                      {accessStatus.isLifetime ? (
+                        <span className="px-2.5 py-0.5 text-[11px] font-bold text-[#6C3BFF] bg-purple-50 border border-purple-200/80 rounded-full flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-[#6C3BFF]" />
+                          Lifetime License
+                        </span>
+                      ) : accessStatus.isExpired ? (
+                        <span className="px-2.5 py-0.5 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-full flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                          Access Expired
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-full flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-500" />
+                          {accessStatus.daysRemaining} Days Left
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-medium">
+                      <span>Owner: <strong className="text-slate-700 font-semibold">{session.user.full_name}</strong></span>
+                      <span aria-hidden="true">·</span>
+                      <span>Category: <span className="text-slate-700 font-semibold">{business.category || 'Retail & Hospitality'}</span></span>
+                      <span aria-hidden="true">·</span>
+                      <span>Expires: <span className="text-slate-600 font-mono">{accessStatus.expiresFormatted}</span></span>
+                    </div>
                   </div>
-                  <p className="text-xs text-neutral-500">
-                    Welcome back, {session.user.full_name} · Plan Validity: {accessStatus.expiresFormatted}
-                  </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Customer ID Box */}
-                  <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 px-3 py-1.5 rounded-xl">
-                    <span className="text-[11px] text-neutral-500 font-medium">Customer ID:</span>
-                    <span className="text-xs font-bold font-mono text-[#6C3BFF]">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Customer Code Box */}
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl">
+                    <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">Store ID:</span>
+                    <span className="text-xs font-black font-mono text-[#6C3BFF]">
                       {session.user.unique_customer_code}
                     </span>
                     <button
                       type="button"
                       onClick={handleCopyCode}
                       title="Copy Customer ID"
-                      className="p-1 text-neutral-400 hover:text-neutral-700 rounded-md hover:bg-neutral-200/50 transition-colors cursor-pointer"
+                      className="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-200/50 transition-colors cursor-pointer"
                     >
                       {copiedCode ? (
                         <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -1628,10 +1649,10 @@ Please generate:
                     <button
                       type="button"
                       onClick={() => onPreviewReviewFlow(business, settings)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-neutral-800 bg-neutral-100 hover:bg-neutral-200 rounded-xl transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs transition-all cursor-pointer"
                     >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Preview Review Flow</span>
+                      <Eye className="w-3.5 h-3.5 text-[#6C3BFF]" />
+                      <span>Preview Flow</span>
                     </button>
                   )}
 
@@ -1640,9 +1661,9 @@ Please generate:
                     href={business.google_review_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-[#6C3BFF] hover:bg-[#5A2DE2] rounded-xl shadow-xs transition-colors"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-slate-950 hover:bg-[#6C3BFF] rounded-xl shadow-xs transition-all cursor-pointer"
                   >
-                    <span>Google Destination</span>
+                    <span>Google Reviews</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 </div>
@@ -1676,400 +1697,273 @@ Please generate:
           );
         })()}
 
-        {/* MOBILE SLIDER NAVIGATION BAR (User Friendly Touch Carousel for Mobile Phones) */}
-        <div className="block lg:hidden mb-4 bg-white/95 backdrop-blur-md rounded-2xl border border-neutral-200 p-2.5 shadow-xs sticky top-2 z-20">
-          <div className="flex items-center justify-between pb-2 px-1 border-b border-neutral-100 text-[11px]">
-            <div className="flex items-center gap-1.5 font-bold text-neutral-800">
+        {/* MOBILE SLIDER NAVIGATION BAR - Clean Brand Segments */}
+        <div className="block lg:hidden mb-4 bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/80 p-2.5 shadow-xs sticky top-2 z-20">
+          <div className="flex items-center justify-between pb-2 px-1 border-b border-slate-100 text-[11px]">
+            <div className="flex items-center gap-1.5 font-bold text-slate-800">
               <SlidersHorizontal className="w-3.5 h-3.5 text-[#6C3BFF]" />
-              <span>Features Slider Menu</span>
+              <span>Workspace Modules</span>
             </div>
-            <div className="flex items-center gap-1 text-[10px] text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full font-semibold">
-              <span>👈 Swipe to explore 👉</span>
+            <div className="flex items-center gap-1 text-[10px] text-slate-500 font-semibold">
+              <span>Swipe horizontally</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth snap-x pt-2.5 pb-1 px-0.5">
-            <button
-              type="button"
-              onClick={() => setActiveTab('dashboard')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'dashboard'
-                  ? 'bg-linear-to-r from-[#6C3BFF] to-[#8B5CF6] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Overview</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('loyalty')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'loyalty'
-                  ? 'bg-linear-to-r from-amber-500 to-amber-600 text-neutral-950 shadow-xs ring-2 ring-amber-300/40'
-                  : 'bg-amber-50/70 text-amber-900 hover:bg-amber-100/70 border border-amber-200/80'
-              }`}
-            >
-              <Gift className="w-3.5 h-3.5 text-amber-600" />
-              <span>Loyalty & Rewards</span>
-              <span className={`px-1.5 py-0.5 text-[9px] rounded-md font-extrabold ${
-                activeTab === 'loyalty' ? 'bg-neutral-950 text-white' : 'bg-amber-200 text-amber-950'
-              }`}>
-                {loyaltyCards.length > 0 ? `${loyaltyCards.length}` : 'New'}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('scratch_offers')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'scratch_offers'
-                  ? 'bg-linear-to-r from-purple-700 to-indigo-700 text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-purple-50/70 text-purple-900 hover:bg-purple-100/70 border border-purple-200/80'
-              }`}
-            >
-              <Trophy className="w-3.5 h-3.5 text-amber-400" />
-              <span>Scratch & Win</span>
-              <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-purple-200 text-purple-900 font-extrabold">
-                Free
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('ai_agent')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'ai_agent'
-                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <Bot className="w-3.5 h-3.5" />
-              <span>AI Agent & Prompt</span>
-              <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-purple-100 text-[#6C3BFF] font-extrabold">
-                Auto
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('qrcode')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'qrcode'
-                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>QR Standee</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('analytics')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'analytics'
-                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span>Analytics</span>
-              <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-neutral-200 text-neutral-800 font-mono">
-                {analytics.totalScans}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('feedback')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'feedback'
-                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <MessageSquareText className="w-3.5 h-3.5" />
-              <span>Private Feedback</span>
-              {feedbacks.length > 0 && (
-                <span className="px-1.5 py-0.5 text-[9px] rounded-md bg-neutral-200 text-neutral-800 font-bold">
-                  {feedbacks.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('business')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'business'
-                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <Store className="w-3.5 h-3.5" />
-              <span>Profile</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('settings')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'settings'
-                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Settings</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('announcements')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'announcements'
-                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <Bell className="w-3.5 h-3.5" />
-              <span>Announcements</span>
-              {unreadAnnouncementsCount > 0 && (
-                <span className="px-1.5 py-0.5 text-[9px] rounded-full bg-rose-500 text-white font-bold">
-                  {unreadAnnouncementsCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('support')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'support'
-                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-              <span>Support</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('security')}
-              className={`snap-start shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                activeTab === 'security'
-                  ? 'bg-[#6C3BFF] text-white shadow-xs ring-2 ring-purple-300/40'
-                  : 'bg-neutral-50 text-neutral-700 hover:bg-neutral-100 border border-neutral-200/80'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Security</span>
-            </button>
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth snap-x pt-2.5 pb-1 px-0.5">
+            {[
+              { tab: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+              { tab: 'qrcode', label: 'QR Standee', icon: QrCode },
+              { tab: 'loyalty', label: 'Loyalty Cards', icon: Gift },
+              { tab: 'scratch_offers', label: 'Scratch & Win', icon: Trophy },
+              { tab: 'ai_agent', label: 'AI Engine', icon: Bot },
+              { tab: 'analytics', label: 'Analytics', icon: BarChart3 },
+              { tab: 'feedback', label: 'Private Shield', icon: MessageSquareText },
+              { tab: 'business', label: 'Store Profile', icon: Store },
+              { tab: 'settings', label: 'Customizer', icon: Sliders },
+              { tab: 'announcements', label: 'Broadcasts', icon: Bell },
+              { tab: 'security', label: 'Security', icon: Lock },
+              { tab: 'support', label: 'Support', icon: HelpCircle },
+            ].map(({ tab, label, icon: Icon }) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab as any)}
+                className={`snap-start shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeTab === tab
+                    ? 'bg-slate-950 text-white shadow-xs'
+                    : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/70'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Workspace Layout: Sidebar Nav + Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Navigation Sidebar (Desktop view) */}
-          <aside className="hidden lg:block lg:col-span-3 bg-white rounded-2xl border border-neutral-200 p-3 shadow-xs space-y-1">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
-                activeTab === 'dashboard'
-                  ? 'bg-purple-50 text-[#6C3BFF]'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <LayoutDashboard className="w-4 h-4" />
-                <span>Dashboard Overview</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('loyalty')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-all ${
-                activeTab === 'loyalty'
-                  ? 'bg-linear-to-r from-amber-500 to-amber-600 text-neutral-950 font-bold shadow-xs'
-                  : 'text-neutral-700 hover:bg-amber-50/80 hover:text-amber-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Gift className="w-4 h-4 text-amber-500" />
-                <span>Loyalty & Rewards</span>
-              </div>
-              <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
-                activeTab === 'loyalty' ? 'bg-neutral-950 text-white' : 'bg-amber-100 text-amber-900'
-              }`}>
-                {loyaltyCards.length > 0 ? `${loyaltyCards.length} Cards` : 'New'}
+          {/* Navigation Sidebar (Desktop view) - Structured Brand Hierarchy */}
+          <aside className="hidden lg:block lg:col-span-3 bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-xs space-y-4">
+            {/* Section 1: Growth Engine */}
+            <div className="space-y-1">
+              <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
+                Growth Engine
               </span>
-            </button>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'dashboard'
+                    ? 'bg-slate-950 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span>Overview & Metrics</span>
+                </div>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('scratch_offers')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-all ${
-                activeTab === 'scratch_offers'
-                  ? 'bg-linear-to-r from-purple-700 to-indigo-700 text-white font-bold shadow-xs'
-                  : 'text-neutral-700 hover:bg-purple-50/80 hover:text-purple-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Trophy className="w-4 h-4 text-amber-500" />
-                <span>Scratch & Win Offers</span>
-              </div>
-              <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
-                activeTab === 'scratch_offers' ? 'bg-white text-purple-900' : 'bg-purple-100 text-purple-800'
-              }`}>
-                Optional
-              </span>
-            </button>
+              <button
+                onClick={() => setActiveTab('qrcode')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'qrcode'
+                    ? 'bg-slate-950 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <QrCode className="w-4 h-4" />
+                  <span>QR Code & Standees</span>
+                </div>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('ai_agent')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-all ${
-                activeTab === 'ai_agent'
-                  ? 'bg-[#6C3BFF] text-white shadow-sm'
-                  : 'text-neutral-700 hover:bg-purple-50/80 hover:text-[#6C3BFF]'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Bot className="w-4 h-4" />
-                <span>AI Agent & Prompt</span>
-              </div>
-              <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
-                activeTab === 'ai_agent' ? 'bg-white/20 text-white' : 'bg-purple-100 text-[#6C3BFF]'
-              }`}>
-                Auto
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('qrcode')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
-                activeTab === 'qrcode'
-                  ? 'bg-purple-50 text-[#6C3BFF]'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <QrCode className="w-4 h-4" />
-                <span>QR Code & Standee</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('analytics')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
-                activeTab === 'analytics'
-                  ? 'bg-purple-50 text-[#6C3BFF]'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <BarChart3 className="w-4 h-4" />
-                <span>Analytics & Funnel</span>
-              </div>
-              <span className="font-mono text-[11px] text-neutral-400">
-                {analytics.totalScans}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('feedback')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
-                activeTab === 'feedback'
-                  ? 'bg-purple-50 text-[#6C3BFF]'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <MessageSquareText className="w-4 h-4" />
-                <span>Private Feedback</span>
-              </div>
-              {feedbacks.length > 0 && (
-                <span className="px-1.5 py-0.5 text-[10px] font-bold bg-neutral-100 text-neutral-700 rounded-md">
-                  {feedbacks.length}
+              <button
+                onClick={() => setActiveTab('ai_agent')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'ai_agent'
+                    ? 'bg-[#6C3BFF] text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-purple-50 hover:text-[#6C3BFF]'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Bot className="w-4 h-4 text-purple-500" />
+                  <span>AI Prompt Engine</span>
+                </div>
+                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                  activeTab === 'ai_agent' ? 'bg-white/20 text-white' : 'bg-purple-100 text-[#6C3BFF]'
+                }`}>
+                  Auto
                 </span>
-              )}
-            </button>
+              </button>
+            </div>
 
-            <button
-              onClick={() => setActiveTab('business')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
-                activeTab === 'business'
-                  ? 'bg-purple-50 text-[#6C3BFF]'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Store className="w-4 h-4" />
-                <span>Business Profile</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
-                activeTab === 'settings'
-                  ? 'bg-purple-50 text-[#6C3BFF]'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Sliders className="w-4 h-4" />
-                <span>Review Settings</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('announcements')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
-                activeTab === 'announcements'
-                  ? 'bg-purple-50 text-[#6C3BFF]'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Bell className="w-4 h-4" />
-                <span>Announcements</span>
-              </div>
-              {unreadAnnouncementsCount > 0 && (
-                <span className="px-2 py-0.5 text-[10px] font-bold bg-rose-500 text-white rounded-full">
-                  {unreadAnnouncementsCount}
+            {/* Section 2: Customer Retention */}
+            <div className="space-y-1 pt-2 border-t border-slate-100">
+              <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
+                Customer Retention
+              </span>
+              <button
+                onClick={() => setActiveTab('loyalty')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'loyalty'
+                    ? 'bg-amber-500 text-neutral-950 font-black shadow-xs'
+                    : 'text-slate-700 hover:bg-amber-50/80 hover:text-amber-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Gift className="w-4 h-4 text-amber-500" />
+                  <span>Loyalty & Stamp Cards</span>
+                </div>
+                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                  activeTab === 'loyalty' ? 'bg-neutral-950 text-white' : 'bg-amber-100 text-amber-900'
+                }`}>
+                  {loyaltyCards.length > 0 ? `${loyaltyCards.length}` : 'New'}
                 </span>
-              )}
-            </button>
+              </button>
 
-            <button
-              onClick={() => setActiveTab('support')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
-                activeTab === 'support'
-                  ? 'bg-purple-50 text-[#6C3BFF]'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <HelpCircle className="w-4 h-4" />
-                <span>WhatsApp Support</span>
-              </div>
-            </button>
+              <button
+                onClick={() => setActiveTab('scratch_offers')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'scratch_offers'
+                    ? 'bg-purple-700 text-white font-bold shadow-xs'
+                    : 'text-slate-700 hover:bg-purple-50/80 hover:text-purple-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span>Scratch & Win Lucky Draw</span>
+                </div>
+                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                  activeTab === 'scratch_offers' ? 'bg-white text-purple-900' : 'bg-purple-100 text-purple-800'
+                }`}>
+                  20% Win
+                </span>
+              </button>
+            </div>
 
-            <button
-              onClick={() => setActiveTab('security')}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl transition-colors ${
-                activeTab === 'security'
-                  ? 'bg-purple-50 text-[#6C3BFF]'
-                  : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Lock className="w-4 h-4" />
-                <span>Password & Security</span>
-              </div>
-            </button>
+            {/* Section 3: Intelligence & Reviews */}
+            <div className="space-y-1 pt-2 border-t border-slate-100">
+              <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
+                Intelligence & Reviews
+              </span>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'analytics'
+                    ? 'bg-slate-950 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <BarChart3 className="w-4 h-4" />
+                  <span>Live Traffic & Scans</span>
+                </div>
+                <span className="font-mono text-[11px] text-slate-400 font-bold">
+                  {analytics.totalScans}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('feedback')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'feedback'
+                    ? 'bg-slate-950 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <MessageSquareText className="w-4 h-4" />
+                  <span>Private Feedback Shield</span>
+                </div>
+                {feedbacks.length > 0 && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 rounded-md">
+                    {feedbacks.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Section 4: Store & Settings */}
+            <div className="space-y-1 pt-2 border-t border-slate-100">
+              <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
+                Store Settings
+              </span>
+              <button
+                onClick={() => setActiveTab('business')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'business'
+                    ? 'bg-slate-950 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Store className="w-4 h-4" />
+                  <span>Profile & GPS Shield</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'settings'
+                    ? 'bg-slate-950 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Sliders className="w-4 h-4" />
+                  <span>Review Customizer</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('announcements')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'announcements'
+                    ? 'bg-slate-950 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Bell className="w-4 h-4" />
+                  <span>Broadcasts</span>
+                </div>
+                {unreadAnnouncementsCount > 0 && (
+                  <span className="px-1.5 py-0.5 text-[9px] rounded-full bg-rose-500 text-white font-bold">
+                    {unreadAnnouncementsCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setActiveTab('support')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'support'
+                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <HelpCircle className="w-4 h-4 text-emerald-500" />
+                  <span>WhatsApp Support</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('security')}
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'security'
+                    ? 'bg-slate-950 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Lock className="w-4 h-4" />
+                  <span>Password & Security</span>
+                </div>
+              </button>
+            </div>
 
             <div className="pt-3 mt-2 border-t border-neutral-100">
               <button
@@ -4275,64 +4169,85 @@ Please generate:
               <div className="space-y-6">
                 {/* Metrics Cards: Mobile Touch Slider Carousel + Desktop 4-col Grid */}
                 <div className="space-y-1.5">
-                  <div className="flex sm:grid sm:grid-cols-4 gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1.5 pt-0.5">
-                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
-                      <div>
-                        <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                  <div className="flex sm:grid sm:grid-cols-4 gap-3.5 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1.5 pt-0.5">
+                    {/* Stat 1: Total QR Scans */}
+                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs shrink-0 sm:shrink flex flex-col justify-between hover:border-slate-300 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                           Total QR Scans
                         </span>
-                        <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
-                          {analytics.totalScans}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-neutral-400 block mt-2">Interactions logged</span>
-                    </div>
-
-                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
-                      <div>
-                        <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                          Ratings Selected
-                        </span>
-                        <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
-                          {analytics.totalRatings}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-neutral-400 block mt-2">1 to 5 star taps</span>
-                    </div>
-
-                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
-                      <div>
-                        <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
-                          Avg Rating
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-2xl font-bold text-neutral-900 font-mono tabular-nums">
-                            {analytics.averageRating > 0 ? analytics.averageRating : '—'}
-                          </span>
-                          {analytics.averageRating > 0 && (
-                            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                          )}
+                        <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                          <QrCode className="w-4 h-4" />
                         </div>
                       </div>
-                      <span className="text-[10px] text-neutral-400 block mt-2">From user selections</span>
+                      <div className="mt-3">
+                        <span className="text-3xl font-black text-slate-900 font-mono tracking-tight tabular-nums">
+                          {analytics.totalScans}
+                        </span>
+                        <span className="text-[11px] text-slate-400 block mt-1 font-medium">Customer camera scans</span>
+                      </div>
                     </div>
 
-                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs shrink-0 sm:shrink flex flex-col justify-between">
-                      <div>
-                        <span className="text-[11px] font-semibold text-neutral-500 block mb-1">
+                    {/* Stat 2: Rating Interactions */}
+                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs shrink-0 sm:shrink flex flex-col justify-between hover:border-slate-300 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Ratings Selected
+                        </span>
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <span className="text-3xl font-black text-slate-900 font-mono tracking-tight tabular-nums">
+                          {analytics.totalRatings}
+                        </span>
+                        <span className="text-[11px] text-slate-400 block mt-1 font-medium">1 to 5 star taps logged</span>
+                      </div>
+                    </div>
+
+                    {/* Stat 3: Avg Rating */}
+                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs shrink-0 sm:shrink flex flex-col justify-between hover:border-slate-300 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Store Rating
+                        </span>
+                        <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                          <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-3xl font-black text-slate-900 font-mono tracking-tight tabular-nums">
+                            {analytics.averageRating > 0 ? analytics.averageRating : '5.0'}
+                          </span>
+                          <div className="flex items-center text-amber-400">
+                            {[1, 2, 3, 4, 5].map((i) => (
+                              <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                            ))}
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-slate-400 block mt-1 font-medium">Verified customer feedback</span>
+                      </div>
+                    </div>
+
+                    {/* Stat 4: Google Review Redirects */}
+                    <div className="min-w-[70vw] sm:min-w-0 snap-center bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs shrink-0 sm:shrink flex flex-col justify-between hover:border-slate-300 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                           Google Review Clicks
                         </span>
-                        <span className="text-2xl font-bold text-[#6C3BFF] font-mono tabular-nums">
+                        <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#6C3BFF] flex items-center justify-center">
+                          <Sparkles className="w-4 h-4" />
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <span className="text-3xl font-black text-[#6C3BFF] font-mono tracking-tight tabular-nums">
                           {analytics.googleClicks}
                         </span>
+                        <span className="text-[11px] text-slate-400 block mt-1 font-medium">5-Star Google redirects</span>
                       </div>
-                      <span className="text-[10px] text-neutral-400 block mt-2">Redirects initiated</span>
                     </div>
-                  </div>
-                  {/* Mobile swipe hint */}
-                  <div className="flex sm:hidden items-center justify-between text-[10px] text-neutral-400 px-1">
-                    <span>👈 Swipe 4 metric cards 👉</span>
-                    <span className="font-semibold text-purple-700">Live Sync</span>
                   </div>
                 </div>
 
