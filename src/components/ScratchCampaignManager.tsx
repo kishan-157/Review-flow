@@ -30,7 +30,10 @@ import {
   Gift,
   RefreshCw,
   Shuffle,
+  Zap,
+  Image as ImageIcon,
 } from 'lucide-react';
+import { RewardWhatsAppShareModal, RewardVoucherShareData } from './RewardWhatsAppShareModal';
 import {
   Business,
   ScratchCampaign,
@@ -56,7 +59,10 @@ import {
   buildScratchAuditDetails,
   extractVoucherCode,
 } from '../lib/rewardAudit';
-import { downloadRewardPassImage } from '../lib/rewardCardGenerator';
+import {
+  downloadRewardPassImage,
+  sendRewardImageDirectToWhatsAppNumber,
+} from '../lib/rewardCardGenerator';
 
 const DEFAULT_LUCKY_DRAW_PRIZES: ScratchPrizeItem[] = [
   { id: 'p1', name: 'Branded Executive Pen 🖊️', reward_value: 'Free Pen', reward_type: 'free_item' },
@@ -152,6 +158,10 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
   const [phoneSaveNotice, setPhoneSaveNotice] = useState<string | null>(null);
   const [copiedVoucherText, setCopiedVoucherText] = useState<string | null>(null);
   const [whatsappTargetMode, setWhatsappTargetMode] = useState<'app' | 'web'>('app');
+  const [scratchShareModalData, setScratchShareModalData] = useState<{
+    voucher: RewardVoucherShareData;
+    initialMode: 'fast' | 'image' | 'text';
+  } | null>(null);
 
   const businessPhone = business.whatsapp_number || business.phone || '';
 
@@ -1141,9 +1151,40 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                 <h4 className="text-sm font-bold text-neutral-900 mt-1">
                   {redeemResult.reward_title} ({redeemResult.reward_value})
                 </h4>
-                <p className="text-xs text-neutral-600">
-                  Customer: <strong className="text-neutral-900">{redeemResult.customer_name}</strong> (📱 {redeemResult.customer_phone})
-                </p>
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 mt-1">
+                  <span>Customer: <strong className="text-neutral-900">{redeemResult.customer_name}</strong></span>
+                  {redeemResult.customer_phone && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!businessPhone) {
+                          setShowPhoneModal(true);
+                          return;
+                        }
+                        await sendRewardImageDirectToWhatsAppNumber({
+                          targetPhone: redeemResult.customer_phone,
+                          businessName: business.business_name,
+                          rewardTitle: redeemResult.reward_title,
+                          rewardValue: redeemResult.reward_value || undefined,
+                          voucherCode: redeemResult.voucher_code,
+                          customerName: redeemResult.customer_name,
+                          expiresAt: redeemResult.expires_at,
+                          terms: redeemResult.terms_conditions,
+                          bizMarketingPhone: businessPhone,
+                          businessAddress: business.address,
+                          status: redeemResult.status,
+                        });
+                      }}
+                      title="Click this number to 1-Click Send Image directly to customer's WhatsApp"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-100 hover:bg-emerald-600 text-emerald-950 hover:text-white font-mono font-bold text-[11px] transition-all cursor-pointer shadow-2xs border border-emerald-300"
+                    >
+                      <Phone className="w-3 h-3 text-emerald-700" />
+                      <span>{redeemResult.customer_phone}</span>
+                      <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
+                      <span className="text-[9px] bg-amber-400 text-slate-950 px-1 rounded font-black">1-Click Image</span>
+                    </button>
+                  )}
+                </div>
 
                 {/* Rich Origin & Timeline: Kab Mila & Kaise Mila */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 my-2.5">
@@ -1216,24 +1257,94 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                   <span>Download Pass</span>
                 </button>
 
-                {/* WhatsApp Marketing Message to Customer - STRICTLY LOCKED UNTIL SETUP NUMBER IS ENTERED */}
+                {/* WhatsApp Marketing: Dual Options (Pass Image & Text Format) */}
                 {redeemResult.customer_phone && (
                   businessPhone ? (
-                    <a
-                      href={getScratchWhatsAppDispatchUrl(
-                        redeemResult.customer_phone,
-                        redeemResult.status === 'redeemed'
-                          ? buildScratchReceiptMessage(redeemResult)
-                          : buildScratchMarketingMessage(redeemResult)
-                      )}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-2 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-2xs"
-                      title={`Send WhatsApp from Store Account: ${business.business_name} (${businessPhone})`}
-                    >
-                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>{redeemResult.status === 'redeemed' ? 'Send Bill Receipt (WhatsApp)' : 'Send Voucher (WhatsApp)'}</span>
-                    </a>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {/* Option 1: ⚡ Fast Instant WhatsApp (0s wait) */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setScratchShareModalData({
+                            voucher: {
+                              id: redeemResult.id,
+                              voucherCode: redeemResult.voucher_code,
+                              rewardTitle: redeemResult.reward_title,
+                              rewardValue: redeemResult.reward_value || undefined,
+                              customerName: redeemResult.customer_name,
+                              customerPhone: redeemResult.customer_phone,
+                              expiresAt: redeemResult.expires_at,
+                              createdAt: redeemResult.created_at,
+                              terms: 'Present this pass at billing counter during checkout to claim your reward.',
+                              originLabel: '🎉 Lucky Draw Scratch & Win Winner',
+                              status: redeemResult.status,
+                            },
+                            initialMode: 'fast',
+                          })
+                        }
+                        className="px-3 py-2 text-white bg-gradient-to-r from-amber-500 via-amber-600 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-black shadow-sm hover:scale-[1.01]"
+                        title="⚡ Fast Option: Send instant WhatsApp with VIP Digital Pass Link (0 seconds wait)"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-amber-200 fill-amber-200" />
+                        <span>⚡ Fast WhatsApp</span>
+                      </button>
+
+                      {/* Option 2: Send Actual Pass Image */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setScratchShareModalData({
+                            voucher: {
+                              id: redeemResult.id,
+                              voucherCode: redeemResult.voucher_code,
+                              rewardTitle: redeemResult.reward_title,
+                              rewardValue: redeemResult.reward_value || undefined,
+                              customerName: redeemResult.customer_name,
+                              customerPhone: redeemResult.customer_phone,
+                              expiresAt: redeemResult.expires_at,
+                              createdAt: redeemResult.created_at,
+                              terms: 'Present this pass at billing counter during checkout to claim your reward.',
+                              originLabel: '🎉 Lucky Draw Scratch & Win Winner',
+                              status: redeemResult.status,
+                            },
+                            initialMode: 'image',
+                          })
+                        }
+                        className="px-3 py-2 text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-extrabold shadow-sm hover:scale-[1.01]"
+                        title="Send actual downloaded Lucky Draw Reward Pass Image on WhatsApp"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Pass Image</span>
+                      </button>
+
+                      {/* Option 3: Send Text Format */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setScratchShareModalData({
+                            voucher: {
+                              id: redeemResult.id,
+                              voucherCode: redeemResult.voucher_code,
+                              rewardTitle: redeemResult.reward_title,
+                              rewardValue: redeemResult.reward_value || undefined,
+                              customerName: redeemResult.customer_name,
+                              customerPhone: redeemResult.customer_phone,
+                              expiresAt: redeemResult.expires_at,
+                              createdAt: redeemResult.created_at,
+                              terms: 'Present this pass at billing counter during checkout to claim your reward.',
+                              originLabel: '🎉 Lucky Draw Scratch & Win Winner',
+                              status: redeemResult.status,
+                            },
+                            initialMode: 'text',
+                          })
+                        }
+                        className="px-3 py-2 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-2xs"
+                        title="Send text message / letter format on WhatsApp"
+                      >
+                        <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{redeemResult.status === 'redeemed' ? 'Receipt Text' : 'Text Only'}</span>
+                      </button>
+                    </div>
                   ) : (
                     <button
                       type="button"
@@ -1841,7 +1952,36 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-neutral-900">{play.customer_name}</span>
-                        <span className="text-neutral-500 font-mono text-[11px]">{play.customer_phone}</span>
+                        {play.customer_phone && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!businessPhone) {
+                                setShowPhoneModal(true);
+                                return;
+                              }
+                              await sendRewardImageDirectToWhatsAppNumber({
+                                targetPhone: play.customer_phone,
+                                businessName: business.business_name,
+                                rewardTitle: play.reward_title,
+                                rewardValue: play.reward_value || undefined,
+                                voucherCode: play.voucher_code,
+                                customerName: play.customer_name,
+                                expiresAt: play.expires_at,
+                                terms: play.terms_conditions,
+                                bizMarketingPhone: businessPhone,
+                                businessAddress: business.address,
+                                status: isRedeemed ? 'redeemed' : 'active',
+                              });
+                            }}
+                            title="Click number to 1-Click Send Image on WhatsApp"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white font-mono font-bold text-[10px] transition-all cursor-pointer border border-emerald-200"
+                          >
+                            <Phone className="w-2.5 h-2.5 text-emerald-600" />
+                            <span>{play.customer_phone}</span>
+                            <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+                          </button>
+                        )}
                         {isRedeemed ? (
                           <span className="px-1.5 py-0.5 bg-neutral-200 text-neutral-700 rounded text-[9px] font-bold">
                             REDEEMED
@@ -1879,18 +2019,88 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
                       </button>
                       {play.customer_phone && (
                         businessPhone ? (
-                          <a
-                            href={getScratchWhatsAppDispatchUrl(
-                              play.customer_phone,
-                              isRedeemed ? buildScratchReceiptMessage(play) : buildScratchMarketingMessage(play)
-                            )}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-neutral-200"
-                            title={`Send WhatsApp from Store Account: ${business.business_name} (${businessPhone})`}
-                          >
-                            <Phone className="w-3.5 h-3.5" />
-                          </a>
+                          <div className="flex items-center gap-1">
+                            {/* Fast WhatsApp (0s wait) */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setScratchShareModalData({
+                                  voucher: {
+                                    id: play.id,
+                                    voucherCode: play.voucher_code,
+                                    rewardTitle: play.reward_title,
+                                    rewardValue: play.reward_value || undefined,
+                                    customerName: play.customer_name,
+                                    customerPhone: play.customer_phone,
+                                    expiresAt: play.expires_at,
+                                    createdAt: play.created_at,
+                                    terms: 'Present this pass at billing counter during checkout to claim your reward.',
+                                    originLabel: '🎉 Lucky Draw Scratch & Win Winner',
+                                    status: isRedeemed ? 'redeemed' : 'active',
+                                  },
+                                  initialMode: 'fast',
+                                },
+                              )}
+                              className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors cursor-pointer"
+                              title="⚡ Fast Option: Send Instant WhatsApp (0s wait)"
+                            >
+                              <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                            </button>
+
+                            {/* Pass Image Share */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setScratchShareModalData({
+                                  voucher: {
+                                    id: play.id,
+                                    voucherCode: play.voucher_code,
+                                    rewardTitle: play.reward_title,
+                                    rewardValue: play.reward_value || undefined,
+                                    customerName: play.customer_name,
+                                    customerPhone: play.customer_phone,
+                                    expiresAt: play.expires_at,
+                                    createdAt: play.created_at,
+                                    terms: 'Present this pass at billing counter during checkout to claim your reward.',
+                                    originLabel: '🎉 Lucky Draw Scratch & Win Winner',
+                                    status: isRedeemed ? 'redeemed' : 'active',
+                                  },
+                                  initialMode: 'image',
+                                })
+                              }
+                              className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
+                              title="Send VIP Pass Image on WhatsApp"
+                            >
+                              <ImageIcon className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Text Share */}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setScratchShareModalData({
+                                  voucher: {
+                                    id: play.id,
+                                    voucherCode: play.voucher_code,
+                                    rewardTitle: play.reward_title,
+                                    rewardValue: play.reward_value || undefined,
+                                    customerName: play.customer_name,
+                                    customerPhone: play.customer_phone,
+                                    expiresAt: play.expires_at,
+                                    createdAt: play.created_at,
+                                    terms: 'Present this pass at billing counter during checkout to claim your reward.',
+                                    originLabel: '🎉 Lucky Draw Scratch & Win Winner',
+                                    status: isRedeemed ? 'redeemed' : 'active',
+                                  },
+                                  initialMode: 'text',
+                                })
+                              }
+                              className="p-1.5 text-neutral-600 hover:text-emerald-700 hover:bg-neutral-100 border border-neutral-200 rounded-lg transition-colors cursor-pointer"
+                              title="Send Text Message on WhatsApp"
+                            >
+                              <Phone className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         ) : (
                           <button
                             type="button"
@@ -2031,6 +2241,23 @@ export const ScratchCampaignManager: React.FC<ScratchCampaignManagerProps> = ({
         onScanSuccess={handleScanQRSuccess}
         title="Scan Customer Scratch Reward QR"
       />
+
+      {/* Reward WhatsApp Share Modal (Image Pass & Text Format) */}
+      {scratchShareModalData && business && (
+        <RewardWhatsAppShareModal
+          isOpen={!!scratchShareModalData}
+          onClose={() => setScratchShareModalData(null)}
+          voucher={scratchShareModalData.voucher}
+          business={business}
+          bizMarketingPhone={businessPhone}
+          onOpenBizPhoneModal={() => {
+            setScratchShareModalData(null);
+            setTempPhone('');
+            setShowPhoneModal(true);
+          }}
+          initialMode={scratchShareModalData.initialMode}
+        />
+      )}
     </div>
   );
 };

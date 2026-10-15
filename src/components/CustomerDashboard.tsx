@@ -57,7 +57,9 @@ import {
   Trophy,
   Camera,
   Info,
+  Image as ImageIcon,
 } from 'lucide-react';
+import { RewardWhatsAppShareModal, RewardVoucherShareData } from './RewardWhatsAppShareModal';
 import {
   AuthSession,
   Business,
@@ -107,13 +109,17 @@ import { LoyaltyReminderManager } from './LoyaltyReminderManager';
 import { ScratchCampaignManager } from './ScratchCampaignManager';
 import { RewardQRScannerModal } from './RewardQRScannerModal';
 import { RewardAuditCard } from './RewardAuditCard';
+import { WhatsAppMarketingHub } from './WhatsAppMarketingHub';
 import {
   findRewardAuditDetails,
   RewardAuditDetails,
   buildLoyaltyAuditDetails,
   extractVoucherCode,
 } from '../lib/rewardAudit';
-import { downloadRewardPassImage } from '../lib/rewardCardGenerator';
+import {
+  downloadRewardPassImage,
+  sendRewardImageDirectToWhatsAppNumber,
+} from '../lib/rewardCardGenerator';
 
 interface CustomerDashboardProps {
   session: AuthSession;
@@ -131,7 +137,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onOpenLiveReview,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'loyalty' | 'scratch_offers' | 'ai_agent' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
+    'dashboard' | 'loyalty' | 'scratch_offers' | 'whatsapp_marketing' | 'ai_agent' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
   >('dashboard');
   const [mobileCategory, setMobileCategory] = useState<'core' | 'rewards' | 'intelligence' | 'store'>('core');
   const [showAllModulesModal, setShowAllModulesModal] = useState<boolean>(false);
@@ -140,7 +146,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     setActiveTab(tab);
     if (tab === 'dashboard' || tab === 'qrcode' || tab === 'ai_agent') {
       setMobileCategory('core');
-    } else if (tab === 'loyalty' || tab === 'scratch_offers') {
+    } else if (tab === 'loyalty' || tab === 'scratch_offers' || tab === 'whatsapp_marketing') {
       setMobileCategory('rewards');
     } else if (tab === 'analytics' || tab === 'feedback') {
       setMobileCategory('intelligence');
@@ -335,6 +341,10 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [bizPhoneSaveMsg, setBizPhoneSaveMsg] = useState<string | null>(null);
   const [copiedRewardVoucherId, setCopiedRewardVoucherId] = useState<string | null>(null);
   const [whatsappTargetMode, setWhatsappTargetMode] = useState<'app' | 'web'>('app');
+  const [whatsappShareModalData, setWhatsappShareModalData] = useState<{
+    voucher: RewardVoucherShareData;
+    initialMode: 'fast' | 'image' | 'text';
+  } | null>(null);
 
   const bizMarketingPhone = business?.whatsapp_number || business?.phone || '';
 
@@ -1810,6 +1820,7 @@ Please generate:
                 {activeTab === 'ai_agent' && 'AI Review Engine'}
                 {activeTab === 'loyalty' && 'Loyalty & Stamp Cards'}
                 {activeTab === 'scratch_offers' && 'Scratch & Win Game'}
+                {activeTab === 'whatsapp_marketing' && 'WhatsApp Marketing Hub'}
                 {activeTab === 'analytics' && 'Traffic & Scans'}
                 {activeTab === 'feedback' && 'Private Feedback Shield'}
                 {activeTab === 'business' && 'Store Profile & GPS'}
@@ -1825,7 +1836,7 @@ Please generate:
               onClick={() => setShowAllModulesModal(true)}
               className="px-2.5 py-1 text-[11px] font-bold text-[#6C3BFF] bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
             >
-              <span>All 12 Modules</span>
+              <span>All 13 Modules</span>
               <ChevronDown className="w-3 h-3" />
             </button>
           </div>
@@ -1980,6 +1991,19 @@ Please generate:
                   <Trophy className="w-3.5 h-3.5 text-amber-400" />
                   <span>Scratch & Win Draw</span>
                   <span className="px-1 text-[9px] bg-white/30 rounded">20% Win</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('whatsapp_marketing')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'whatsapp_marketing'
+                      ? 'bg-emerald-600 text-white shadow-xs font-black'
+                      : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-200/70'
+                  }`}
+                >
+                  <Send className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>WhatsApp Marketing</span>
+                  <span className="px-1 text-[9px] bg-amber-400 text-slate-950 font-black rounded">1-Click</span>
                 </button>
               </>
             )}
@@ -2211,6 +2235,23 @@ Please generate:
                       <div>
                         <div className="text-xs font-bold">Scratch & Win Draw</div>
                         <div className={`text-[10px] ${activeTab === 'scratch_offers' ? 'text-purple-200' : 'text-purple-800'}`}>Gamified reward vouchers</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('whatsapp_marketing');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer sm:col-span-2 ${
+                        activeTab === 'whatsapp_marketing' ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-emerald-50/70 hover:bg-emerald-100 border-emerald-200/70 text-emerald-950'
+                      }`}
+                    >
+                      <Send className="w-5 h-5 text-emerald-500 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">WhatsApp Marketing Hub (1-Click Image Dispatch)</div>
+                        <div className={`text-[10px] ${activeTab === 'whatsapp_marketing' ? 'text-emerald-100' : 'text-emerald-800'}`}>Send actual voucher images & digital passes to customer phone numbers in 1 click</div>
                       </div>
                     </button>
                   </div>
@@ -2467,6 +2508,25 @@ Please generate:
                   activeTab === 'scratch_offers' ? 'bg-white text-purple-900' : 'bg-purple-100 text-purple-800'
                 }`}>
                   20% Win
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleSelectTab('whatsapp_marketing')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'whatsapp_marketing'
+                    ? 'bg-emerald-600 text-white font-black shadow-xs'
+                    : 'text-slate-700 hover:bg-emerald-50/80 hover:text-emerald-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Send className="w-4 h-4 text-emerald-500" />
+                  <span>WhatsApp Marketing Hub</span>
+                </div>
+                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                  activeTab === 'whatsapp_marketing' ? 'bg-white text-emerald-900' : 'bg-emerald-100 text-emerald-900'
+                }`}>
+                  1-Click Direct
                 </span>
               </button>
             </div>
@@ -4047,9 +4107,40 @@ Please generate:
                           <h4 className="text-sm font-bold text-neutral-900 mt-1">
                             {verifiedCard.reward_title}
                           </h4>
-                          <p className="text-xs text-neutral-600">
-                            Customer: <strong className="text-neutral-900">{verifiedCard.customer_name}</strong> (📱 {verifiedCard.customer_phone})
-                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-600 mt-1">
+                            <span>Customer: <strong className="text-neutral-900">{verifiedCard.customer_name}</strong></span>
+                            {verifiedCard.customer_phone && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!bizMarketingPhone) {
+                                    setShowBizPhoneModal(true);
+                                    return;
+                                  }
+                                  await sendRewardImageDirectToWhatsAppNumber({
+                                    targetPhone: verifiedCard.customer_phone,
+                                    businessName: business.business_name,
+                                    rewardTitle: verifiedCard.reward_title,
+                                    rewardValue: verifiedCard.reward_value || undefined,
+                                    voucherCode: verifiedCard.voucher_code,
+                                    customerName: verifiedCard.customer_name,
+                                    expiresAt: verifiedCard.expires_at,
+                                    terms: verifiedCard.terms_conditions,
+                                    bizMarketingPhone,
+                                    businessAddress: business.address,
+                                    status: verifiedCard.status,
+                                  });
+                                }}
+                                title="Click this number to 1-Click Send Image directly to WhatsApp"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-100 hover:bg-emerald-600 text-emerald-950 hover:text-white font-mono font-bold text-[11px] transition-all cursor-pointer shadow-2xs border border-emerald-300"
+                              >
+                                <Phone className="w-3 h-3 text-emerald-700" />
+                                <span>{verifiedCard.customer_phone}</span>
+                                <Zap className="w-3 h-3 text-amber-500 fill-amber-500" />
+                                <span className="text-[9px] bg-amber-400 text-slate-950 px-1 rounded font-black">1-Click Image</span>
+                              </button>
+                            )}
+                          </div>
 
                           {/* Rich Origin & Timeline: Kab Mila & Kaise Mila */}
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 my-2.5">
@@ -4122,24 +4213,100 @@ Please generate:
                             <span>Download Pass</span>
                           </button>
 
-                          {/* WhatsApp Marketing Message to Customer - STRICTLY LOCKED UNTIL SETUP NUMBER IS ENTERED */}
+                          {/* WhatsApp Marketing: Dual Options (Pass Image & Text Format) */}
                           {verifiedCard.customer_phone && (
                             bizMarketingPhone ? (
-                              <a
-                                href={getWhatsAppDispatchUrl(
-                                  verifiedCard.customer_phone,
-                                  verifiedCard.status === 'redeemed'
-                                    ? buildRewardReceiptMessage(verifiedCard)
-                                    : buildRewardMarketingMessage(verifiedCard)
-                                )}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-2 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-2xs"
-                                title={`Send WhatsApp from Store Account: ${business.business_name} (${bizMarketingPhone})`}
-                              >
-                                <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>{verifiedCard.status === 'redeemed' ? 'Send Bill Receipt (WhatsApp)' : 'Send Voucher (WhatsApp)'}</span>
-                              </a>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {/* Option 1: ⚡ Fast Instant WhatsApp (Zero waiting) */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setWhatsappShareModalData({
+                                        voucher: {
+                                          id: verifiedCard.id,
+                                          voucherCode: verifiedCard.voucher_code,
+                                          rewardTitle: verifiedCard.reward_title,
+                                          rewardValue: verifiedCard.reward_value || undefined,
+                                          customerName: verifiedCard.customer_name,
+                                          customerPhone: verifiedCard.customer_phone,
+                                          expiresAt: verifiedCard.expires_at,
+                                          createdAt: verifiedCard.created_at,
+                                          terms: verifiedCard.terms_conditions,
+                                          originLabel: verifiedCard.issue_rating
+                                            ? '⭐ 5-Star Google Review Reward'
+                                            : '🏆 VIP Loyalty Program',
+                                          status: verifiedCard.status,
+                                        },
+                                        initialMode: 'fast',
+                                      })
+                                    }
+                                    className="px-3 py-2 text-white bg-gradient-to-r from-amber-500 via-amber-600 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-black shadow-sm hover:scale-[1.01]"
+                                    title="⚡ Fast Option: Send instant WhatsApp with VIP Digital Pass Link (0 seconds wait)"
+                                  >
+                                    <Zap className="w-3.5 h-3.5 text-amber-200 fill-amber-200" />
+                                    <span>⚡ Fast WhatsApp</span>
+                                  </button>
+
+                                  {/* Option 2: Send Actual Pass Image */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setWhatsappShareModalData({
+                                        voucher: {
+                                          id: verifiedCard.id,
+                                          voucherCode: verifiedCard.voucher_code,
+                                          rewardTitle: verifiedCard.reward_title,
+                                          rewardValue: verifiedCard.reward_value || undefined,
+                                          customerName: verifiedCard.customer_name,
+                                          customerPhone: verifiedCard.customer_phone,
+                                          expiresAt: verifiedCard.expires_at,
+                                          createdAt: verifiedCard.created_at,
+                                          terms: verifiedCard.terms_conditions,
+                                          originLabel: verifiedCard.issue_rating
+                                            ? '⭐ 5-Star Google Review Reward'
+                                            : '🏆 VIP Loyalty Program',
+                                          status: verifiedCard.status,
+                                        },
+                                        initialMode: 'image',
+                                      })
+                                    }
+                                    className="px-3 py-2 text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-extrabold shadow-sm hover:scale-[1.01]"
+                                    title="Send the actual downloaded VIP Reward Pass Image on WhatsApp"
+                                  >
+                                    <ImageIcon className="w-3.5 h-3.5 text-amber-300" />
+                                    <span>Pass Image</span>
+                                  </button>
+
+                                  {/* Option 3: Send Text Message (Letter) */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setWhatsappShareModalData({
+                                        voucher: {
+                                          id: verifiedCard.id,
+                                          voucherCode: verifiedCard.voucher_code,
+                                          rewardTitle: verifiedCard.reward_title,
+                                          rewardValue: verifiedCard.reward_value || undefined,
+                                          customerName: verifiedCard.customer_name,
+                                          customerPhone: verifiedCard.customer_phone,
+                                          expiresAt: verifiedCard.expires_at,
+                                          createdAt: verifiedCard.created_at,
+                                          terms: verifiedCard.terms_conditions,
+                                          originLabel: verifiedCard.issue_rating
+                                            ? '⭐ 5-Star Google Review Reward'
+                                            : '🏆 VIP Loyalty Program',
+                                          status: verifiedCard.status,
+                                        },
+                                        initialMode: 'text',
+                                      })
+                                    }
+                                    className="px-3 py-2 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-2xs"
+                                    title="Send text message / letter format on WhatsApp"
+                                  >
+                                    <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>{verifiedCard.status === 'redeemed' ? 'Receipt Text' : 'Text Only'}</span>
+                                  </button>
+                                </div>
                             ) : (
                               <button
                                 type="button"
@@ -4355,11 +4522,36 @@ Please generate:
                                       </span>
                                     )}
                                   </div>
-                                  <div className="text-xs font-bold text-neutral-900">
-                                    {card.customer_name}{' '}
-                                    <span className="font-normal font-mono text-neutral-500">
-                                      ({card.customer_phone})
-                                    </span>
+                                  <div className="text-xs font-bold text-neutral-900 flex flex-wrap items-center gap-1.5">
+                                    <span>{card.customer_name}</span>
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        if (!bizMarketingPhone) {
+                                          setShowBizPhoneModal(true);
+                                          return;
+                                        }
+                                        await sendRewardImageDirectToWhatsAppNumber({
+                                          targetPhone: card.customer_phone,
+                                          businessName: business.business_name,
+                                          rewardTitle: card.reward_title,
+                                          rewardValue: card.reward_value || undefined,
+                                          voucherCode: card.voucher_code,
+                                          customerName: card.customer_name,
+                                          expiresAt: card.expires_at,
+                                          terms: card.terms_conditions,
+                                          bizMarketingPhone,
+                                          businessAddress: business.address,
+                                          status: card.status,
+                                        });
+                                      }}
+                                      title="Click number to 1-Click Send Image on WhatsApp"
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white font-mono font-bold text-[10px] transition-all cursor-pointer border border-emerald-200"
+                                    >
+                                      <Phone className="w-2.5 h-2.5 text-emerald-600" />
+                                      <span>{card.customer_phone}</span>
+                                      <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+                                    </button>
                                   </div>
                                   <p className="text-[11px] text-neutral-600 truncate max-w-xs">
                                     {card.reward_title} · Valid till{' '}
@@ -4378,18 +4570,94 @@ Please generate:
                                   </button>
                                   {card.customer_phone && (
                                     bizMarketingPhone ? (
-                                      <a
-                                        href={getWhatsAppDispatchUrl(
-                                          card.customer_phone,
-                                          isRedeemed ? buildRewardReceiptMessage(card) : buildRewardMarketingMessage(card)
-                                        )}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer border border-neutral-200"
-                                        title={`Send WhatsApp from Store Account: ${business?.business_name} (${bizMarketingPhone})`}
-                                      >
-                                        <Phone className="w-3.5 h-3.5" />
-                                      </a>
+                                        <div className="flex items-center gap-1">
+                                          {/* Fast WhatsApp (0s wait) */}
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setWhatsappShareModalData({
+                                                voucher: {
+                                                  id: card.id,
+                                                  voucherCode: card.voucher_code,
+                                                  rewardTitle: card.reward_title,
+                                                  rewardValue: card.reward_value || undefined,
+                                                  customerName: card.customer_name,
+                                                  customerPhone: card.customer_phone,
+                                                  expiresAt: card.expires_at,
+                                                  createdAt: card.created_at,
+                                                  terms: card.terms_conditions,
+                                                  originLabel: card.issue_rating
+                                                    ? '⭐ 5-Star Google Review Reward'
+                                                    : '🏆 VIP Loyalty Program',
+                                                  status: card.status,
+                                                },
+                                                initialMode: 'fast',
+                                              })
+                                            }
+                                            className="p-1.5 text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors cursor-pointer"
+                                            title="⚡ Fast Option: Send Instant WhatsApp (0s wait)"
+                                          >
+                                            <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                                          </button>
+
+                                          {/* Pass Image Share */}
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setWhatsappShareModalData({
+                                                voucher: {
+                                                  id: card.id,
+                                                  voucherCode: card.voucher_code,
+                                                  rewardTitle: card.reward_title,
+                                                  rewardValue: card.reward_value || undefined,
+                                                  customerName: card.customer_name,
+                                                  customerPhone: card.customer_phone,
+                                                  expiresAt: card.expires_at,
+                                                  createdAt: card.created_at,
+                                                  terms: card.terms_conditions,
+                                                  originLabel: card.issue_rating
+                                                    ? '⭐ 5-Star Google Review Reward'
+                                                    : '🏆 VIP Loyalty Program',
+                                                  status: card.status,
+                                                },
+                                                initialMode: 'image',
+                                              })
+                                            }
+                                            className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
+                                            title="Send VIP Pass Image on WhatsApp"
+                                          >
+                                            <ImageIcon className="w-3.5 h-3.5" />
+                                          </button>
+
+                                          {/* Text Share */}
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setWhatsappShareModalData({
+                                                voucher: {
+                                                  id: card.id,
+                                                  voucherCode: card.voucher_code,
+                                                  rewardTitle: card.reward_title,
+                                                  rewardValue: card.reward_value || undefined,
+                                                  customerName: card.customer_name,
+                                                  customerPhone: card.customer_phone,
+                                                  expiresAt: card.expires_at,
+                                                  createdAt: card.created_at,
+                                                  terms: card.terms_conditions,
+                                                  originLabel: card.issue_rating
+                                                    ? '⭐ 5-Star Google Review Reward'
+                                                    : '🏆 VIP Loyalty Program',
+                                                  status: card.status,
+                                                },
+                                                initialMode: 'text',
+                                              })
+                                            }
+                                            className="p-1.5 text-neutral-600 hover:text-emerald-700 hover:bg-neutral-100 border border-neutral-200 rounded-lg transition-colors cursor-pointer"
+                                            title="Send Text Message on WhatsApp"
+                                          >
+                                            <Phone className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
                                     ) : (
                                       <button
                                         type="button"
@@ -4771,6 +5039,23 @@ Please generate:
                   onScanSuccess={handleScanQRSuccess}
                   title="Scan Customer Reward QR Code"
                 />
+
+                {/* Reward WhatsApp Share Modal (Image Pass & Text Format) */}
+                {whatsappShareModalData && business && (
+                  <RewardWhatsAppShareModal
+                    isOpen={!!whatsappShareModalData}
+                    onClose={() => setWhatsappShareModalData(null)}
+                    voucher={whatsappShareModalData.voucher}
+                    business={business}
+                    bizMarketingPhone={bizMarketingPhone}
+                    onOpenBizPhoneModal={() => {
+                      setWhatsappShareModalData(null);
+                      setQuickBizPhoneInput('');
+                      setShowBizPhoneModal(true);
+                    }}
+                    initialMode={whatsappShareModalData.initialMode}
+                  />
+                )}
               </>
             )}
           </div>
@@ -4789,6 +5074,22 @@ Please generate:
                   if (settings) {
                     onPreviewReviewFlow(business, settings);
                   }
+                }}
+              />
+            )}
+
+            {/* TAB: WHATSAPP MARKETING HUB (1-CLICK DIRECT IMAGE DISPATCH) */}
+            {activeTab === 'whatsapp_marketing' && business && (
+              <WhatsAppMarketingHub
+                business={business}
+                loyaltyCards={loyaltyCards}
+                bizMarketingPhone={bizMarketingPhone}
+                onOpenBizPhoneModal={() => setShowBizPhoneModal(true)}
+                onOpenShareModal={(voucher, mode) => {
+                  setWhatsappShareModalData({
+                    voucher,
+                    initialMode: mode,
+                  });
                 }}
               />
             )}

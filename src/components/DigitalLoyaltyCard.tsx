@@ -14,9 +14,10 @@ import {
   Phone,
   ArrowRight,
   BadgeCheck,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { LoyaltyCard, Business } from '../types/database';
-import { downloadRewardPassImage } from '../lib/rewardCardGenerator';
+import { downloadRewardPassImage, shareRewardPassOnWhatsApp } from '../lib/rewardCardGenerator';
 
 interface DigitalLoyaltyCardProps {
   card: LoyaltyCard;
@@ -87,6 +88,43 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
 
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
+  };
+
+  const [isSharingImage, setIsSharingImage] = useState(false);
+
+  const handleShareWhatsAppImage = async () => {
+    setIsSharingImage(true);
+    try {
+      const bizName = business?.business_name || 'Our Store';
+      const bizContact = business?.phone || business?.whatsapp_number;
+      const contactLine = bizContact ? `\n\n🏢 *Store:* ${bizName}\n📞 *Contact Store:* ${bizContact}` : `\n\n🏢 *Store:* ${bizName}`;
+      const text = `🎁 Here is my VIP Loyalty Card for *${bizName}*!\n\n` +
+        `🎟️ *Voucher Code:* ${card.voucher_code}\n` +
+        `🎉 *Reward:* ${card.reward_title}\n` +
+        `⏳ *Valid Till:* ${new Date(card.expires_at).toLocaleDateString()}\n` +
+        `📍 Show this message or code at the counter during billing to claim your reward!` +
+        contactLine;
+
+      await shareRewardPassOnWhatsApp({
+        businessName: bizName,
+        rewardTitle: card.reward_title,
+        rewardValue: card.reward_value,
+        voucherCode: card.voucher_code,
+        customerName: card.customer_name,
+        customerPhone: card.customer_phone,
+        expiresAt: card.expires_at,
+        createdAt: card.created_at,
+        terms: card.terms_conditions,
+        originLabel: card.issue_rating ? '⭐ 5-Star Google Review Reward' : '🏆 VIP Loyalty Program',
+        targetPhone: card.customer_phone,
+        shareText: text,
+      });
+    } catch (err) {
+      console.error('Failed to share pass image on WhatsApp:', err);
+      handleShareWhatsApp();
+    } finally {
+      setIsSharingImage(false);
+    }
   };
 
   const handleDownloadPass = async () => {
@@ -324,13 +362,27 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
           )}
         </button>
 
+        {/* Option 1: Share Actual Pass Image */}
+        <button
+          type="button"
+          onClick={handleShareWhatsAppImage}
+          disabled={isSharingImage}
+          className="flex-1 min-w-[130px] py-3 px-4 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-2xl text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:opacity-60"
+          title="Share the actual downloaded VIP Reward Pass image on WhatsApp"
+        >
+          <ImageIcon className="w-4 h-4 text-amber-200" />
+          <span>{isSharingImage ? 'Sending...' : 'Pass Image (WhatsApp)'}</span>
+        </button>
+
+        {/* Option 2: Share Text Message */}
         <button
           type="button"
           onClick={handleShareWhatsApp}
-          className="flex-1 min-w-[130px] py-3 px-4 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-2xl text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+          className="py-3 px-3.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-2xl text-xs font-bold shadow-2xs flex items-center justify-center gap-1.5 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer shrink-0"
+          title="Share text message on WhatsApp"
         >
-          <Share2 className="w-4 h-4" />
-          <span>Save to WhatsApp</span>
+          <Phone className="w-4 h-4 text-emerald-600" />
+          <span>Text</span>
         </button>
 
         <button

@@ -15,10 +15,11 @@ import {
   Flame,
   ArrowRight,
   Copy,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { ScratchCampaign, ScratchPlay, Business } from '../types/database';
 import { checkScratchEligibility, executeScratchPlay } from '../lib/db';
-import { downloadRewardPassImage } from '../lib/rewardCardGenerator';
+import { downloadRewardPassImage, shareRewardPassOnWhatsApp } from '../lib/rewardCardGenerator';
 
 interface InlineScratchCardProps {
   business: Business;
@@ -290,6 +291,38 @@ export const InlineScratchCard: React.FC<InlineScratchCardProps> = ({
     }
   };
 
+  const [isSharingImage, setIsSharingImage] = useState(false);
+
+  const getShareText = () => {
+    if (!activePlay) return '';
+    return `🎉 Congratulations ${activePlay.customer_name}! You won "${activePlay.reward_title}" (${activePlay.reward_value}) in the Lucky Draw at ${business?.business_name || 'our store'}! Your coupon code is: ${activePlay.voucher_code}. Show this message or code at billing counter to claim! Valid till: ${new Date(activePlay.expires_at).toLocaleDateString()}.\n\n🏢 Store: ${business?.business_name || 'Our Store'}${business?.phone || business?.whatsapp_number ? `\n📞 Store Contact: ${business.whatsapp_number || business.phone}` : ''}`;
+  };
+
+  const handleSharePassImage = async () => {
+    if (!activePlay || !activePlay.customer_phone) return;
+    setIsSharingImage(true);
+    try {
+      await shareRewardPassOnWhatsApp({
+        businessName: business.business_name || 'Store Partner',
+        rewardTitle: activePlay.reward_title,
+        rewardValue: activePlay.reward_value,
+        voucherCode: activePlay.voucher_code,
+        customerName: activePlay.customer_name,
+        customerPhone: activePlay.customer_phone,
+        expiresAt: activePlay.expires_at,
+        createdAt: activePlay.scratched_at || activePlay.created_at,
+        terms: activePlay.terms_conditions || 'Present this pass at billing counter to redeem.',
+        originLabel: '🎲 Scratch & Win Lucky Draw',
+        targetPhone: activePlay.customer_phone,
+        shareText: getShareText(),
+      });
+    } catch (err) {
+      console.error('Failed to share pass image on WhatsApp:', err);
+    } finally {
+      setIsSharingImage(false);
+    }
+  };
+
   return (
     <div className={`p-4 rounded-2xl bg-gradient-to-br from-amber-50 via-purple-50/50 to-amber-50 border-2 border-amber-300 shadow-md ${className}`}>
       {/* Header Banner */}
@@ -536,17 +569,31 @@ export const InlineScratchCard: React.FC<InlineScratchCardProps> = ({
             </button>
 
             {activePlay.customer_phone && (
-              <a
-                href={`https://wa.me/${activePlay.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                  `🎉 Congratulations ${activePlay.customer_name}! You won "${activePlay.reward_title}" (${activePlay.reward_value}) in the Lucky Draw at ${business?.business_name || 'our store'}! Your coupon code is: ${activePlay.voucher_code}. Show this message or code at billing counter to claim! Valid till: ${new Date(activePlay.expires_at).toLocaleDateString()}.\n\n🏢 Store: ${business?.business_name || 'Our Store'}${business?.phone || business?.whatsapp_number ? `\n📞 Store Contact: ${business.whatsapp_number || business.phone}` : ''}`
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 py-2.5 px-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
-              >
-                <Phone className="w-4 h-4" />
-                <span>Save to WhatsApp</span>
-              </a>
+              <div className="flex flex-1 flex-wrap gap-1.5">
+                {/* Send Actual Pass Image */}
+                <button
+                  type="button"
+                  onClick={handleSharePassImage}
+                  disabled={isSharingImage}
+                  className="flex-1 min-w-[130px] py-2.5 px-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60"
+                  title="Send actual downloaded reward pass image on WhatsApp"
+                >
+                  <ImageIcon className="w-4 h-4 text-amber-200" />
+                  <span>{isSharingImage ? 'Sending...' : 'Pass Image (WhatsApp)'}</span>
+                </button>
+
+                {/* Send Text */}
+                <a
+                  href={`https://wa.me/${activePlay.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(getShareText())}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  title="Send text message on WhatsApp"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Text</span>
+                </a>
+              </div>
             )}
           </div>
 

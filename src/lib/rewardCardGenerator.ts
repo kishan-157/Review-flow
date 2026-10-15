@@ -12,12 +12,31 @@ export interface RewardDownloadOptions {
   terms?: string;
   rewardType?: 'loyalty' | 'scratch' | 'review';
   originLabel?: string;
+  quality?: 'fast' | 'hd'; // 'fast' = Turbo Mode (~20ms), 'hd' = Ultra HD Print (900x1160)
+  forceRefresh?: boolean;
+}
+
+// In-memory cache so subsequent shares/downloads/copies take 0ms
+const passImageCache = new Map<string, { dataUrl: string; blob: Blob; filename: string }>();
+
+export function getCachedRewardPass(voucherCode: string): { dataUrl: string; blob: Blob; filename: string } | undefined {
+  return passImageCache.get(voucherCode);
+}
+
+export function clearRewardPassCache(voucherCode?: string): void {
+  if (voucherCode) {
+    passImageCache.delete(voucherCode);
+  } else {
+    passImageCache.clear();
+  }
 }
 
 /**
- * Generates and downloads a high-resolution, print-ready VIP Reward Pass image (PNG)
+ * Generates an optimized VIP Reward Pass image on canvas (Instant Turbo or Ultra HD)
  */
-export async function downloadRewardPassImage(options: RewardDownloadOptions): Promise<string> {
+export async function generateRewardPassDataUrl(
+  options: RewardDownloadOptions
+): Promise<{ dataUrl: string; blob: Blob; filename: string }> {
   const {
     businessName,
     rewardTitle,
@@ -29,19 +48,29 @@ export async function downloadRewardPassImage(options: RewardDownloadOptions): P
     createdAt,
     terms = 'Present this pass at billing counter during checkout to claim your reward.',
     originLabel,
+    quality = 'fast',
+    forceRefresh = false,
   } = options;
+
+  const cacheKey = `${voucherCode}_${quality}`;
+  if (!forceRefresh && passImageCache.has(cacheKey)) {
+    return passImageCache.get(cacheKey)!;
+  }
 
   // 1. Generate QR code for counter verification
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const verifyUrl = `${origin}/?verify_reward=${encodeURIComponent(voucherCode)}`;
+  
+  // Fast mode uses smaller dimension and medium error correction for 5x faster QR generation
+  const qrWidth = quality === 'fast' ? 180 : 240;
   const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
-    width: 240,
+    width: qrWidth,
     margin: 1,
     color: {
       dark: '#1e1b4b',
       light: '#ffffff',
     },
-    errorCorrectionLevel: 'H',
+    errorCorrectionLevel: quality === 'fast' ? 'M' : 'H',
   });
 
   // Load QR image element
@@ -52,12 +81,21 @@ export async function downloadRewardPassImage(options: RewardDownloadOptions): P
     img.src = qrDataUrl;
   });
 
-  // 2. Setup High-DPI Canvas (900x1160)
+  // 2. Setup Canvas - Fast Mode (600x773) vs Ultra HD (900x1160)
+  const baseW = 900;
+  const baseH = 1160;
+  const targetW = quality === 'fast' ? 600 : 900;
+  const targetH = quality === 'fast' ? 773 : 1160;
+  const scale = targetW / baseW;
+
   const canvas = document.createElement('canvas');
-  canvas.width = 900;
-  canvas.height = 1160;
+  canvas.width = targetW;
+  canvas.height = targetH;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Could not get canvas context');
+
+  // Scale context to target resolution so identical layout math applies
+  ctx.scale(scale, scale);
 
   // Background Gradient (Deep Royal Midnight Purple)
   const bgGrad = ctx.createLinearGradient(0, 0, 900, 1160);
@@ -270,11 +308,32 @@ export async function downloadRewardPassImage(options: RewardDownloadOptions): P
   ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
   ctx.fillText('LocalBoost AI Verified Customer Loyalty Network', 450, 1075);
 
-  // Convert to Data URL
+  // Convert to Data URL & Blob
   const dataUrl = canvas.toDataURL('image/png');
-
-  // Trigger download
   const filename = `Reward-${businessName.replace(/[^a-zA-Z0-9]/g, '')}-${voucherCode}.png`;
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((b) => {
+      if (b) resolve(b);
+      else reject(new Error('Canvas toBlob failed'));
+    }, 'image/png');
+  });
+
+  const result = { dataUrl, blob, filename };
+  passImageCache.set(cacheKey, result);
+  // Also store by just voucherCode for convenience
+  passImageCache.set(voucherCode, result);
+
+  return result;
+}
+
+/**
+ * Generates and downloads a VIP Reward Pass image (PNG)
+ */
+export async function downloadRewardPassImage(options: RewardDownloadOptions): Promise<string> {
+  const { dataUrl, filename } = await generateRewardPassDataUrl(options);
+
+  // Trigger browser download
   const link = document.createElement('a');
   link.download = filename;
   link.href = dataUrl;
@@ -283,4 +342,239 @@ export async function downloadRewardPassImage(options: RewardDownloadOptions): P
   document.body.removeChild(link);
 
   return dataUrl;
+}
+
+/**
+ * Copies the VIP Reward Pass image directly to the system clipboard
+ * so users can paste (Ctrl+V) directly into WhatsApp Web or chats
+ */
+export async function copyRewardPassImageToClipboard(
+  options: RewardDownloadOptions,
+  preloaded?: { blob: Blob }
+): Promise<boolean> {
+  try {
+    const blob = preloaded?.blob || (await generateRewardPassDataUrl(options)).blob;
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': blob,
+        }),
+      ]);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn('Clipboard write failed:', err);
+    return false;
+  }
+}
+
+export interface ShareRewardWhatsAppOptions extends RewardDownloadOptions {
+  targetPhone: string;
+  shareText: string;
+  dispatchMode?: 'app' | 'web';
+  preloaded?: { dataUrl: string; blob: Blob; filename: string };
+}
+
+/**
+ * Returns the direct URL for customer to view and verify their digital VIP pass
+ */
+export function getRewardPassUrl(voucherCode: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/?verify_reward=${encodeURIComponent(voucherCode)}`;
+}
+
+/**
+ * Builds the instant, high-converting WhatsApp message containing
+ * direct details and an instant digital pass link.
+ */
+export function buildFastRewardWhatsAppMessage(params: {
+  businessName: string;
+  voucherCode: string;
+  rewardTitle: string;
+  rewardValue?: string;
+  customerName: string;
+  expiresAt: string;
+  terms?: string;
+  bizMarketingPhone?: string;
+  businessAddress?: string;
+  status?: string;
+}): string {
+  const bName = params.businessName || 'Our Store';
+  const expiryFormatted = new Date(params.expiresAt).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  const passUrl = getRewardPassUrl(params.voucherCode);
+
+  const contactLine = params.bizMarketingPhone
+    ? `\n\n🏢 *Official Store:* ${bName}\n📱 *Store WhatsApp:* ${params.bizMarketingPhone}${
+        params.businessAddress ? `\n📍 *Address:* ${params.businessAddress}` : ''
+      }`
+    : `\n\n🏢 *Official Store:* ${bName}`;
+
+  if (params.status === 'redeemed') {
+    return (
+      `🧾 *Official Reward Bill Receipt - ${bName}*\n\n` +
+      `Hello ${params.customerName}! ✨\n` +
+      `Your discount voucher *${params.voucherCode}* for *"${params.rewardTitle}"* has been successfully applied to your bill!\n\n` +
+      `📲 *View Official Pass & Bill Status:*\n` +
+      `👉 ${passUrl}\n\n` +
+      `Thank you for shopping with us! Visit again soon for more exciting rewards.` +
+      contactLine
+    );
+  }
+
+  return (
+    `🌟 *VIP Customer Reward Pass - ${bName}*\n\n` +
+    `Hello ${params.customerName}! ✨\n` +
+    `Congratulations! Here is your official VIP reward pass from *${bName}*:\n\n` +
+    `🎟️ *Voucher Code:* ${params.voucherCode}\n` +
+    `🎁 *Reward:* ${params.rewardTitle}${params.rewardValue ? ` (${params.rewardValue})` : ''}\n` +
+    `⏳ *Valid Till:* ${expiryFormatted}\n` +
+    `📍 *Terms:* ${params.terms || 'Present pass or voucher code at cashier counter during checkout'}\n\n` +
+    `📲 *View & Download Digital Pass Card (with QR):*\n` +
+    `👉 ${passUrl}\n\n` +
+    `Show this pass at our billing counter to claim your discount!` +
+    contactLine
+  );
+}
+
+/**
+ * Shares the actual downloaded reward pass image on WhatsApp.
+ * - On Mobile (Web Share API): attaches actual image PNG file + caption to WhatsApp.
+ * - On Desktop / WhatsApp Web: copies image to clipboard, auto-downloads file,
+ *   and opens WhatsApp Web so user can simply paste (Ctrl+V) the image.
+ * Uses preloaded image if available for 0ms delay!
+ */
+export async function shareRewardPassOnWhatsApp(
+  options: ShareRewardWhatsAppOptions
+): Promise<{ method: 'native_share' | 'clipboard_and_tab'; success: boolean }> {
+  // Use preloaded image if provided to avoid re-generating canvas
+  const { dataUrl, blob, filename } = options.preloaded || (await generateRewardPassDataUrl(options));
+
+  let cleanPhone = options.targetPhone.replace(/[^0-9]/g, '');
+  if (cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
+
+  const dispatchUrl =
+    options.dispatchMode === 'web'
+      ? `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(options.shareText)}`
+      : `https://wa.me/${cleanPhone}?text=${encodeURIComponent(options.shareText)}`;
+
+  // 1. Try Mobile Web Share API with image file
+  const imageFile = new File([blob], filename, { type: 'image/png' });
+  if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+    try {
+      await navigator.share({
+        files: [imageFile],
+        title: `🎁 ${options.businessName} Reward Voucher - ${options.voucherCode}`,
+        text: options.shareText,
+      });
+      return { method: 'native_share', success: true };
+    } catch (shareErr: any) {
+      if (shareErr.name === 'AbortError') {
+        return { method: 'native_share', success: false };
+      }
+    }
+  }
+
+  // 2. Desktop WhatsApp Web / Browser Fallback:
+  // Copy image to clipboard instantly
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': blob,
+        }),
+      ]);
+    }
+  } catch (clipErr) {
+    console.warn('Clipboard copy fallback error', clipErr);
+  }
+
+  // Also auto-trigger image download
+  try {
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (dlErr) {
+    console.warn('Auto download error', dlErr);
+  }
+
+  // Open WhatsApp in new tab
+  if (typeof window !== 'undefined') {
+    window.open(dispatchUrl, '_blank', 'noopener,noreferrer');
+  }
+
+  return { method: 'clipboard_and_tab', success: true };
+}
+
+/**
+ * 1-Click Direct WhatsApp Image Sender:
+ * Automatically formats phone number, builds message with digital pass link,
+ * generates/retrieves turbo cached image pass, copies to clipboard (or mobile native share),
+ * and directly opens WhatsApp chat for that specific number!
+ */
+export async function sendRewardImageDirectToWhatsAppNumber(params: {
+  targetPhone: string;
+  businessName: string;
+  rewardTitle: string;
+  rewardValue?: string;
+  voucherCode: string;
+  customerName?: string;
+  customerPhone?: string;
+  expiresAt?: string;
+  terms?: string;
+  bizMarketingPhone?: string;
+  businessAddress?: string;
+  status?: string;
+  dispatchMode?: 'app' | 'web';
+}): Promise<{ method: 'native_share' | 'clipboard_and_tab'; success: boolean }> {
+  const custName = params.customerName || 'Valued Customer';
+  const expiry = params.expiresAt || new Date(Date.now() + 30 * 86400000).toISOString();
+
+  const shareText = buildFastRewardWhatsAppMessage({
+    businessName: params.businessName,
+    voucherCode: params.voucherCode,
+    rewardTitle: params.rewardTitle,
+    rewardValue: params.rewardValue,
+    customerName: custName,
+    expiresAt: expiry,
+    terms: params.terms,
+    bizMarketingPhone: params.bizMarketingPhone,
+    businessAddress: params.businessAddress,
+    status: params.status,
+  });
+
+  // Fast preloaded image canvas
+  const preloaded = await generateRewardPassDataUrl({
+    businessName: params.businessName,
+    rewardTitle: params.rewardTitle,
+    rewardValue: params.rewardValue,
+    voucherCode: params.voucherCode,
+    customerName: custName,
+    customerPhone: params.customerPhone || params.targetPhone,
+    expiresAt: expiry,
+    terms: params.terms,
+    quality: 'fast',
+  });
+
+  return shareRewardPassOnWhatsApp({
+    businessName: params.businessName,
+    rewardTitle: params.rewardTitle,
+    rewardValue: params.rewardValue,
+    voucherCode: params.voucherCode,
+    customerName: custName,
+    customerPhone: params.customerPhone || params.targetPhone,
+    expiresAt: expiry,
+    terms: params.terms,
+    targetPhone: params.targetPhone,
+    shareText,
+    dispatchMode: params.dispatchMode || (typeof window !== 'undefined' && window.innerWidth < 768 ? 'app' : 'web'),
+    preloaded,
+  });
 }

@@ -1,8 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Sparkles, Trophy, Gift, Check, Clock, ShieldCheck, Tag, ShoppingBag, Percent, Phone, Calendar, Download } from 'lucide-react';
+import { Sparkles, Trophy, Gift, Check, Clock, ShieldCheck, Tag, ShoppingBag, Percent, Phone, Calendar, Download, Image as ImageIcon } from 'lucide-react';
 import { ScratchPlay, Business } from '../types/database';
-import { downloadRewardPassImage } from '../lib/rewardCardGenerator';
+import { downloadRewardPassImage, shareRewardPassOnWhatsApp } from '../lib/rewardCardGenerator';
 
 interface ScratchCardModalProps {
   play: ScratchPlay;
@@ -42,6 +42,37 @@ export const ScratchCardModal: React.FC<ScratchCardModalProps> = ({ play, busine
       console.error('Failed to download scratch reward image', err);
     } finally {
       setIsDownloading(false);
+    }
+  };
+
+  const [isSharingImage, setIsSharingImage] = useState(false);
+
+  const getShareText = () => {
+    return `🎉 Congratulations ${play.customer_name}! You won "${play.reward_title}" (${play.reward_value}) at ${business?.business_name || 'our store'}! Your Scratch & Win coupon code is: ${play.voucher_code}. Show this message or code at billing counter to claim! Valid till: ${new Date(play.expires_at).toLocaleDateString()}.\n\n🏢 Store: ${business?.business_name || 'Our Store'}${business?.phone || business?.whatsapp_number ? `\n📞 Store Contact: ${business.whatsapp_number || business.phone}` : ''}`;
+  };
+
+  const handleSharePassImage = async () => {
+    if (!play.customer_phone) return;
+    setIsSharingImage(true);
+    try {
+      await shareRewardPassOnWhatsApp({
+        businessName: business.business_name || 'VIP Store',
+        rewardTitle: play.reward_title,
+        rewardValue: play.reward_value || undefined,
+        voucherCode: play.voucher_code,
+        customerName: play.customer_name,
+        customerPhone: play.customer_phone,
+        expiresAt: play.expires_at,
+        createdAt: play.scratched_at || play.created_at,
+        terms: play.terms_conditions || 'Present this pass at billing counter to redeem.',
+        originLabel: '🎲 Scratch & Win Lucky Draw',
+        targetPhone: play.customer_phone,
+        shareText: getShareText(),
+      });
+    } catch (err) {
+      console.error('Failed to share pass image on WhatsApp', err);
+    } finally {
+      setIsSharingImage(false);
     }
   };
 
@@ -337,17 +368,31 @@ export const ScratchCardModal: React.FC<ScratchCardModalProps> = ({ play, busine
                 </button>
 
                 {play.customer_phone && (
-                  <a
-                    href={`https://wa.me/${play.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                      `🎉 Congratulations ${play.customer_name}! You won "${play.reward_title}" (${play.reward_value}) at ${business?.business_name || 'our store'}! Your Scratch & Win coupon code is: ${play.voucher_code}. Show this message or code at billing counter to claim! Valid till: ${new Date(play.expires_at).toLocaleDateString()}.\n\n🏢 Store: ${business?.business_name || 'Our Store'}${business?.phone || business?.whatsapp_number ? `\n📞 Store Contact: ${business.whatsapp_number || business.phone}` : ''}`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 py-2.5 px-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
-                  >
-                    <Phone className="w-4 h-4" />
-                    <span>WhatsApp</span>
-                  </a>
+                  <div className="flex flex-1 flex-wrap gap-1.5">
+                    {/* Send Actual Pass Image */}
+                    <button
+                      type="button"
+                      onClick={handleSharePassImage}
+                      disabled={isSharingImage}
+                      className="flex-1 min-w-[130px] py-2.5 px-3 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60"
+                      title="Send actual downloaded reward pass image on WhatsApp"
+                    >
+                      <ImageIcon className="w-4 h-4 text-amber-200" />
+                      <span>{isSharingImage ? 'Sending...' : 'Pass Image (WhatsApp)'}</span>
+                    </button>
+
+                    {/* Send Text */}
+                    <a
+                      href={`https://wa.me/${play.customer_phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(getShareText())}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                      title="Send text message on WhatsApp"
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>Text</span>
+                    </a>
+                  </div>
                 )}
               </div>
 
