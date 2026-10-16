@@ -41,34 +41,28 @@ export function calculateDaysRemaining(expiresAtIso: string): number {
 
 /**
  * Checks whether a reminder is active/due for its stage based on days remaining:
- * - '7_days': Due when days remaining is <= 7 (and >= 4). If exactOnly is true: strictly 7 days!
- *             Cards with 8 or more days remaining are STRICTLY EXCLUDED.
- * - '3_days': Due when days remaining is <= 3 (and >= 1). If exactOnly is true: strictly 3 days!
- *             Cards with 4 or more days remaining are STRICTLY EXCLUDED.
- * - 'expiry_day': Due on expiry day (days remaining === 0).
+ * - '7_days': STRICTLY due when days remaining is EXACTLY 7!
+ *             Cards with 8 or more days (or 6 or fewer days) are STRICTLY EXCLUDED.
+ * - '3_days': STRICTLY due when days remaining is EXACTLY 3!
+ *             Cards with 4 or more days (or 2 or fewer days) are STRICTLY EXCLUDED.
+ * - 'expiry_day': STRICTLY due on expiry day (days remaining === 0).
  */
 export function isReminderStageEligible(
   stage: ReminderStage,
   daysRemaining: number,
-  exactOnly: boolean = true
+  _exactOnly: boolean = true
 ): boolean {
-  if (exactOnly) {
-    if (stage === '7_days') return daysRemaining === 7;
-    if (stage === '3_days') return daysRemaining === 3;
-    if (stage === 'expiry_day') return daysRemaining === 0;
-    return false;
-  }
-
   if (stage === '7_days') {
-    // Strictly block 8 days or more!
-    return daysRemaining <= 7 && daysRemaining >= 4;
+    // Strictly 7 days only! (8+ days or <7 days are never shown in 7-day stage)
+    return daysRemaining === 7;
   }
   if (stage === '3_days') {
-    // Strictly block 4 days or more!
-    return daysRemaining <= 3 && daysRemaining >= 1;
+    // Strictly 3 days only! (4+ days or <3 days are never shown in 3-day stage)
+    return daysRemaining === 3;
   }
   if (stage === 'expiry_day') {
-    return daysRemaining === 0 || daysRemaining < 0;
+    // Strictly expiry day (0 days left)
+    return daysRemaining === 0;
   }
   return false;
 }
@@ -223,12 +217,16 @@ export async function syncAndGetReminders(
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.reminders)) {
-        setLocalReminders(data.reminders);
+        const calibratedReminders = data.reminders.map((r: RewardReminder) => ({
+          ...r,
+          days_remaining: calculateDaysRemaining(r.expires_at),
+        }));
+        setLocalReminders(calibratedReminders);
         if (Array.isArray(data.auditLogs)) {
           setLocalAuditLogs(data.auditLogs);
         }
         return {
-          reminders: data.reminders,
+          reminders: calibratedReminders,
           auditLogs: data.auditLogs || [],
         };
       }

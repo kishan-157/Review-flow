@@ -22,6 +22,7 @@ import {
   ArrowRight,
   Info,
   Ban,
+  Zap,
 } from 'lucide-react';
 import {
   LoyaltyCard,
@@ -38,6 +39,7 @@ import {
   manuallyCorrectReminderStatusApi,
   isReminderStageEligible,
 } from '../lib/reminderService';
+import { sendRewardImageDirectToWhatsAppNumber } from '../lib/rewardCardGenerator';
 
 interface LoyaltyReminderManagerProps {
   business: Business;
@@ -159,6 +161,51 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
     setActiveConfirmReminder(reminder);
   };
 
+  // 1-Click Send HD Image Pass directly to WhatsApp number
+  const handle1ClickSendImagePass = async (reminder: RewardReminder) => {
+    const bizPhone = business.whatsapp_number || business.phone;
+    if (!bizPhone || !bizPhone.trim()) {
+      setActionError(
+        '⚠️ Customer Reminders Blocked: Business setup number is missing! Jab tak business owner apna setup number nahi dalta tab tak koi message nahi ja sakta. Super admin number is strictly blocked. Please configure your business phone first.'
+      );
+      return;
+    }
+
+    if (reminder.status === 'SENT') {
+      setActionError(`Reminder for stage "${reminder.stage_label}" has already been sent! Duplicate sending is blocked.`);
+      return;
+    }
+
+    if (reminder.status === 'STOPPED') {
+      setActionError('Cannot send reminder: Reward has already been claimed or expired.');
+      return;
+    }
+
+    try {
+      await sendRewardImageDirectToWhatsAppNumber({
+        targetPhone: reminder.customer_phone,
+        businessName: business.business_name,
+        rewardTitle: reminder.reward_title,
+        rewardValue: reminder.reward_value,
+        voucherCode: reminder.voucher_code,
+        customerName: reminder.customer_name,
+        customerPhone: reminder.customer_phone,
+        expiresAt: reminder.expires_at,
+        bizMarketingPhone: bizPhone,
+        businessAddress: business.address,
+        status: reminder.status,
+      });
+
+      // Prompt 2-step confirmation modal to finalize audit log
+      setHasWindowRefocused(false);
+      setConfirmNotes(`Sent 1-Click HD Image Pass (${reminder.stage_label})`);
+      setActiveConfirmReminder(reminder);
+    } catch (err: any) {
+      console.error('Failed to send 1-click image pass:', err);
+      setActionError(err?.message || 'Failed to send WhatsApp image pass.');
+    }
+  };
+
   // Confirm that message was sent
   const handleConfirmMessageSent = async () => {
     if (!activeConfirmReminder) return;
@@ -233,21 +280,17 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
     setTimeout(() => setCopiedVoucher(null), 2000);
   };
 
-  // Metrics summary
+  // Metrics summary - strictly 7 days (no 8+), strictly 3 days (no 4+), strictly 0 days
   const metrics = useMemo(() => {
-    // 7 Days count: cards where days_remaining is 7 (or 4-7 in window mode)
-    const count7Days = reminders.filter(
-      (r) => r.stage === '7_days' && isReminderStageEligible('7_days', r.days_remaining, exactDaysMode)
-    ).length;
+    // 7 Days count: cards where days_remaining is EXACTLY 7 (never 8+ or <7)
+    const count7Days = reminders.filter((r) => r.stage === '7_days' && r.days_remaining === 7).length;
 
-    // 3 Days count: cards where days_remaining is 3 (or 1-3 in window mode)
-    const count3Days = reminders.filter(
-      (r) => r.stage === '3_days' && isReminderStageEligible('3_days', r.days_remaining, exactDaysMode)
-    ).length;
+    // 3 Days count: cards where days_remaining is EXACTLY 3 (never 4+ or <3)
+    const count3Days = reminders.filter((r) => r.stage === '3_days' && r.days_remaining === 3).length;
 
     // Expiry Day count: cards where days_remaining is 0
     const countExpiry = reminders.filter(
-      (r) => r.stage === 'expiry_day' && isReminderStageEligible('expiry_day', r.days_remaining, exactDaysMode)
+      (r) => r.stage === 'expiry_day' && r.days_remaining === 0
     ).length;
 
     // Upcoming: cards with > 7 days remaining
@@ -255,9 +298,9 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
       (r) => r.stage === '7_days' && r.days_remaining > 7
     ).length;
 
-    // Due reminders
+    // Due reminders: strictly due on their respective milestone
     const dueReminders = reminders.filter((r) =>
-      isReminderStageEligible(r.stage, r.days_remaining, exactDaysMode)
+      isReminderStageEligible(r.stage, r.days_remaining)
     );
 
     const total = dueReminders.length;
@@ -276,9 +319,9 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
       countUpcoming,
       allTotal: reminders.length,
     };
-  }, [reminders, exactDaysMode]);
+  }, [reminders]);
 
-  // Filtered reminders list with strict days remaining enforcement
+  // Filtered reminders list with strict exact days remaining enforcement
   const filteredReminders = useMemo(() => {
     return reminders.filter((r) => {
       // Search query
@@ -295,33 +338,30 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
       // Status filter
       if (statusFilter !== 'all' && r.status !== statusFilter) return false;
 
-      // Stage filter with strict days remaining logic
+      // Stage filter with 100% strict exact days remaining logic
       if (stageFilter === '7_days') {
-        if (r.stage !== '7_days') return false;
-        // MUST NEVER SHOW cards with 8 or more days remaining!
-        return isReminderStageEligible('7_days', r.days_remaining, exactDaysMode);
+        // STRICT RULE: Only cards where days_remaining is EXACTLY 7! 8+ days or <7 days are blocked!
+        return r.stage === '7_days' && r.days_remaining === 7;
       }
 
       if (stageFilter === '3_days') {
-        if (r.stage !== '3_days') return false;
-        // MUST NEVER SHOW cards with 4 or more days remaining!
-        return isReminderStageEligible('3_days', r.days_remaining, exactDaysMode);
+        // STRICT RULE: Only cards where days_remaining is EXACTLY 3! 4+ days or <3 days are blocked!
+        return r.stage === '3_days' && r.days_remaining === 3;
       }
 
       if (stageFilter === 'expiry_day') {
-        if (r.stage !== 'expiry_day') return false;
-        return isReminderStageEligible('expiry_day', r.days_remaining, exactDaysMode);
+        return r.stage === 'expiry_day' && r.days_remaining === 0;
       }
 
       if (stageFilter === 'upcoming') {
-        // Future vouchers that have more than 7 days left
+        // Future vouchers that have strictly more than 7 days left
         return r.days_remaining > 7 && r.stage === '7_days';
       }
 
       // If 'all':
       // Only show reminders that are currently due/eligible (unless showUpcoming is checked)
       if (!showUpcoming) {
-        return isReminderStageEligible(r.stage, r.days_remaining, exactDaysMode);
+        return isReminderStageEligible(r.stage, r.days_remaining);
       }
 
       return true;
@@ -774,14 +814,21 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold text-neutral-900">
                         {reminder.customer_name}
                       </span>
-                      <span className="text-xs font-mono text-neutral-600 flex items-center gap-1">
-                        <Phone className="w-3 h-3 text-neutral-400" />
-                        {reminder.customer_phone}
-                      </span>
+                      {/* 1-Click Interactive Customer Phone Number */}
+                      <button
+                        type="button"
+                        onClick={() => handle1ClickSendImagePass(reminder)}
+                        title="Click to send 1-click HD Image Pass to this customer on WhatsApp"
+                        className="group inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-50 hover:bg-emerald-600 text-emerald-800 hover:text-white rounded-lg border border-emerald-200 transition-all cursor-pointer text-xs font-mono font-bold shadow-2xs"
+                      >
+                        <Phone className="w-3 h-3 text-emerald-600 group-hover:text-white shrink-0" />
+                        <span>{reminder.customer_phone}</span>
+                        <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500 group-hover:text-amber-300 group-hover:fill-amber-300" />
+                      </button>
                     </div>
 
                     <div className="text-xs text-neutral-600 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -864,7 +911,7 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* WhatsApp Action Button */}
+                    {/* WhatsApp Action Buttons: 1-Click Image Pass + Send Text Reminder */}
                     {isPending ? (
                       !(business.phone || business.whatsapp_number) ? (
                         <button
@@ -877,14 +924,29 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
                           <span>🔒 Setup Number to Send</span>
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenWhatsAppReminder(reminder)}
-                          className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5" />
-                          <span>Send WhatsApp Reminder</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          {/* 1-Click Direct WhatsApp Image Pass */}
+                          <button
+                            type="button"
+                            onClick={() => handle1ClickSendImagePass(reminder)}
+                            className="px-3 py-2 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl text-xs font-black shadow-xs transition-all flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95"
+                            title="1-Click Direct WhatsApp Image Pass"
+                          >
+                            <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300 animate-pulse" />
+                            <span>1-Click Image</span>
+                          </button>
+
+                          {/* Text-based Personalized WhatsApp Reminder */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenWhatsAppReminder(reminder)}
+                            className="px-3 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                            title="Open WhatsApp with personalized text reminder template"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Send Text</span>
+                          </button>
+                        </div>
                       )
                     ) : isSent ? (
                       <button

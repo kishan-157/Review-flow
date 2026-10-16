@@ -829,6 +829,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         gps_radius_meters: bizForm.gps_radius_meters ? parseInt(bizForm.gps_radius_meters, 10) : 200,
       });
       setBusiness(updated);
+      onSessionUpdated({ ...session, business: updated });
       setSaveSuccessMsg('Business details updated successfully!');
       setTimeout(() => setSaveSuccessMsg(null), 3000);
     } catch (err: any) {
@@ -1362,6 +1363,7 @@ Please generate:
       });
 
       setBusiness(updatedBiz);
+      onSessionUpdated({ ...session, business: updatedBiz });
       setAiNoticeMsg('🎉 Prompt aur Keywords safalta-purvak save ho gaye! 12 keyword review drafts live QR station par active hain (har bar 3 rotate honge).');
       setTimeout(() => setAiNoticeMsg(null), 7000);
     } catch (err: any) {
@@ -1398,6 +1400,7 @@ Please generate:
         ai_suggestions_preview: updatedPreview,
       });
       setBusiness(updatedBiz);
+      onSessionUpdated({ ...session, business: updatedBiz });
       setAiNoticeMsg('✨ 12 Naye Review Drafts keywords ke mutabik refresh kar diye gaye hain!');
       setTimeout(() => setAiNoticeMsg(null), 5000);
     } catch {
@@ -1446,6 +1449,7 @@ Please generate:
         ai_suggestions_preview: updatedPreview,
       });
       setBusiness(updatedBiz);
+      onSessionUpdated({ ...session, business: updatedBiz });
       setDraftsSaveSuccess('🎉 12 Review drafts successfully saved! Yahi drafts live QR scan par 3-3 rotate hokar dikhenge.');
       setTimeout(() => setDraftsSaveSuccess(null), 5000);
     } catch (err: any) {
@@ -5078,11 +5082,12 @@ Please generate:
               />
             )}
 
-            {/* TAB: WHATSAPP MARKETING HUB (1-CLICK DIRECT IMAGE DISPATCH) */}
+            {/* TAB: WHATSAPP MARKETING HUB (1-CLICK DIRECT IMAGE DISPATCH & EXPIRY REMINDERS) */}
             {activeTab === 'whatsapp_marketing' && business && (
               <WhatsAppMarketingHub
                 business={business}
                 loyaltyCards={loyaltyCards}
+                session={session}
                 bizMarketingPhone={bizMarketingPhone}
                 onOpenBizPhoneModal={() => setShowBizPhoneModal(true)}
                 onOpenShareModal={(voucher, mode) => {
@@ -5090,6 +5095,12 @@ Please generate:
                     voucher,
                     initialMode: mode,
                   });
+                }}
+                onRefreshCards={async () => {
+                  if (business) {
+                    const fresh = await getLoyaltyCardsByBusinessId(business.id);
+                    setLoyaltyCards(fresh);
+                  }
                 }}
               />
             )}

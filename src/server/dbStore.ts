@@ -341,7 +341,12 @@ export function authenticateUser(credentialInput: string, passwordInput: string)
   user.last_login_at = new Date().toISOString();
   saveServerDb(db);
 
-  let business = db.businesses.find((b) => b.user_id === user.id);
+  const userBizList = db.businesses.filter((b) => b.user_id === user.id);
+  let business =
+    userBizList.length > 0
+      ? userBizList.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime())[0]
+      : null;
+
   // Guarantee business profile exists for customer
   if (!business && user.role === 'customer') {
     business = {
@@ -357,5 +362,5 @@ export function authenticateUser(credentialInput: string, passwordInput: string)
     saveServerDb(db);
   }
 
-  return { user, business };
+  return { user, business: business || undefined };
 }

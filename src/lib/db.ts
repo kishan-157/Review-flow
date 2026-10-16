@@ -509,9 +509,7 @@ export async function syncWithServer(): Promise<void> {
     if (Array.isArray(data.profiles) && data.profiles.length > 0) {
       const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
       const mergedProfilesMap = new Map<string, Profile>();
-      // First put server profiles
       data.profiles.forEach((p: Profile) => mergedProfilesMap.set(p.id, p));
-      // Then keep any local profile not yet in server
       localProfiles.forEach((p: Profile) => {
         if (!mergedProfilesMap.has(p.id)) {
           mergedProfilesMap.set(p.id, p);
@@ -523,25 +521,97 @@ export async function syncWithServer(): Promise<void> {
     if (Array.isArray(data.businesses) && data.businesses.length > 0) {
       const localBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
       const mergedBizMap = new Map<string, Business>();
-      data.businesses.forEach((b: Business) => mergedBizMap.set(b.id, b));
+
+      data.businesses.forEach((serverB: Business) => {
+        const localMatch = localBiz.find(
+          (lb) => lb.id === serverB.id || (lb.user_id && serverB.user_id && lb.user_id === serverB.user_id)
+        );
+        if (localMatch) {
+          const serverTime = new Date(serverB.updated_at || 0).getTime();
+          const localTime = new Date(localMatch.updated_at || 0).getTime();
+          if (localTime > serverTime) {
+            // Local is newer! Preserve local data
+            mergedBizMap.set(serverB.id, { ...serverB, ...localMatch });
+          } else {
+            // Keep any non-empty local fields (e.g. phone/whatsapp/address/name) that server might not have
+            const merged: Business = {
+              ...serverB,
+              business_name: serverB.business_name || localMatch.business_name,
+              phone: serverB.phone || localMatch.phone || undefined,
+              whatsapp_number: serverB.whatsapp_number || localMatch.whatsapp_number || localMatch.phone || undefined,
+              address: serverB.address || localMatch.address || undefined,
+              logo_url: serverB.logo_url || localMatch.logo_url || undefined,
+              category: serverB.category || localMatch.category,
+              google_review_url: serverB.google_review_url || localMatch.google_review_url,
+            };
+            mergedBizMap.set(serverB.id, merged);
+          }
+        } else {
+          mergedBizMap.set(serverB.id, serverB);
+        }
+      });
+
       localBiz.forEach((b: Business) => {
         if (!mergedBizMap.has(b.id)) {
           mergedBizMap.set(b.id, b);
         }
       });
+
       setStorage(STORAGE_KEYS.BUSINESSES, Array.from(mergedBizMap.values()));
     }
 
     if (Array.isArray(data.reviewSettings) && data.reviewSettings.length > 0) {
       const localSett = getStorage<ReviewSettings[]>(STORAGE_KEYS.REVIEW_SETTINGS, []);
       const mergedSettMap = new Map<string, ReviewSettings>();
-      data.reviewSettings.forEach((s: ReviewSettings) => mergedSettMap.set(s.id, s));
+      data.reviewSettings.forEach((s: ReviewSettings) => {
+        const localMatch = localSett.find((ls) => ls.business_id === s.business_id || ls.id === s.id);
+        if (localMatch) {
+          const serverTime = new Date(s.updated_at || 0).getTime();
+          const localTime = new Date(localMatch.updated_at || 0).getTime();
+          mergedSettMap.set(s.business_id, localTime > serverTime ? localMatch : s);
+        } else {
+          mergedSettMap.set(s.business_id, s);
+        }
+      });
       localSett.forEach((s: ReviewSettings) => {
-        if (!mergedSettMap.has(s.id)) {
-          mergedSettMap.set(s.id, s);
+        if (!mergedSettMap.has(s.business_id)) {
+          mergedSettMap.set(s.business_id, s);
         }
       });
       setStorage(STORAGE_KEYS.REVIEW_SETTINGS, Array.from(mergedSettMap.values()));
+    }
+
+    if (Array.isArray(data.loyaltyConfigs) && data.loyaltyConfigs.length > 0) {
+      const localConfigs = getStorage<LoyaltyProgramConfig[]>(STORAGE_KEYS.LOYALTY_CONFIGS, []);
+      const mergedConfMap = new Map<string, LoyaltyProgramConfig>();
+      data.loyaltyConfigs.forEach((sc: LoyaltyProgramConfig) => {
+        const localMatch = localConfigs.find((lc) => lc.business_id === sc.business_id || lc.id === sc.id);
+        if (localMatch) {
+          const serverTime = new Date(sc.updated_at || 0).getTime();
+          const localTime = new Date(localMatch.updated_at || 0).getTime();
+          mergedConfMap.set(sc.business_id, localTime > serverTime ? localMatch : sc);
+        } else {
+          mergedConfMap.set(sc.business_id, sc);
+        }
+      });
+      localConfigs.forEach((lc) => {
+        if (!mergedConfMap.has(lc.business_id)) {
+          mergedConfMap.set(lc.business_id, lc);
+        }
+      });
+      setStorage(STORAGE_KEYS.LOYALTY_CONFIGS, Array.from(mergedConfMap.values()));
+    }
+
+    if (Array.isArray(data.loyaltyCards) && data.loyaltyCards.length > 0) {
+      const localCards = getStorage<LoyaltyCard[]>(STORAGE_KEYS.LOYALTY_CARDS, []);
+      const mergedCardMap = new Map<string, LoyaltyCard>();
+      data.loyaltyCards.forEach((c: LoyaltyCard) => mergedCardMap.set(c.id, c));
+      localCards.forEach((c: LoyaltyCard) => {
+        if (!mergedCardMap.has(c.id)) {
+          mergedCardMap.set(c.id, c);
+        }
+      });
+      setStorage(STORAGE_KEYS.LOYALTY_CARDS, Array.from(mergedCardMap.values()));
     }
 
     if (Array.isArray(data.analyticsEvents) && data.analyticsEvents.length > 0) {
@@ -941,16 +1011,44 @@ export async function signInUser(credentialInput: string, passwordInput: string)
         }
         setStorage(STORAGE_KEYS.PROFILES, localProfiles);
 
-        // Update local businesses cache
+        // Update local businesses cache while preserving all saved details
         if (data.session.business) {
           const localBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
-          const bIdx = localBiz.findIndex((b) => b.id === data.session.business.id);
+          const bIdx = localBiz.findIndex(
+            (b) => b.id === data.session.business.id || (b.user_id && b.user_id === data.session.user.id)
+          );
           if (bIdx !== -1) {
-            localBiz[bIdx] = data.session.business;
+            const local = localBiz[bIdx];
+            const mergedBiz: Business = {
+              ...data.session.business,
+              business_name: data.session.business.business_name || local.business_name,
+              phone: data.session.business.phone || local.phone || undefined,
+              whatsapp_number: data.session.business.whatsapp_number || local.whatsapp_number || local.phone || undefined,
+              address: data.session.business.address || local.address || undefined,
+              logo_url: data.session.business.logo_url || local.logo_url || undefined,
+              category: data.session.business.category || local.category,
+              google_review_url: data.session.business.google_review_url || local.google_review_url,
+              gps_verification_enabled: data.session.business.gps_verification_enabled ?? local.gps_verification_enabled,
+              latitude: data.session.business.latitude ?? local.latitude,
+              longitude: data.session.business.longitude ?? local.longitude,
+              gps_radius_meters: data.session.business.gps_radius_meters ?? local.gps_radius_meters,
+              ai_prompt: data.session.business.ai_prompt || local.ai_prompt,
+              ai_keywords: data.session.business.ai_keywords || local.ai_keywords,
+              ai_suggestions_preview: data.session.business.ai_suggestions_preview || local.ai_suggestions_preview,
+            };
+            data.session.business = mergedBiz;
+            localBiz[bIdx] = mergedBiz;
+            // Also push back to server to ensure server is in sync
+            fetch(`/api/businesses/${encodeURIComponent(mergedBiz.id)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(mergedBiz),
+            }).catch(() => {});
           } else {
             localBiz.unshift(data.session.business);
           }
           setStorage(STORAGE_KEYS.BUSINESSES, localBiz);
+          setStorage(STORAGE_KEYS.SESSION, data.session);
         }
 
         return data.session;
@@ -1666,6 +1764,11 @@ export async function updateBusiness(
 
   // Also sync to server database
   try {
+    fetch(`/api/businesses/${encodeURIComponent(businessId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(businesses[index]),
+    }).catch(() => {});
     fetch('/api/sync/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1751,6 +1854,18 @@ export async function updateReviewSettings(
     };
     settingsList.push(newSettings);
     setStorage(STORAGE_KEYS.REVIEW_SETTINGS, settingsList);
+    try {
+      fetch(`/api/review-settings/${encodeURIComponent(businessId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings),
+      }).catch(() => {});
+      fetch('/api/sync/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewSettings: [newSettings] }),
+      }).catch(() => {});
+    } catch {}
     return newSettings;
   }
 
@@ -1760,6 +1875,20 @@ export async function updateReviewSettings(
     updated_at: new Date().toISOString(),
   };
   setStorage(STORAGE_KEYS.REVIEW_SETTINGS, settingsList);
+
+  try {
+    fetch(`/api/review-settings/${encodeURIComponent(businessId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settingsList[index]),
+    }).catch(() => {});
+    fetch('/api/sync/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewSettings: [settingsList[index]] }),
+    }).catch(() => {});
+  } catch {}
+
   return settingsList[index];
 }
 
@@ -2975,6 +3104,21 @@ export async function updateLoyaltyConfig(
     configs.push(updated);
   }
   setStorage(STORAGE_KEYS.LOYALTY_CONFIGS, configs);
+
+  // Sync to server endpoints
+  try {
+    fetch(`/api/loyalty/config/${encodeURIComponent(businessId)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    }).catch(() => {});
+    fetch('/api/sync/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loyaltyConfigs: [updated] }),
+    }).catch(() => {});
+  } catch {}
+
   return updated;
 }
 
@@ -3032,6 +3176,20 @@ export async function issueLoyaltyCard(params: {
   cards.unshift(newCard);
   setStorage(STORAGE_KEYS.LOYALTY_CARDS, cards);
 
+  // Sync to server endpoints
+  try {
+    fetch('/api/loyalty/cards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCard),
+    }).catch(() => {});
+    fetch('/api/sync/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ loyaltyCards: [newCard] }),
+    }).catch(() => {});
+  } catch {}
+
   return newCard;
 }
 
@@ -3051,6 +3209,27 @@ export async function getLoyaltyCardsByBusinessId(businessId: string): Promise<L
       // Fallback
     }
   }
+
+  // Also fetch from server if available to merge
+  try {
+    const res = await fetch(`/api/loyalty/cards/${encodeURIComponent(businessId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.cards) && data.cards.length > 0) {
+        const local = getStorage<LoyaltyCard[]>(STORAGE_KEYS.LOYALTY_CARDS, []);
+        const map = new Map<string, LoyaltyCard>();
+        data.cards.forEach((c: LoyaltyCard) => map.set(c.id, c));
+        local.forEach((c: LoyaltyCard) => {
+          if (!map.has(c.id)) map.set(c.id, c);
+        });
+        const merged = Array.from(map.values()).sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setStorage(STORAGE_KEYS.LOYALTY_CARDS, merged);
+        return merged.filter((c) => c.business_id === businessId);
+      }
+    }
+  } catch {}
 
   const cards = getStorage<LoyaltyCard[]>(STORAGE_KEYS.LOYALTY_CARDS, []);
   return cards
@@ -3092,6 +3271,16 @@ export async function redeemLoyaltyCard(
   card.redeemed_at = now;
   card.redeemed_by = redeemedBy;
   setStorage(STORAGE_KEYS.LOYALTY_CARDS, cards);
+
+  // Sync redemption to server
+  try {
+    fetch(`/api/loyalty/cards/${encodeURIComponent(cardId)}/redeem`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ redeemedBy }),
+    }).catch(() => {});
+  } catch {}
+
   return card;
 }
 

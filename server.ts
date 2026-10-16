@@ -683,11 +683,194 @@ app.get('/api/business/by-slug/:slug', (req, res) => {
   }
 });
 
-// Full client-to-server data reconciliation (keeps everything synced across all mobile devices)
+// Direct REST APIs for instant cross-session persistence
+app.get('/api/businesses/user/:userId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { userId } = req.params;
+    const userBusinesses = db.businesses.filter((b) => b.user_id === userId);
+    const biz =
+      userBusinesses.length > 0
+        ? userBusinesses.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime())[0]
+        : null;
+    return res.json({ success: true, business: biz });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch business' });
+  }
+});
+
+app.get('/api/businesses/:id', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { id } = req.params;
+    const biz = db.businesses.find((b) => b.id === id);
+    return res.json({ success: true, business: biz || null });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch business' });
+  }
+});
+
+app.post('/api/businesses/:id', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { id } = req.params;
+    const updates = req.body;
+    const idx = db.businesses.findIndex((b) => b.id === id || (updates.user_id && b.user_id === updates.user_id));
+    if (idx !== -1) {
+      db.businesses[idx] = { ...db.businesses[idx], ...updates, updated_at: new Date().toISOString() };
+      saveServerDb(db);
+      return res.json({ success: true, business: db.businesses[idx] });
+    } else {
+      const newBiz = { id, ...updates, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      db.businesses.push(newBiz);
+      saveServerDb(db);
+      return res.json({ success: true, business: newBiz });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to update business' });
+  }
+});
+
+app.post('/api/review-settings/:businessId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const updates = req.body;
+    const idx = db.reviewSettings.findIndex((s) => s.business_id === businessId || (updates.id && s.id === updates.id));
+    if (idx !== -1) {
+      db.reviewSettings[idx] = { ...db.reviewSettings[idx], ...updates, updated_at: new Date().toISOString() };
+      saveServerDb(db);
+      return res.json({ success: true, settings: db.reviewSettings[idx] });
+    } else {
+      const newSettings = {
+        id: updates.id || `rs_${businessId}`,
+        business_id: businessId,
+        ...updates,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      db.reviewSettings.push(newSettings);
+      saveServerDb(db);
+      return res.json({ success: true, settings: newSettings });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to update review settings' });
+  }
+});
+
+// Loyalty Config endpoints
+const handleLoyaltyConfigUpdate = (req: any, res: any) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const updates = req.body;
+    if (!Array.isArray(db.loyaltyConfigs)) db.loyaltyConfigs = [];
+    const idx = db.loyaltyConfigs.findIndex((l) => l.business_id === businessId || (updates.id && l.id === updates.id));
+    if (idx !== -1) {
+      db.loyaltyConfigs[idx] = { ...db.loyaltyConfigs[idx], ...updates, updated_at: new Date().toISOString() };
+      saveServerDb(db);
+      return res.json({ success: true, config: db.loyaltyConfigs[idx] });
+    } else {
+      const newConfig = {
+        id: updates.id || `loyalty_${businessId}`,
+        business_id: businessId,
+        ...updates,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      db.loyaltyConfigs.push(newConfig);
+      saveServerDb(db);
+      return res.json({ success: true, config: newConfig });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to update loyalty config' });
+  }
+};
+
+app.post('/api/loyalty-configs/:businessId', handleLoyaltyConfigUpdate);
+app.post('/api/loyalty/config/:businessId', handleLoyaltyConfigUpdate);
+
+const handleLoyaltyConfigGet = (req: any, res: any) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const config = (db.loyaltyConfigs || []).find((l) => l.business_id === businessId);
+    return res.json({ success: true, config: config || null });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch loyalty config' });
+  }
+};
+app.get('/api/loyalty-configs/:businessId', handleLoyaltyConfigGet);
+app.get('/api/loyalty/config/:businessId', handleLoyaltyConfigGet);
+
+// Loyalty Cards Endpoints
+app.get('/api/loyalty/cards/:businessId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const cards = (db.loyaltyCards || []).filter((c) => c.business_id === businessId);
+    return res.json({ success: true, cards });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch loyalty cards' });
+  }
+});
+
+app.post('/api/loyalty/cards', (req, res) => {
+  try {
+    const db = loadServerDb();
+    if (!Array.isArray(db.loyaltyCards)) db.loyaltyCards = [];
+    const card = req.body;
+    if (!card || !card.id) {
+      return res.status(400).json({ error: 'Valid card object with id is required' });
+    }
+    const idx = db.loyaltyCards.findIndex((c) => c.id === card.id);
+    if (idx !== -1) {
+      db.loyaltyCards[idx] = { ...db.loyaltyCards[idx], ...card, updated_at: new Date().toISOString() };
+    } else {
+      db.loyaltyCards.unshift(card);
+    }
+    saveServerDb(db);
+    return res.json({ success: true, card: idx !== -1 ? db.loyaltyCards[idx] : card });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to save loyalty card' });
+  }
+});
+
+app.post('/api/loyalty/cards/:id/redeem', (req, res) => {
+  try {
+    const db = loadServerDb();
+    if (!Array.isArray(db.loyaltyCards)) db.loyaltyCards = [];
+    const { id } = req.params;
+    const { redeemedBy, billAmount, notes } = req.body;
+    const card = db.loyaltyCards.find((c) => c.id === id);
+    if (!card) {
+      return res.status(404).json({ error: 'Loyalty card not found' });
+    }
+    card.status = 'redeemed';
+    card.redeemed_at = new Date().toISOString();
+    card.redeemed_by = redeemedBy || 'Counter Cashier';
+    if (billAmount) card.redemption_bill_amount = billAmount;
+    if (notes) card.redemption_notes = notes;
+    saveServerDb(db);
+    return res.json({ success: true, card });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to redeem loyalty card' });
+  }
+});
+
+// Full client-to-server data reconciliation (keeps everything synced across all mobile devices & logins)
 app.post('/api/sync/push', (req, res) => {
   try {
     const db = loadServerDb();
-    const { profiles = [], businesses = [], reviewSettings = [], loyaltyConfigs = [], passwords = {} } = req.body;
+    const {
+      profiles = [],
+      businesses = [],
+      reviewSettings = [],
+      loyaltyConfigs = [],
+      loyaltyCards = [],
+      feedbacks = [],
+      passwords = {},
+    } = req.body;
 
     profiles.forEach((p: any) => {
       const idx = db.profiles.findIndex((ep) => ep.id === p.id || ep.email.toLowerCase() === p.email.toLowerCase());
@@ -702,6 +885,7 @@ app.post('/api/sync/push', (req, res) => {
       const idx = db.businesses.findIndex(
         (eb) =>
           eb.id === b.id ||
+          (eb.user_id && b.user_id && eb.user_id === b.user_id) ||
           (eb.unique_slug && b.unique_slug && eb.unique_slug.toLowerCase() === b.unique_slug.toLowerCase())
       );
       if (idx !== -1) {
@@ -729,6 +913,30 @@ app.post('/api/sync/push', (req, res) => {
           db.loyaltyConfigs[idx] = { ...db.loyaltyConfigs[idx], ...l };
         } else {
           db.loyaltyConfigs.push(l);
+        }
+      });
+    }
+
+    if (Array.isArray(loyaltyCards)) {
+      if (!Array.isArray(db.loyaltyCards)) db.loyaltyCards = [];
+      loyaltyCards.forEach((c: any) => {
+        const idx = db.loyaltyCards.findIndex((ec) => ec.id === c.id);
+        if (idx !== -1) {
+          db.loyaltyCards[idx] = { ...db.loyaltyCards[idx], ...c };
+        } else {
+          db.loyaltyCards.push(c);
+        }
+      });
+    }
+
+    if (Array.isArray(feedbacks)) {
+      if (!Array.isArray(db.feedbacks)) db.feedbacks = [];
+      feedbacks.forEach((f: any) => {
+        const idx = db.feedbacks.findIndex((ef) => ef.id === f.id);
+        if (idx !== -1) {
+          db.feedbacks[idx] = { ...db.feedbacks[idx], ...f };
+        } else {
+          db.feedbacks.push(f);
         }
       });
     }
@@ -772,8 +980,20 @@ app.post('/api/loyalty/reminders/sync/:businessId', (req, res) => {
     cards.forEach((card: LoyaltyCard) => {
       const isClaimed = card.status === 'redeemed';
       const isExpired = new Date(card.expires_at).getTime() < Date.now();
-      const diffMs = new Date(card.expires_at).getTime() - Date.now();
-      const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      // Accurate calendar midnight calculation (prevents fractional hours from turning 7 days into 8 or 3 into 4)
+      const expiryDate = new Date(card.expires_at);
+      const now = new Date();
+      const expMidnight = new Date(
+        expiryDate.getFullYear(),
+        expiryDate.getMonth(),
+        expiryDate.getDate()
+      ).getTime();
+      const nowMidnight = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      ).getTime();
+      const daysLeft = Math.round((expMidnight - nowMidnight) / (1000 * 60 * 60 * 24));
 
       stages.forEach(({ stage, label }) => {
         const uniqueId = `${card.id}_${stage}`;

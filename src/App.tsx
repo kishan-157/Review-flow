@@ -7,6 +7,7 @@ import {
   getBusinessBySlug,
   getReviewSettings,
   initDefaultData,
+  syncWithServer,
 } from './lib/db';
 import { Navbar } from './components/Navbar';
 import { LandingHero } from './components/LandingHero';
@@ -34,6 +35,7 @@ export default function App() {
   // Initialize session and check URL route for #review/:slug, /review/:slug, #login, /login
   useEffect(() => {
     initDefaultData();
+    syncWithServer().catch(() => {});
     const saved = getCurrentSession();
     if (saved) {
       setSession(saved);

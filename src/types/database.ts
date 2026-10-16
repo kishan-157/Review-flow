@@ -205,6 +205,8 @@ export interface LoyaltyCard {
   expires_at: string;
   redeemed_at?: string;
   redeemed_by?: string;
+  redemption_bill_amount?: string;
+  redemption_notes?: string;
   created_at: string;
 }
 
