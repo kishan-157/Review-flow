@@ -33,8 +33,6 @@ import { ScratchPlay } from '../types/database';
 import {
   RewardDownloadOptions,
   sendRewardImageDirectToWhatsAppNumber,
-  getRewardPassUrl,
-  buildFastRewardWhatsAppMessage,
 } from '../lib/rewardCardGenerator';
 import { getScratchPlaysByBusiness } from '../lib/db';
 import { calculateDaysRemaining } from '../lib/reminderService';

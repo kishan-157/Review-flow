@@ -117,7 +117,7 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
         terms: card.terms_conditions,
         originLabel: card.issue_rating ? '⭐ 5-Star Google Review Reward' : '🏆 VIP Loyalty Program',
         targetPhone: card.customer_phone,
-        shareText: text,
+        shareText: '', // Pure image only - no text message and no customer panel link
       });
     } catch (err) {
       console.error('Failed to share pass image on WhatsApp:', err);

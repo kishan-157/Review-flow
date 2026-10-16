@@ -406,7 +406,6 @@ export function buildFastRewardWhatsAppMessage(params: {
     month: 'short',
     year: 'numeric',
   });
-  const passUrl = getRewardPassUrl(params.voucherCode);
 
   const contactLine = params.bizMarketingPhone
     ? `\n\n🏢 *Official Store:* ${bName}\n📱 *Store WhatsApp:* ${params.bizMarketingPhone}${
@@ -419,8 +418,6 @@ export function buildFastRewardWhatsAppMessage(params: {
       `🧾 *Official Reward Bill Receipt - ${bName}*\n\n` +
       `Hello ${params.customerName}! ✨\n` +
       `Your discount voucher *${params.voucherCode}* for *"${params.rewardTitle}"* has been successfully applied to your bill!\n\n` +
-      `📲 *View Official Pass & Bill Status:*\n` +
-      `👉 ${passUrl}\n\n` +
       `Thank you for shopping with us! Visit again soon for more exciting rewards.` +
       contactLine
     );
@@ -434,8 +431,6 @@ export function buildFastRewardWhatsAppMessage(params: {
     `🎁 *Reward:* ${params.rewardTitle}${params.rewardValue ? ` (${params.rewardValue})` : ''}\n` +
     `⏳ *Valid Till:* ${expiryFormatted}\n` +
     `📍 *Terms:* ${params.terms || 'Present pass or voucher code at cashier counter during checkout'}\n\n` +
-    `📲 *View & Download Digital Pass Card (with QR):*\n` +
-    `👉 ${passUrl}\n\n` +
     `Show this pass at our billing counter to claim your discount!` +
     contactLine
   );
@@ -443,9 +438,9 @@ export function buildFastRewardWhatsAppMessage(params: {
 
 /**
  * Shares the actual downloaded reward pass image on WhatsApp.
- * - On Mobile (Web Share API): attaches actual image PNG file + caption to WhatsApp.
+ * - On Mobile (Web Share API): attaches actual image PNG file without unwanted text/links.
  * - On Desktop / WhatsApp Web: copies image to clipboard, auto-downloads file,
- *   and opens WhatsApp Web so user can simply paste (Ctrl+V) the image.
+ *   and opens WhatsApp Web chat directly so user can simply paste (Ctrl+V) the image.
  * Uses preloaded image if available for 0ms delay!
  */
 export async function shareRewardPassOnWhatsApp(
@@ -457,20 +452,27 @@ export async function shareRewardPassOnWhatsApp(
   let cleanPhone = options.targetPhone.replace(/[^0-9]/g, '');
   if (cleanPhone.length === 10) cleanPhone = `91${cleanPhone}`;
 
-  const dispatchUrl =
-    options.dispatchMode === 'web'
-      ? `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(options.shareText)}`
-      : `https://wa.me/${cleanPhone}?text=${encodeURIComponent(options.shareText)}`;
+  const hasText = !!options.shareText && options.shareText.trim().length > 0;
+  const dispatchUrl = hasText
+    ? (options.dispatchMode === 'web'
+        ? `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(options.shareText!.trim())}`
+        : `https://wa.me/${cleanPhone}?text=${encodeURIComponent(options.shareText!.trim())}`)
+    : (options.dispatchMode === 'web'
+        ? `https://web.whatsapp.com/send?phone=${cleanPhone}`
+        : `https://wa.me/${cleanPhone}`);
 
   // 1. Try Mobile Web Share API with image file
   const imageFile = new File([blob], filename, { type: 'image/png' });
   if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
     try {
-      await navigator.share({
+      const shareData: ShareData = {
         files: [imageFile],
         title: `🎁 ${options.businessName} Reward Voucher - ${options.voucherCode}`,
-        text: options.shareText,
-      });
+      };
+      if (hasText) {
+        shareData.text = options.shareText!.trim();
+      }
+      await navigator.share(shareData);
       return { method: 'native_share', success: true };
     } catch (shareErr: any) {
       if (shareErr.name === 'AbortError') {
@@ -533,22 +535,13 @@ export async function sendRewardImageDirectToWhatsAppNumber(params: {
   businessAddress?: string;
   status?: string;
   dispatchMode?: 'app' | 'web';
+  customShareText?: string;
 }): Promise<{ method: 'native_share' | 'clipboard_and_tab'; success: boolean }> {
   const custName = params.customerName || 'Valued Customer';
   const expiry = params.expiresAt || new Date(Date.now() + 30 * 86400000).toISOString();
 
-  const shareText = buildFastRewardWhatsAppMessage({
-    businessName: params.businessName,
-    voucherCode: params.voucherCode,
-    rewardTitle: params.rewardTitle,
-    rewardValue: params.rewardValue,
-    customerName: custName,
-    expiresAt: expiry,
-    terms: params.terms,
-    bizMarketingPhone: params.bizMarketingPhone,
-    businessAddress: params.businessAddress,
-    status: params.status,
-  });
+  // Pure Image Mode: When sharing or sending the image pass, do NOT send text message or customer panel links.
+  const shareText = params.customShareText || '';
 
   // Fast preloaded image canvas
   const preloaded = await generateRewardPassDataUrl({

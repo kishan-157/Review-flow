@@ -314,7 +314,7 @@ export const InlineScratchCard: React.FC<InlineScratchCardProps> = ({
         terms: activePlay.terms_conditions || 'Present this pass at billing counter to redeem.',
         originLabel: '🎲 Scratch & Win Lucky Draw',
         targetPhone: activePlay.customer_phone,
-        shareText: getShareText(),
+        shareText: '', // Pure image only - no text message and no customer panel link
       });
     } catch (err) {
       console.error('Failed to share pass image on WhatsApp:', err);

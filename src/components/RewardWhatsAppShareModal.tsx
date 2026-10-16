@@ -24,7 +24,6 @@ import {
   copyRewardPassImageToClipboard,
   shareRewardPassOnWhatsApp,
   buildFastRewardWhatsAppMessage,
-  getRewardPassUrl,
 } from '../lib/rewardCardGenerator';
 
 export interface RewardVoucherShareData {
@@ -128,9 +127,7 @@ export const RewardWhatsAppShareModal: React.FC<RewardWhatsAppShareModalProps> =
     year: 'numeric',
   });
 
-  const passUrl = getRewardPassUrl(voucher.voucherCode);
-
-  // Fast mode message (with rich digital pass link for instant 1-tap card opening)
+  // Fast mode message (clean text receipt without web links)
   const fastMessage = buildFastRewardWhatsAppMessage({
     businessName: bName,
     voucherCode: voucher.voucherCode,
@@ -205,7 +202,7 @@ export const RewardWhatsAppShareModal: React.FC<RewardWhatsAppShareModalProps> =
         terms: voucher.terms || 'Present this pass at billing counter during checkout to claim your reward.',
         originLabel: voucher.originLabel || '⭐ Verified Customer Reward',
         targetPhone: voucher.customerPhone,
-        shareText: fastMessage,
+        shareText: '', // Pure image only - no text message and no customer panel link
         dispatchMode: dispatchChannel,
         quality: imageQuality,
         preloaded: preloadedImage || undefined,
@@ -522,15 +519,14 @@ export const RewardWhatsAppShareModal: React.FC<RewardWhatsAppShareModalProps> =
                     )}
                   </button>
 
-                  <a
-                    href={passUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => setActiveMode('image')}
                     className="py-2.5 px-3 bg-white border border-neutral-300 hover:bg-neutral-50 text-neutral-800 rounded-xl font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                   >
-                    <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Open Digital Pass</span>
-                  </a>
+                    <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                    <span>View Image Pass</span>
+                  </button>
                 </div>
               </div>
             </div>
