@@ -58,9 +58,11 @@ import {
   Camera,
   Info,
   Image as ImageIcon,
+  Cake,
 } from 'lucide-react';
 import { RewardWhatsAppShareModal, RewardVoucherShareData } from './RewardWhatsAppShareModal';
 import { ExportCustomerModal } from './ExportCustomerModal';
+import { BirthdayClubSection } from './BirthdayClubSection';
 import {
   AuthSession,
   Business,
@@ -138,7 +140,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onOpenLiveReview,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'loyalty' | 'scratch_offers' | 'whatsapp_marketing' | 'ai_agent' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
+    'dashboard' | 'loyalty' | 'scratch_offers' | 'whatsapp_marketing' | 'birthday' | 'ai_agent' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
   >('dashboard');
   const [mobileCategory, setMobileCategory] = useState<'core' | 'rewards' | 'intelligence' | 'store'>('core');
   const [showAllModulesModal, setShowAllModulesModal] = useState<boolean>(false);
@@ -147,7 +149,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     setActiveTab(tab);
     if (tab === 'dashboard' || tab === 'qrcode' || tab === 'ai_agent') {
       setMobileCategory('core');
-    } else if (tab === 'loyalty' || tab === 'scratch_offers' || tab === 'whatsapp_marketing') {
+    } else if (tab === 'loyalty' || tab === 'scratch_offers' || tab === 'whatsapp_marketing' || tab === 'birthday') {
       setMobileCategory('rewards');
     } else if (tab === 'analytics' || tab === 'feedback') {
       setMobileCategory('intelligence');
@@ -285,6 +287,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     min_bill_amount: string;
     validity_days: number;
     terms_conditions: string;
+    ask_birthday: boolean;
   }>({
     enabled: true,
     reward_title: 'Flat 15% Off Your Next Meal',
@@ -294,6 +297,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     min_bill_amount: 'Min bill ₹250',
     validity_days: 30,
     terms_conditions: 'Valid for dine-in & takeaway. One voucher per table/bill. Not combinable with other discounts.',
+    ask_birthday: true,
   });
   const [isSavingLoyalty, setIsSavingLoyalty] = useState(false);
   const [loyaltySaveSuccess, setLoyaltySaveSuccess] = useState<string | null>(null);
@@ -409,13 +413,13 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   // Loyalty Table Filter & Search
   const [loyaltySearch, setLoyaltySearch] = useState('');
-  const [loyaltyStatusFilter, setLoyaltyStatusFilter] = useState<'all' | 'active' | 'unclaimed_expired' | 'redeemed'>('all');
+  const [loyaltyStatusFilter, setLoyaltyStatusFilter] = useState<'all' | 'active' | 'unclaimed_expired' | 'redeemed' | 'birthday_today'>('all');
   const [loyaltySubTab, setLoyaltySubTab] = useState<'cards' | 'reminders'>('cards');
   const [previewCardModal, setPreviewCardModal] = useState<LoyaltyCard | null>(null);
 
   // Customer List CSV Export Modal state
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportInitialFilter, setExportInitialFilter] = useState<'all' | 'active' | 'unclaimed_expired' | 'redeemed'>('all');
+  const [exportInitialFilter, setExportInitialFilter] = useState<'all' | 'active' | 'unclaimed_expired' | 'redeemed' | 'birthday_today' | 'birthday_month'>('all');
 
   // Manual Card Issue Modal / Form (Counter Walk-in)
   const [showManualIssueModal, setShowManualIssueModal] = useState(false);
@@ -501,6 +505,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           min_bill_amount: lConf.min_bill_amount || '',
           validity_days: lConf.validity_days,
           terms_conditions: lConf.terms_conditions,
+          ask_birthday: lConf.ask_birthday !== false,
         });
       }
       setLoyaltyCards(lCards);
@@ -874,6 +879,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         min_bill_amount: loyaltyForm.min_bill_amount.trim(),
         validity_days: Number(loyaltyForm.validity_days) || 30,
         terms_conditions: loyaltyForm.terms_conditions.trim(),
+        ask_birthday: loyaltyForm.ask_birthday,
       });
       setLoyaltyConfig(updated);
       setLoyaltySaveSuccess('Loyalty Program settings successfully saved!');
@@ -1098,7 +1104,7 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
   };
 
-  const handleExportLoyaltyCSV = (filter: 'all' | 'active' | 'unclaimed_expired' | 'redeemed' = 'all') => {
+  const handleExportLoyaltyCSV = (filter: 'all' | 'active' | 'unclaimed_expired' | 'redeemed' | 'birthday_today' | 'birthday_month' = 'all') => {
     setExportInitialFilter(filter);
     setShowExportModal(true);
   };
@@ -1811,6 +1817,7 @@ Please generate:
                 {activeTab === 'loyalty' && 'Loyalty & Stamp Cards'}
                 {activeTab === 'scratch_offers' && 'Scratch & Win Game'}
                 {activeTab === 'whatsapp_marketing' && 'WhatsApp Marketing Hub'}
+                {activeTab === 'birthday' && '🎂 Birthday Club & Wishes'}
                 {activeTab === 'analytics' && 'Traffic & Scans'}
                 {activeTab === 'feedback' && 'Private Feedback Shield'}
                 {activeTab === 'business' && 'Store Profile & GPS'}
@@ -1826,7 +1833,7 @@ Please generate:
               onClick={() => setShowAllModulesModal(true)}
               className="px-2.5 py-1 text-[11px] font-bold text-[#6C3BFF] bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
             >
-              <span>All 13 Modules</span>
+              <span>All 14 Modules</span>
               <ChevronDown className="w-3 h-3" />
             </button>
           </div>
@@ -1855,7 +1862,7 @@ Please generate:
               type="button"
               onClick={() => {
                 setMobileCategory('rewards');
-                if (!['loyalty', 'scratch_offers'].includes(activeTab)) {
+                if (!['loyalty', 'scratch_offers', 'whatsapp_marketing', 'birthday'].includes(activeTab)) {
                   handleSelectTab('loyalty');
                 }
               }}
@@ -1994,6 +2001,19 @@ Please generate:
                   <Send className="w-3.5 h-3.5 text-emerald-500" />
                   <span>WhatsApp Marketing</span>
                   <span className="px-1 text-[9px] bg-amber-400 text-slate-950 font-black rounded">1-Click</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('birthday')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'birthday'
+                      ? 'bg-pink-600 text-white shadow-xs font-black'
+                      : 'bg-pink-50 text-pink-900 hover:bg-pink-100 border border-pink-200/70'
+                  }`}
+                >
+                  <Cake className="w-3.5 h-3.5 text-pink-500" />
+                  <span>Birthday Club</span>
+                  <span className="px-1 text-[9px] bg-pink-100 text-pink-900 font-black rounded">🎂 VIP</span>
                 </button>
               </>
             )}
@@ -2234,14 +2254,31 @@ Please generate:
                         handleSelectTab('whatsapp_marketing');
                         setShowAllModulesModal(false);
                       }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer sm:col-span-2 ${
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
                         activeTab === 'whatsapp_marketing' ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-emerald-50/70 hover:bg-emerald-100 border-emerald-200/70 text-emerald-950'
                       }`}
                     >
                       <Send className="w-5 h-5 text-emerald-500 shrink-0" />
                       <div>
-                        <div className="text-xs font-bold">WhatsApp Marketing Hub (1-Click Image Dispatch)</div>
-                        <div className={`text-[10px] ${activeTab === 'whatsapp_marketing' ? 'text-emerald-100' : 'text-emerald-800'}`}>Send actual voucher images & digital passes to customer phone numbers in 1 click</div>
+                        <div className="text-xs font-bold">WhatsApp Marketing Hub</div>
+                        <div className={`text-[10px] ${activeTab === 'whatsapp_marketing' ? 'text-emerald-100' : 'text-emerald-800'}`}>1-Click voucher images & passes</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('birthday');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'birthday' ? 'bg-pink-600 text-white border-pink-700 font-bold' : 'bg-pink-50/70 hover:bg-pink-100 border-pink-200/70 text-pink-950'
+                      }`}
+                    >
+                      <Cake className="w-5 h-5 text-pink-500 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold">Birthday Club & Wishes</div>
+                        <div className={`text-[10px] ${activeTab === 'birthday' ? 'text-pink-100' : 'text-pink-800'}`}>Birthday rewards & automated WhatsApp greetings</div>
                       </div>
                     </button>
                   </div>
@@ -2517,6 +2554,25 @@ Please generate:
                   activeTab === 'whatsapp_marketing' ? 'bg-white text-emerald-900' : 'bg-emerald-100 text-emerald-900'
                 }`}>
                   1-Click Direct
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleSelectTab('birthday')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'birthday'
+                    ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white font-black shadow-xs'
+                    : 'text-slate-700 hover:bg-pink-50/80 hover:text-pink-900'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Cake className="w-4 h-4 text-pink-500" />
+                  <span>Birthday Club & Wishes</span>
+                </div>
+                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                  activeTab === 'birthday' ? 'bg-white text-pink-900' : 'bg-pink-100 text-pink-800'
+                }`}>
+                  🎂 Auto
                 </span>
               </button>
             </div>
@@ -3407,6 +3463,14 @@ Please generate:
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Export Customer List (CSV)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExportLoyaltyCSV('birthday_today')}
+                        className="px-3.5 py-1.5 bg-pink-500/30 border border-pink-300/40 text-pink-100 hover:text-white rounded-xl text-xs font-semibold hover:bg-pink-500/50 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Cake className="w-3.5 h-3.5 text-pink-300" />
+                        <span>Export Birthdays (CSV)</span>
                       </button>
                       <button
                         type="button"
@@ -4430,6 +4494,7 @@ Please generate:
                             { id: 'active', label: '🟢 Active' },
                             { id: 'unclaimed_expired', label: '🟡 Unclaimed / Expired' },
                             { id: 'redeemed', label: '🟣 Redeemed' },
+                            { id: 'birthday_today', label: '🎂 Birthday Today' },
                           ].map((tab) => (
                             <button
                               key={tab.id}
@@ -4485,9 +4550,20 @@ Please generate:
                         const isExp = new Date(card.expires_at).getTime() < now;
                         const isActive = !isRedeemed && !isExp;
 
+                        const isBirthdayToday = (() => {
+                          if (!card.customer_dob) return false;
+                          const parts = card.customer_dob.split('-');
+                          if (parts.length < 2) return false;
+                          const m = parts.length === 3 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+                          const d = parts.length === 3 ? parseInt(parts[2], 10) : parseInt(parts[1], 10);
+                          const today = new Date();
+                          return m === today.getMonth() + 1 && d === today.getDate();
+                        })();
+
                         if (loyaltyStatusFilter === 'active') return isActive;
                         if (loyaltyStatusFilter === 'unclaimed_expired') return !isRedeemed && isExp;
                         if (loyaltyStatusFilter === 'redeemed') return isRedeemed;
+                        if (loyaltyStatusFilter === 'birthday_today') return isBirthdayToday;
                         return true;
                       });
 
@@ -4568,6 +4644,12 @@ Please generate:
                                       <span>{card.customer_phone}</span>
                                       <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
                                     </button>
+                                    {card.customer_dob && (
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-pink-50 text-pink-700 border border-pink-200 text-[10px] font-bold">
+                                        <Cake className="w-2.5 h-2.5 text-pink-500" />
+                                        <span>DOB: {card.customer_dob}</span>
+                                      </span>
+                                    )}
                                   </div>
                                   <p className="text-[11px] text-neutral-600 truncate max-w-xs">
                                     {card.reward_title} · Valid till{' '}
@@ -4835,6 +4917,28 @@ Please generate:
                           placeholder="Valid for dine-in & takeaway. 1 card per bill."
                           className="w-full px-3 py-2 text-xs bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-[#6C3BFF]"
                         />
+                      </div>
+
+                      {/* Ask Customer Birthday Toggle */}
+                      <div className="p-3 bg-pink-50/70 border border-pink-200 rounded-xl flex items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <label className="text-[11px] font-bold text-neutral-800 flex items-center gap-1.5">
+                            <Cake className="w-3.5 h-3.5 text-pink-600" />
+                            <span>Capture Date of Birth (जन्म तारीख)</span>
+                          </label>
+                          <p className="text-[10px] text-neutral-500 leading-tight">
+                            Review form par customer se unka birthday poochhein taki Birthday Club offers & wishes bhej sakein (On/Off).
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={loyaltyForm.ask_birthday}
+                            onChange={(e) => setLoyaltyForm({ ...loyaltyForm, ask_birthday: e.target.checked })}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-neutral-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                        </label>
                       </div>
 
                       <button
@@ -5124,6 +5228,28 @@ Please generate:
                     const fresh = await getLoyaltyCardsByBusinessId(business.id);
                     setLoyaltyCards(fresh);
                   }
+                }}
+              />
+            )}
+
+            {/* TAB: BIRTHDAY CLUB & WISHES (AUTOMATED CAPTURE, SPECIAL REWARDS, & PYARA SA GREETING) */}
+            {activeTab === 'birthday' && business && (
+              <BirthdayClubSection
+                business={business}
+                loyaltyCards={loyaltyCards}
+                bizMarketingPhone={bizMarketingPhone}
+                onRefreshCards={async () => {
+                  if (business) {
+                    const fresh = await getLoyaltyCardsByBusinessId(business.id);
+                    setLoyaltyCards(fresh);
+                  }
+                }}
+                onOpenExportModal={(filter) => {
+                  handleExportLoyaltyCSV(filter as any);
+                }}
+                onUpdateBusiness={(updated) => {
+                  setBusiness(updated);
+                  onSessionUpdated({ ...session, business: updated });
                 }}
               />
             )}

@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   RefreshCw,
   HelpCircle,
+  Cake,
+  PartyPopper,
 } from 'lucide-react';
 import { LoyaltyCard, ScratchPlay, Business } from '../types/database';
 import { getScratchPlaysByBusiness } from '../lib/db';
@@ -28,6 +30,12 @@ export interface ExportCustomerItem {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  customerDob?: string;
+  dobFormatted?: string;
+  isBirthdayToday: boolean;
+  isBirthdayThisWeek: boolean;
+  isBirthdayThisMonth: boolean;
+  daysUntilBirthday: number;
   rewardTitle: string;
   rewardValue: string;
   minBillAmount: string;
@@ -50,7 +58,7 @@ interface ExportCustomerModalProps {
   onClose: () => void;
   business: Business;
   loyaltyCards: LoyaltyCard[];
-  initialFilter?: 'all' | 'active' | 'unclaimed_expired' | 'redeemed';
+  initialFilter?: 'all' | 'active' | 'unclaimed_expired' | 'redeemed' | 'birthday_today' | 'birthday_month';
 }
 
 export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
@@ -62,9 +70,8 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
 }) => {
   const [scratchPlays, setScratchPlays] = useState<ScratchPlay[]>([]);
   const [isLoadingScratch, setIsLoadingScratch] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'unclaimed_expired' | 'redeemed'>(
-    initialFilter
-  );
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'unclaimed_expired' | 'redeemed'>('all');
+  const [birthdayFilter, setBirthdayFilter] = useState<'all' | 'today' | 'this_week' | 'this_month' | 'has_dob'>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'loyalty' | 'scratch'>('all');
   const [timeFilter, setTimeFilter] = useState<'all' | '7_days' | '30_days' | '90_days'>('all');
   const [phoneFormat, setPhoneFormat] = useState<'intl' | 'plain'>('intl'); // +91 vs 10 digits
@@ -95,10 +102,78 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
 
   // Sync initialFilter prop if changed
   useEffect(() => {
-    if (initialFilter) {
-      setStatusFilter(initialFilter);
+    if (initialFilter === 'birthday_today') {
+      setBirthdayFilter('today');
+      setStatusFilter('all');
+    } else if (initialFilter === 'birthday_month') {
+      setBirthdayFilter('this_month');
+      setStatusFilter('all');
+    } else if (['all', 'active', 'unclaimed_expired', 'redeemed'].includes(initialFilter)) {
+      setStatusFilter(initialFilter as any);
+      setBirthdayFilter('all');
     }
   }, [initialFilter, isOpen]);
+
+  // Helper to parse DOB and compute status
+  const parseDobInfo = (dobStr?: string) => {
+    if (!dobStr) {
+      return {
+        formatted: undefined,
+        isToday: false,
+        isThisWeek: false,
+        isThisMonth: false,
+        daysUntil: 999,
+      };
+    }
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1;
+    const currentDay = today.getDate();
+
+    const parts = dobStr.split('-');
+    if (parts.length < 2) {
+      return {
+        formatted: dobStr,
+        isToday: false,
+        isThisWeek: false,
+        isThisMonth: false,
+        daysUntil: 999,
+      };
+    }
+
+    const m = parts.length === 3 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+    const d = parts.length === 3 ? parseInt(parts[2], 10) : parseInt(parts[1], 10);
+    if (isNaN(m) || isNaN(d)) {
+      return {
+        formatted: dobStr,
+        isToday: false,
+        isThisWeek: false,
+        isThisMonth: false,
+        daysUntil: 999,
+      };
+    }
+
+    const isToday = m === currentMonth && d === currentDay;
+    const isThisMonth = m === currentMonth;
+
+    let bdayThisYear = new Date(today.getFullYear(), m - 1, d);
+    if (bdayThisYear.getTime() < new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) {
+      bdayThisYear = new Date(today.getFullYear() + 1, m - 1, d);
+    }
+    const diffMs = bdayThisYear.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    const isThisWeek = diffDays >= 0 && diffDays <= 7;
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const formatted = `${d} ${monthNames[m - 1]}`;
+
+    return {
+      formatted,
+      isToday,
+      isThisWeek,
+      isThisMonth,
+      daysUntil: diffDays,
+    };
+  };
 
   // Combine and normalize all customer items
   const allCustomers = useMemo<ExportCustomerItem[]>(() => {
@@ -116,12 +191,20 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
       if (isRedeemed) computedStatus = 'redeemed';
       else if (isExpired) computedStatus = 'unclaimed_expired';
 
+      const dobInfo = parseDobInfo(c.customer_dob);
+
       items.push({
         id: `loyalty_${c.id}`,
         voucherCode: c.voucher_code,
         customerName: c.customer_name || 'Valued Customer',
         customerPhone: c.customer_phone,
         customerEmail: c.customer_email,
+        customerDob: c.customer_dob,
+        dobFormatted: dobInfo.formatted,
+        isBirthdayToday: dobInfo.isToday,
+        isBirthdayThisWeek: dobInfo.isThisWeek,
+        isBirthdayThisMonth: dobInfo.isThisMonth,
+        daysUntilBirthday: dobInfo.daysUntil,
         rewardTitle: c.reward_title,
         rewardValue: c.reward_value,
         minBillAmount: c.min_bill_amount || 'Min bill ₹250',
@@ -166,12 +249,20 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
       if (isRedeemed) computedStatus = 'redeemed';
       else if (isExpired) computedStatus = 'unclaimed_expired';
 
+      const dobInfo = parseDobInfo(p.customer_dob);
+
       items.push({
         id: `scratch_${p.id}`,
         voucherCode: p.voucher_code,
         customerName: p.customer_name || 'Lucky Winner',
         customerPhone: p.customer_phone,
         customerEmail: p.customer_email,
+        customerDob: p.customer_dob,
+        dobFormatted: dobInfo.formatted,
+        isBirthdayToday: dobInfo.isToday,
+        isBirthdayThisWeek: dobInfo.isThisWeek,
+        isBirthdayThisMonth: dobInfo.isThisMonth,
+        daysUntilBirthday: dobInfo.daysUntil,
         rewardTitle: p.reward_title,
         rewardValue: p.reward_value,
         minBillAmount: p.min_purchase_amount || 'Min bill ₹250',
@@ -213,11 +304,20 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
     let active = 0;
     let unclaimedExpired = 0;
     let redeemed = 0;
+    let birthdayToday = 0;
+    let birthdayThisMonth = 0;
+    let totalWithDob = 0;
 
     allCustomers.forEach((item) => {
       if (item.status === 'active') active++;
       else if (item.status === 'unclaimed_expired') unclaimedExpired++;
       else if (item.status === 'redeemed') redeemed++;
+
+      if (item.customerDob) {
+        totalWithDob++;
+        if (item.isBirthdayToday) birthdayToday++;
+        if (item.isBirthdayThisMonth) birthdayThisMonth++;
+      }
     });
 
     return {
@@ -225,6 +325,9 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
       active,
       unclaimedExpired,
       redeemed,
+      birthdayToday,
+      birthdayThisMonth,
+      totalWithDob,
     };
   }, [allCustomers]);
 
@@ -237,11 +340,17 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
       if (statusFilter === 'unclaimed_expired' && item.status !== 'unclaimed_expired') return false;
       if (statusFilter === 'redeemed' && item.status !== 'redeemed') return false;
 
-      // 2. Source Filter
+      // 2. Birthday Filter
+      if (birthdayFilter === 'today' && !item.isBirthdayToday) return false;
+      if (birthdayFilter === 'this_week' && !item.isBirthdayThisWeek) return false;
+      if (birthdayFilter === 'this_month' && !item.isBirthdayThisMonth) return false;
+      if (birthdayFilter === 'has_dob' && !item.customerDob) return false;
+
+      // 3. Source Filter
       if (sourceFilter === 'loyalty' && item.source === 'Scratch & Win') return false;
       if (sourceFilter === 'scratch' && item.source !== 'Scratch & Win') return false;
 
-      // 3. Time Filter
+      // 4. Time Filter
       if (timeFilter !== 'all') {
         const itemTime = new Date(item.issuedAt).getTime();
         const diffDays = (now - itemTime) / (1000 * 60 * 60 * 24);
@@ -250,19 +359,20 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
         if (timeFilter === '90_days' && diffDays > 90) return false;
       }
 
-      // 4. Search Filter
+      // 5. Search Filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesName = item.customerName.toLowerCase().includes(q);
         const matchesPhone = item.customerPhone.includes(q);
         const matchesCode = item.voucherCode.toLowerCase().includes(q);
         const matchesReward = item.rewardTitle.toLowerCase().includes(q);
-        if (!matchesName && !matchesPhone && !matchesCode && !matchesReward) return false;
+        const matchesDob = (item.dobFormatted || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesPhone && !matchesCode && !matchesReward && !matchesDob) return false;
       }
 
       return true;
     });
-  }, [allCustomers, statusFilter, sourceFilter, timeFilter, searchQuery]);
+  }, [allCustomers, statusFilter, birthdayFilter, sourceFilter, timeFilter, searchQuery]);
 
   // Format phone number according to selected format
   const formatPhoneNumber = (phone: string, mode: 'intl' | 'plain') => {
@@ -286,6 +396,8 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
     const headers = [
       'Customer Name',
       'Customer Phone',
+      'Date of Birth (DOB)',
+      'Birthday Today',
       'Voucher Code',
       'Reward Title',
       'Reward Value',
@@ -310,6 +422,8 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
       return [
         `"${item.customerName.replace(/"/g, '""')}"`,
         `"${phoneFormatted}"`,
+        `"${item.dobFormatted || item.customerDob || 'Not Provided'}"`,
+        `"${item.isBirthdayToday ? 'YES (TODAY!)' : 'No'}"`,
         `"${item.voucherCode}"`,
         `"${item.rewardTitle.replace(/"/g, '""')}"`,
         `"${item.rewardValue}"`,
@@ -381,7 +495,7 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                 Export Customer List (Filtered CSV)
               </h2>
               <p className="text-xs text-purple-200 mt-0.5">
-                Download filtered lists for WhatsApp / SMS campaigns: Active customers, Unclaimed/Expired, or Redeemed.
+                Download filtered lists for WhatsApp / SMS: Active rewards, Unclaimed/Expired, Birthday Club, or Redeemed.
               </p>
             </div>
           </div>
@@ -418,21 +532,21 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Card 1: Active Reward Holders */}
-              <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 hover:border-emerald-300 transition-all flex flex-col justify-between space-y-3">
+              <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 hover:border-emerald-300 transition-all flex flex-col justify-between space-y-2.5">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-200/60 px-2 py-0.5 rounded-md">
                       Active Rewards
                     </span>
-                    <span className="text-lg font-black text-emerald-950 font-mono">
+                    <span className="text-base font-black text-emerald-950 font-mono">
                       {counts.active}
                     </span>
                   </div>
-                  <h4 className="text-xs font-bold text-emerald-950">Active Reward Customers</h4>
-                  <p className="text-[11px] text-emerald-800/80 leading-relaxed">
-                    Jinke paas currently valid coupon hai aur unhone abhi claim nahi kiya hai.
+                  <h4 className="text-xs font-bold text-emerald-950">Active Customers</h4>
+                  <p className="text-[10px] text-emerald-800/80 leading-snug">
+                    Currently valid & unredeemed coupon holders.
                   </p>
                 </div>
 
@@ -443,27 +557,27 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                     exportToCSV(activeItems, 'active_reward_customers');
                   }}
                   disabled={counts.active === 0}
-                  className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                  className="w-full py-1.5 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Active ({counts.active})</span>
+                  <Download className="w-3 h-3" />
+                  <span>Download ({counts.active})</span>
                 </button>
               </div>
 
               {/* Card 2: Unclaimed & Expired Customers (Mila tha par claim nahi kiya) */}
-              <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-300 hover:border-amber-400 transition-all flex flex-col justify-between space-y-3 shadow-2xs">
+              <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-300 hover:border-amber-400 transition-all flex flex-col justify-between space-y-2.5 shadow-2xs">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-200 px-2 py-0.5 rounded-md">
                       Mila Par Claim Nahi Kiya
                     </span>
-                    <span className="text-lg font-black text-amber-950 font-mono">
+                    <span className="text-base font-black text-amber-950 font-mono">
                       {counts.unclaimedExpired}
                     </span>
                   </div>
                   <h4 className="text-xs font-bold text-amber-950">Unclaimed / Expired</h4>
-                  <p className="text-[11px] text-amber-900/80 leading-relaxed">
-                    Reward mila tha par counter par redeem nahi kiya aur expire ho gaya. Re-engagement ke liye best!
+                  <p className="text-[10px] text-amber-900/80 leading-snug">
+                    Reward mila tha par counter par redeem nahi kiya.
                   </p>
                 </div>
 
@@ -474,27 +588,59 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                     exportToCSV(unclaimedItems, 'unclaimed_expired_customers');
                   }}
                   disabled={counts.unclaimedExpired === 0}
-                  className="w-full py-2 px-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                  className="w-full py-1.5 px-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Unclaimed ({counts.unclaimedExpired})</span>
+                  <Download className="w-3 h-3" />
+                  <span>Download ({counts.unclaimedExpired})</span>
                 </button>
               </div>
 
-              {/* Card 3: Redeemed / Claimed Customers */}
-              <div className="p-4 rounded-2xl bg-purple-50/70 border border-purple-200 hover:border-purple-300 transition-all flex flex-col justify-between space-y-3">
+              {/* Card 3: Birthday Club Customers */}
+              <div className="p-3.5 rounded-2xl bg-pink-50/80 border border-pink-300 hover:border-pink-400 transition-all flex flex-col justify-between space-y-2.5 shadow-2xs">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-pink-900 bg-pink-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <Cake className="w-2.5 h-2.5" />
+                      Birthday Club
+                    </span>
+                    <span className="text-base font-black text-pink-950 font-mono">
+                      {counts.totalWithDob}
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-bold text-pink-950">Birthdays Recorded</h4>
+                  <p className="text-[10px] text-pink-900/80 leading-snug">
+                    Today: <strong>{counts.birthdayToday}</strong> • This Month: <strong>{counts.birthdayThisMonth}</strong>
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const bdayItems = allCustomers.filter((i) => i.customerDob);
+                    exportToCSV(bdayItems, 'birthday_club_customers');
+                  }}
+                  disabled={counts.totalWithDob === 0}
+                  className="w-full py-1.5 px-2.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white rounded-xl text-[11px] font-black transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  <Cake className="w-3 h-3" />
+                  <span>Download Birthday ({counts.totalWithDob})</span>
+                </button>
+              </div>
+
+              {/* Card 4: Redeemed Customers */}
+              <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200 hover:border-purple-300 transition-all flex flex-col justify-between space-y-2.5">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black uppercase tracking-wider text-purple-800 bg-purple-200/60 px-2 py-0.5 rounded-md">
-                      Claimed & Redeemed
+                      Redeemed
                     </span>
-                    <span className="text-lg font-black text-purple-950 font-mono">
+                    <span className="text-base font-black text-purple-950 font-mono">
                       {counts.redeemed}
                     </span>
                   </div>
-                  <h4 className="text-xs font-bold text-purple-950">Redeemed Customers</h4>
-                  <p className="text-[11px] text-purple-800/80 leading-relaxed">
-                    Dukaan par aakar coupon successfully apply aur spend karne wale verified customers.
+                  <h4 className="text-xs font-bold text-purple-950">Claimed Rewards</h4>
+                  <p className="text-[10px] text-purple-800/80 leading-snug">
+                    Dukaan par aakar claim karne wale customers.
                   </p>
                 </div>
 
@@ -505,10 +651,10 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                     exportToCSV(redeemedItems, 'redeemed_customers');
                   }}
                   disabled={counts.redeemed === 0}
-                  className="w-full py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                  className="w-full py-1.5 px-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer disabled:opacity-50"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download Redeemed ({counts.redeemed})</span>
+                  <Download className="w-3 h-3" />
+                  <span>Download ({counts.redeemed})</span>
                 </button>
               </div>
             </div>
@@ -525,6 +671,7 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                 type="button"
                 onClick={() => {
                   setStatusFilter('all');
+                  setBirthdayFilter('all');
                   setSourceFilter('all');
                   setTimeFilter('all');
                   setSearchQuery('');
@@ -536,7 +683,7 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
             </div>
 
             {/* Filter Tabs Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
               {/* 1. Status Filter Tab */}
               <div>
                 <label className="text-[11px] font-bold text-neutral-700 block mb-1">
@@ -545,18 +692,37 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as any)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl font-bold text-neutral-800 focus:outline-hidden focus:ring-1 focus:ring-purple-500 cursor-pointer"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-neutral-300 rounded-xl font-bold text-neutral-800 focus:outline-hidden focus:ring-1 focus:ring-purple-500 cursor-pointer"
                 >
                   <option value="all">🌟 All Statuses ({counts.all})</option>
-                  <option value="active">🟢 Active Valid Rewards ({counts.active})</option>
+                  <option value="active">🟢 Active Valid ({counts.active})</option>
                   <option value="unclaimed_expired">
-                    🟡 Unclaimed & Expired ({counts.unclaimedExpired})
+                    🟡 Unclaimed / Expired ({counts.unclaimedExpired})
                   </option>
-                  <option value="redeemed">🟣 Redeemed / Claimed ({counts.redeemed})</option>
+                  <option value="redeemed">🟣 Redeemed ({counts.redeemed})</option>
                 </select>
               </div>
 
-              {/* 2. Source / Campaign Filter */}
+              {/* 2. Birthday Filter Tab */}
+              <div>
+                <label className="text-[11px] font-bold text-neutral-700 block mb-1 flex items-center gap-1">
+                  <Cake className="w-3 h-3 text-pink-600" />
+                  <span>Birthday Filter:</span>
+                </label>
+                <select
+                  value={birthdayFilter}
+                  onChange={(e) => setBirthdayFilter(e.target.value as any)}
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-pink-300 rounded-xl font-bold text-pink-950 focus:outline-hidden focus:ring-1 focus:ring-pink-500 cursor-pointer"
+                >
+                  <option value="all">🎂 All (No Birthday Filter)</option>
+                  <option value="today">🎉 Birthday TODAY ({counts.birthdayToday})</option>
+                  <option value="this_week">🎁 Birthday This Week</option>
+                  <option value="this_month">📅 Birthday This Month ({counts.birthdayThisMonth})</option>
+                  <option value="has_dob">👥 Has Birthday Recorded ({counts.totalWithDob})</option>
+                </select>
+              </div>
+
+              {/* 3. Source / Campaign Filter */}
               <div>
                 <label className="text-[11px] font-bold text-neutral-700 block mb-1">
                   Program Source:
@@ -564,15 +730,15 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                 <select
                   value={sourceFilter}
                   onChange={(e) => setSourceFilter(e.target.value as any)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl font-bold text-neutral-800 focus:outline-hidden focus:ring-1 focus:ring-purple-500 cursor-pointer"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-neutral-300 rounded-xl font-bold text-neutral-800 focus:outline-hidden focus:ring-1 focus:ring-purple-500 cursor-pointer"
                 >
-                  <option value="all">All Programs (Loyalty + Scratch)</option>
-                  <option value="loyalty">⭐ Google Reviews & Loyalty Cards</option>
+                  <option value="all">All Sources (Loyalty + Scratch)</option>
+                  <option value="loyalty">⭐ Google Reviews & Loyalty</option>
                   <option value="scratch">🎲 Scratch & Win Lucky Draw</option>
                 </select>
               </div>
 
-              {/* 3. Timeline / Issued Period */}
+              {/* 4. Timeline / Issued Period */}
               <div>
                 <label className="text-[11px] font-bold text-neutral-700 block mb-1">
                   Issued Timeline:
@@ -580,7 +746,7 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                 <select
                   value={timeFilter}
                   onChange={(e) => setTimeFilter(e.target.value as any)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl font-bold text-neutral-800 focus:outline-hidden focus:ring-1 focus:ring-purple-500 cursor-pointer"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-neutral-300 rounded-xl font-bold text-neutral-800 focus:outline-hidden focus:ring-1 focus:ring-purple-500 cursor-pointer"
                 >
                   <option value="all">All Time (Full History)</option>
                   <option value="7_days">Last 7 Days</option>
@@ -596,7 +762,7 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                 <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Search by customer name, phone, or voucher code..."
+                  placeholder="Search name, phone, voucher code, or birth date..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-purple-500"
@@ -653,7 +819,7 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                 <Gift className="w-8 h-8 text-neutral-300 mx-auto" />
                 <p className="text-xs font-bold text-neutral-700">No customers match this filter combination</p>
                 <p className="text-[11px] text-neutral-400">
-                  Try switching status or timeline filter to view more results.
+                  Try switching status, birthday, or timeline filter to view more results.
                 </p>
               </div>
             ) : (
@@ -663,6 +829,7 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                     <tr className="bg-neutral-100 border-b border-neutral-200 text-[11px] font-black text-neutral-600 uppercase tracking-wider">
                       <th className="py-2.5 px-3">Customer</th>
                       <th className="py-2.5 px-3">Mobile</th>
+                      <th className="py-2.5 px-3">Date of Birth</th>
                       <th className="py-2.5 px-3">Code & Reward</th>
                       <th className="py-2.5 px-3">Min. Spend</th>
                       <th className="py-2.5 px-3">Status</th>
@@ -673,18 +840,32 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
                   <tbody className="divide-y divide-neutral-200 bg-white">
                     {filteredCustomers.slice(0, 5).map((c) => (
                       <tr key={c.id} className="hover:bg-neutral-50/80 transition-colors">
-                        <td className="py-2 px-3 font-bold text-neutral-900 truncate max-w-[140px]">
+                        <td className="py-2 px-3 font-bold text-neutral-900 truncate max-w-[130px]">
                           {c.customerName}
                         </td>
                         <td className="py-2 px-3 font-mono text-[11px] text-neutral-600">
                           {formatPhoneNumber(c.customerPhone, phoneFormat)}
                         </td>
                         <td className="py-2 px-3">
+                          {c.isBirthdayToday ? (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-pink-500 text-white shadow-2xs">
+                              🎂 TODAY!
+                            </span>
+                          ) : c.dobFormatted ? (
+                            <span className="text-neutral-700 font-semibold text-[11px] flex items-center gap-1">
+                              <Cake className="w-3 h-3 text-pink-500" />
+                              {c.dobFormatted}
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400 text-[10px] italic">Not set</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3">
                           <div className="flex items-center gap-1.5">
                             <span className="font-mono text-[10px] font-black bg-purple-50 text-purple-900 px-1.5 py-0.5 rounded border border-purple-200">
                               {c.voucherCode}
                             </span>
-                            <span className="text-[11px] text-neutral-800 font-semibold truncate max-w-[150px]">
+                            <span className="text-[11px] text-neutral-800 font-semibold truncate max-w-[130px]">
                               {c.rewardTitle}
                             </span>
                           </div>
@@ -742,7 +923,9 @@ export const ExportCustomerModal: React.FC<ExportCustomerModalProps> = ({
               type="button"
               onClick={() => {
                 let segmentName = 'filtered_customers';
-                if (statusFilter === 'active') segmentName = 'active_reward_customers';
+                if (birthdayFilter === 'today') segmentName = 'birthday_today_customers';
+                else if (birthdayFilter === 'this_month') segmentName = 'birthday_this_month_customers';
+                else if (statusFilter === 'active') segmentName = 'active_reward_customers';
                 else if (statusFilter === 'unclaimed_expired') segmentName = 'unclaimed_expired_customers';
                 else if (statusFilter === 'redeemed') segmentName = 'redeemed_customers';
                 else if (statusFilter === 'all') segmentName = 'all_customers';

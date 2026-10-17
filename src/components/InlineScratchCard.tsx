@@ -16,6 +16,7 @@ import {
   ArrowRight,
   Copy,
   Image as ImageIcon,
+  Cake,
 } from 'lucide-react';
 import { ScratchCampaign, ScratchPlay, Business } from '../types/database';
 import { checkScratchEligibility, executeScratchPlay } from '../lib/db';
@@ -44,6 +45,7 @@ export const InlineScratchCard: React.FC<InlineScratchCardProps> = ({
   // Customer input state
   const [name, setName] = useState<string>(initialName);
   const [phone, setPhone] = useState<string>(initialPhone);
+  const [dob, setDob] = useState<string>('');
   const [isUnlocking, setIsUnlocking] = useState<boolean>(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
 
@@ -87,6 +89,7 @@ export const InlineScratchCard: React.FC<InlineScratchCardProps> = ({
         businessId: business.id,
         customerName: name.trim(),
         customerPhone: phone.trim(),
+        customerDob: dob.trim() || undefined,
       });
 
       setActivePlay(play);
@@ -413,6 +416,27 @@ export const InlineScratchCard: React.FC<InlineScratchCardProps> = ({
                   className="w-full pl-7 pr-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-400"
                 />
                 <Phone className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2.5" />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-bold text-neutral-600 flex items-center gap-1">
+                  <Cake className="w-3 h-3 text-pink-600" />
+                  <span>Date of Birth (जन्म तारीख)</span>
+                </label>
+                <span className="text-[9px] text-pink-700 font-bold bg-pink-50 px-1.5 py-0.5 rounded border border-pink-200">
+                  🎂 Birthday Gift ke liye! (Optional)
+                </span>
+              </div>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  className="w-full pl-7 pr-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-pink-400"
+                />
+                <Cake className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2.5" />
               </div>
             </div>
           </div>

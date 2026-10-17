@@ -3067,6 +3067,7 @@ export async function getLoyaltyConfig(businessId: string): Promise<LoyaltyProgr
       terms_conditions: 'Valid for dine-in & takeaway. One voucher per table/bill. Not combinable with other discounts.',
       stamps_required: 1,
       badge_label: 'Google Review VIP Pass',
+      ask_birthday: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -3137,11 +3138,17 @@ export async function issueLoyaltyCard(params: {
   customer_name: string;
   customer_phone: string;
   customer_email?: string;
+  customer_dob?: string;
   rating?: number;
+  reward_title?: string;
+  reward_value?: string;
+  min_bill_amount?: string;
+  terms_conditions?: string;
+  validity_days?: number;
 }): Promise<LoyaltyCard> {
   const config = await getLoyaltyConfig(params.business_id);
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + (config.validity_days || 30));
+  expiresAt.setDate(expiresAt.getDate() + (params.validity_days || config.validity_days || 30));
 
   const newCard: LoyaltyCard = {
     id: `card_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -3149,13 +3156,14 @@ export async function issueLoyaltyCard(params: {
     customer_name: params.customer_name.trim(),
     customer_phone: params.customer_phone.trim(),
     customer_email: params.customer_email?.trim() || undefined,
+    customer_dob: params.customer_dob?.trim() || undefined,
     voucher_code: generateVoucherCode(),
-    reward_title: config.reward_title || 'VIP Loyalty Reward',
+    reward_title: params.reward_title || config.reward_title || 'VIP Loyalty Reward',
     reward_description: config.reward_description || 'Thank you for your valuable feedback!',
     reward_type: config.reward_type || 'discount_percentage',
-    reward_value: config.reward_value || '15%',
-    min_bill_amount: config.min_bill_amount || 'Min bill ₹250',
-    terms_conditions: config.terms_conditions || 'Valid for 30 days. Present at counter.',
+    reward_value: params.reward_value || config.reward_value || '15%',
+    min_bill_amount: params.min_bill_amount || config.min_bill_amount || 'Min bill ₹250',
+    terms_conditions: params.terms_conditions || config.terms_conditions || 'Valid for 30 days. Present at counter.',
     status: 'active',
     issue_rating: params.rating || 5,
     stamps_collected: 1,
@@ -3550,6 +3558,7 @@ export async function executeScratchPlay(params: {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  customerDob?: string;
 }): Promise<ScratchPlay> {
   // Always invoke server to determine prize authoritatively
   const res = await fetch('/api/scratch/play', {

@@ -49,6 +49,13 @@ export interface Business {
   gps_radius_meters?: number; // e.g., 200 (meters)
   // Proactive Review Reward Mode: Guaranteed Loyalty Card vs Scratch & Win Lucky Draw
   review_reward_mode?: ReviewRewardMode;
+  // Birthday Club & Celebration Marketing
+  birthday_offer_enabled?: boolean;
+  birthday_reward_title?: string;
+  birthday_reward_value?: string;
+  birthday_min_bill_amount?: string;
+  birthday_validity_days?: number;
+  birthday_wish_template?: string;
   created_at: string;
   updated_at: string;
 }
@@ -182,6 +189,7 @@ export interface LoyaltyProgramConfig {
   terms_conditions: string;
   stamps_required?: number;
   badge_label?: string;
+  ask_birthday?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -192,6 +200,7 @@ export interface LoyaltyCard {
   customer_name: string;
   customer_phone: string;
   customer_email?: string;
+  customer_dob?: string; // YYYY-MM-DD
   voucher_code: string;
   reward_title: string;
   reward_description: string;
@@ -297,6 +306,7 @@ export interface ScratchPlay {
   customer_name: string;
   customer_phone: string;
   customer_email?: string;
+  customer_dob?: string;
   voucher_code: string; // e.g. WIN-7K9A
   reward_title: string;
   reward_type: RewardType;

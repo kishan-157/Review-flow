@@ -1414,10 +1414,11 @@ app.get('/api/scratch/eligibility/:businessId', (req, res) => {
 app.post('/api/scratch/play', (req, res) => {
   try {
     const db = loadServerDb();
-    const { businessId, customerName, customerPhone, customerEmail } = req.body;
+    const { businessId, customerName, customerPhone, customerEmail, customerDob } = req.body;
 
     const cleanName = (customerName || '').trim();
     const cleanPhone = (customerPhone || '').trim();
+    const cleanDob = (customerDob || '').trim() || undefined;
 
     if (!businessId || !cleanName || !cleanPhone) {
       return res.status(400).json({ error: 'Business ID, Customer Name, and Customer Phone are required.' });
@@ -1506,6 +1507,7 @@ app.post('/api/scratch/play', (req, res) => {
       customer_name: cleanName,
       customer_phone: cleanPhone,
       customer_email: customerEmail || undefined,
+      customer_dob: cleanDob,
       voucher_code: voucherCode,
       reward_title: prizeTitle,
       reward_type: prizeType,

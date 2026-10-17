@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   Navigation,
   Trophy,
+  Cake,
 } from 'lucide-react';
 import {
   Business,
@@ -108,6 +109,7 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
   const [showLoyaltyModal, setShowLoyaltyModal] = useState<boolean>(false);
   const [loyaltyCustomerName, setLoyaltyCustomerName] = useState<string>('');
   const [loyaltyCustomerPhone, setLoyaltyCustomerPhone] = useState<string>('');
+  const [loyaltyCustomerDob, setLoyaltyCustomerDob] = useState<string>('');
   const [issuedLoyaltyCard, setIssuedLoyaltyCard] = useState<LoyaltyCard | null>(null);
   const [issuingLoyalty, setIssuingLoyalty] = useState<boolean>(false);
   const [loyaltyClaimError, setLoyaltyClaimError] = useState<string | null>(null);
@@ -337,6 +339,7 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
         business_id: business.id,
         customer_name: loyaltyCustomerName,
         customer_phone: loyaltyCustomerPhone,
+        customer_dob: loyaltyCustomerDob.trim() || undefined,
         rating: rating || 5,
       });
       setIssuedLoyaltyCard(card);
@@ -1346,6 +1349,28 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                                         <Phone className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-2" />
                                       </div>
                                     </div>
+                                    {loyaltyConfig?.ask_birthday !== false && (
+                                      <div className="col-span-1 sm:col-span-2">
+                                        <div className="flex items-center justify-between mb-0.5">
+                                          <label className="text-[10px] font-bold text-neutral-700 flex items-center gap-1">
+                                            <Cake className="w-3 h-3 text-purple-600" />
+                                            <span>Date of Birth (जन्म तारीख)</span>
+                                          </label>
+                                          <span className="text-[9px] text-purple-600 font-bold bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200">
+                                            🎂 Birthday Gift Voucher ke liye!
+                                          </span>
+                                        </div>
+                                        <div className="relative">
+                                          <input
+                                            type="date"
+                                            value={loyaltyCustomerDob}
+                                            onChange={(e) => setLoyaltyCustomerDob(e.target.value)}
+                                            className="w-full pl-7 pr-2.5 py-1.5 text-xs bg-white border border-neutral-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-[#6C3BFF]"
+                                          />
+                                          <Cake className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-2" />
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
 
                                   {loyaltyClaimError && (
