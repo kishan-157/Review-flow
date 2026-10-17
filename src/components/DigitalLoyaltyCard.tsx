@@ -15,6 +15,7 @@ import {
   ArrowRight,
   BadgeCheck,
   Image as ImageIcon,
+  Tag,
 } from 'lucide-react';
 import { LoyaltyCard, Business } from '../types/database';
 import { downloadRewardPassImage, shareRewardPassOnWhatsApp } from '../lib/rewardCardGenerator';
@@ -116,6 +117,7 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
         createdAt: card.created_at,
         terms: card.terms_conditions,
         originLabel: card.issue_rating ? '⭐ 5-Star Google Review Reward' : '🏆 VIP Loyalty Program',
+        minBillAmount: card.min_bill_amount || 'Min bill ₹250',
         targetPhone: card.customer_phone,
         shareText: '', // Pure image only - no text message and no customer panel link
       });
@@ -141,6 +143,7 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
         createdAt: card.created_at,
         terms: card.terms_conditions,
         originLabel: card.issue_rating ? '⭐ 5-Star Google Review Reward' : '🏆 VIP Loyalty Program',
+        minBillAmount: card.min_bill_amount || 'Min bill ₹250',
       });
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 2500);
@@ -158,6 +161,7 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
     day: 'numeric',
     year: 'numeric',
   });
+  const minSpendRequired = card.min_bill_amount || 'Min bill ₹250';
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -231,6 +235,17 @@ export const DigitalLoyaltyCard: React.FC<DigitalLoyaltyCardProps> = ({
                 {card.reward_value}
               </div>
             )}
+          </div>
+
+          {/* Minimum Spend Requirement Banner (Samne dikhna chahiye) */}
+          <div className="mt-3.5 py-2.5 px-3 bg-linear-to-r from-amber-500/25 via-amber-400/20 to-orange-500/20 border border-amber-400/50 rounded-xl flex items-center justify-between gap-2 text-xs shadow-inner">
+            <div className="flex items-center gap-1.5 text-amber-200 font-bold">
+              <Tag className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Minimum Spend Required:</span>
+            </div>
+            <span className="font-black text-amber-300 bg-amber-400/25 px-2.5 py-0.5 rounded-lg border border-amber-400/40 text-xs shadow-xs">
+              {minSpendRequired}
+            </span>
           </div>
 
           {card.terms_conditions && (

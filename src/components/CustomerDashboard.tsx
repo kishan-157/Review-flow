@@ -60,6 +60,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { RewardWhatsAppShareModal, RewardVoucherShareData } from './RewardWhatsAppShareModal';
+import { ExportCustomerModal } from './ExportCustomerModal';
 import {
   AuthSession,
   Business,
@@ -408,9 +409,13 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   // Loyalty Table Filter & Search
   const [loyaltySearch, setLoyaltySearch] = useState('');
-  const [loyaltyStatusFilter, setLoyaltyStatusFilter] = useState<'all' | 'active' | 'redeemed' | 'expired'>('all');
+  const [loyaltyStatusFilter, setLoyaltyStatusFilter] = useState<'all' | 'active' | 'unclaimed_expired' | 'redeemed'>('all');
   const [loyaltySubTab, setLoyaltySubTab] = useState<'cards' | 'reminders'>('cards');
   const [previewCardModal, setPreviewCardModal] = useState<LoyaltyCard | null>(null);
+
+  // Customer List CSV Export Modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportInitialFilter, setExportInitialFilter] = useState<'all' | 'active' | 'unclaimed_expired' | 'redeemed'>('all');
 
   // Manual Card Issue Modal / Form (Counter Walk-in)
   const [showManualIssueModal, setShowManualIssueModal] = useState(false);
@@ -1093,28 +1098,9 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
   };
 
-  const handleExportLoyaltyCSV = () => {
-    if (loyaltyCards.length === 0) return;
-    const headers = ['Voucher Code', 'Customer Name', 'Customer Phone', 'Reward Title', 'Value', 'Status', 'Expires At', 'Issued At', 'Redeemed At'];
-    const rows = loyaltyCards.map((c) => [
-      c.voucher_code,
-      `"${c.customer_name}"`,
-      `"${c.customer_phone}"`,
-      `"${c.reward_title}"`,
-      `"${c.reward_value}"`,
-      c.status,
-      c.expires_at,
-      c.created_at,
-      c.redeemed_at || '',
-    ]);
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `loyalty_customers_${business?.unique_slug || 'export'}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExportLoyaltyCSV = (filter: 'all' | 'active' | 'unclaimed_expired' | 'redeemed' = 'all') => {
+    setExportInitialFilter(filter);
+    setShowExportModal(true);
   };
 
   // AI Agent Functions
@@ -3416,9 +3402,8 @@ Please generate:
                       )}
                       <button
                         type="button"
-                        onClick={handleExportLoyaltyCSV}
-                        disabled={loyaltyCards.length === 0}
-                        className="px-3.5 py-1.5 bg-neutral-900/40 border border-white/20 text-white rounded-xl text-xs font-semibold hover:bg-neutral-900/60 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        onClick={() => handleExportLoyaltyCSV('all')}
+                        className="px-3.5 py-1.5 bg-neutral-900/40 border border-white/20 text-white rounded-xl text-xs font-semibold hover:bg-neutral-900/60 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Export Customer List (CSV)</span>
@@ -4133,6 +4118,7 @@ Please generate:
                                     bizMarketingPhone,
                                     businessAddress: business.address,
                                     status: verifiedCard.status,
+                                    minBillAmount: verifiedCard.min_bill_amount || loyaltyConfig?.min_bill_amount || 'Min bill ₹250',
                                   });
                                 }}
                                 title="Click this number to 1-Click Send Image directly to WhatsApp"
@@ -4240,6 +4226,7 @@ Please generate:
                                             ? '⭐ 5-Star Google Review Reward'
                                             : '🏆 VIP Loyalty Program',
                                           status: verifiedCard.status,
+                                          minBillAmount: verifiedCard.min_bill_amount || loyaltyConfig?.min_bill_amount || "Min bill ₹250",
                                         },
                                         initialMode: 'fast',
                                       })
@@ -4435,22 +4422,39 @@ Please generate:
                         </p>
                       </div>
 
-                      {/* Status Filter Tabs */}
-                      <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-xl text-[11px]">
-                        {(['all', 'active', 'redeemed'] as const).map((tab) => (
-                          <button
-                            key={tab}
-                            type="button"
-                            onClick={() => setLoyaltyStatusFilter(tab)}
-                            className={`px-2.5 py-1 rounded-lg font-bold capitalize transition-colors cursor-pointer ${
-                              loyaltyStatusFilter === tab
-                                ? 'bg-white text-neutral-900 shadow-2xs'
-                                : 'text-neutral-500 hover:text-neutral-900'
-                            }`}
-                          >
-                            {tab}
-                          </button>
-                        ))}
+                      {/* Status Filter Tabs & Export Action */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1 bg-neutral-100 p-1 rounded-xl text-[11px]">
+                          {[
+                            { id: 'all', label: 'All' },
+                            { id: 'active', label: '🟢 Active' },
+                            { id: 'unclaimed_expired', label: '🟡 Unclaimed / Expired' },
+                            { id: 'redeemed', label: '🟣 Redeemed' },
+                          ].map((tab) => (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => setLoyaltyStatusFilter(tab.id as any)}
+                              className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                                loyaltyStatusFilter === tab.id
+                                  ? 'bg-white text-neutral-900 shadow-2xs'
+                                  : 'text-neutral-500 hover:text-neutral-900'
+                              }`}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleExportLoyaltyCSV(loyaltyStatusFilter as any)}
+                          className="px-2.5 py-1.5 bg-white border border-neutral-300 hover:bg-neutral-50 text-neutral-800 rounded-xl text-[11px] font-bold shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer ml-auto"
+                          title="Open CSV Export Modal with current filter"
+                        >
+                          <Download className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Export CSV</span>
+                        </button>
                       </div>
                     </div>
 
@@ -4468,6 +4472,7 @@ Please generate:
 
                     {/* Cards List / Table */}
                     {(() => {
+                      const now = Date.now();
                       const filtered = loyaltyCards.filter((card) => {
                         const q = loyaltySearch.toLowerCase();
                         const matches =
@@ -4475,8 +4480,14 @@ Please generate:
                           card.customer_phone.includes(q) ||
                           card.voucher_code.toLowerCase().includes(q);
                         if (!matches) return false;
-                        if (loyaltyStatusFilter === 'active') return card.status === 'active';
-                        if (loyaltyStatusFilter === 'redeemed') return card.status === 'redeemed';
+
+                        const isRedeemed = card.status === 'redeemed';
+                        const isExp = new Date(card.expires_at).getTime() < now;
+                        const isActive = !isRedeemed && !isExp;
+
+                        if (loyaltyStatusFilter === 'active') return isActive;
+                        if (loyaltyStatusFilter === 'unclaimed_expired') return !isRedeemed && isExp;
+                        if (loyaltyStatusFilter === 'redeemed') return isRedeemed;
                         return true;
                       });
 
@@ -4547,6 +4558,7 @@ Please generate:
                                           bizMarketingPhone,
                                           businessAddress: business.address,
                                           status: card.status,
+                                          minBillAmount: card.min_bill_amount || loyaltyConfig?.min_bill_amount || "Min bill ₹250",
                                         });
                                       }}
                                       title="Click number to 1-Click Send Image on WhatsApp"
@@ -5058,6 +5070,17 @@ Please generate:
                       setShowBizPhoneModal(true);
                     }}
                     initialMode={whatsappShareModalData.initialMode}
+                  />
+                )}
+
+                {/* Customer List CSV Export Modal (Filtered by Active, Unclaimed/Expired, Redeemed) */}
+                {showExportModal && business && (
+                  <ExportCustomerModal
+                    isOpen={showExportModal}
+                    onClose={() => setShowExportModal(false)}
+                    business={business}
+                    loyaltyCards={loyaltyCards}
+                    initialFilter={exportInitialFilter}
                   />
                 )}
               </>

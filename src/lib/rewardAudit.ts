@@ -155,7 +155,7 @@ export function buildLoyaltyAuditDetails(
     kaise_mila_title: kaiseMilaTitle,
     kaise_mila_desc: kaiseMilaDesc,
     kaise_mila_stars: stars,
-    min_purchase_amount: undefined,
+    min_purchase_amount: card.min_bill_amount || undefined,
     terms_conditions: card.terms_conditions || 'Valid at counter during billing.',
     expires_at: card.expires_at,
     expires_at_formatted: formatDateTime(card.expires_at),

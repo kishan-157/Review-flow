@@ -37,6 +37,7 @@ export interface RewardVoucherShareData {
   createdAt?: string;
   terms?: string;
   originLabel?: string;
+  minBillAmount?: string;
   status?: 'active' | 'redeemed' | 'expired';
 }
 
@@ -100,6 +101,7 @@ export const RewardWhatsAppShareModal: React.FC<RewardWhatsAppShareModalProps> =
       createdAt: voucher.createdAt,
       terms: voucher.terms || 'Present this pass at billing counter during checkout to claim your reward.',
       originLabel: voucher.originLabel || '⭐ Verified Customer Reward',
+      minBillAmount: voucher.minBillAmount,
       quality: imageQuality,
     })
       .then((res) => {
@@ -201,6 +203,7 @@ export const RewardWhatsAppShareModal: React.FC<RewardWhatsAppShareModalProps> =
         createdAt: voucher.createdAt,
         terms: voucher.terms || 'Present this pass at billing counter during checkout to claim your reward.',
         originLabel: voucher.originLabel || '⭐ Verified Customer Reward',
+        minBillAmount: voucher.minBillAmount,
         targetPhone: voucher.customerPhone,
         shareText: '', // Pure image only - no text message and no customer panel link
         dispatchMode: dispatchChannel,
@@ -238,6 +241,7 @@ export const RewardWhatsAppShareModal: React.FC<RewardWhatsAppShareModalProps> =
         createdAt: voucher.createdAt,
         terms: voucher.terms || 'Present this pass at billing counter during checkout to claim your reward.',
         originLabel: voucher.originLabel || '⭐ Verified Customer Reward',
+        minBillAmount: voucher.minBillAmount,
         quality: imageQuality,
       },
       preloadedImage || undefined
@@ -276,6 +280,7 @@ export const RewardWhatsAppShareModal: React.FC<RewardWhatsAppShareModalProps> =
       createdAt: voucher.createdAt,
       terms: voucher.terms || 'Present this pass at billing counter during checkout to claim your reward.',
       originLabel: voucher.originLabel || '⭐ Verified Customer Reward',
+      minBillAmount: voucher.minBillAmount,
       quality: imageQuality,
     });
     setShareSuccessNotice('⬇️ VIP Pass downloaded successfully!');
@@ -317,11 +322,16 @@ export const RewardWhatsAppShareModal: React.FC<RewardWhatsAppShareModalProps> =
             </div>
           </div>
 
-          <div className="mt-3 flex items-center gap-2 text-xs">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
             <span className="font-mono bg-white/20 text-white font-black px-2.5 py-0.5 rounded-lg border border-white/20">
               Code: {voucher.voucherCode}
             </span>
             <span className="truncate text-emerald-100 max-w-xs">{voucher.rewardTitle}</span>
+            {voucher.minBillAmount && (
+              <span className="bg-amber-400 text-slate-950 font-black px-2.5 py-0.5 rounded-lg text-xs shadow-xs border border-amber-300">
+                🏷️ {voucher.minBillAmount}
+              </span>
+            )}
           </div>
         </div>
 

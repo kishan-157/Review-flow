@@ -122,6 +122,7 @@ export const WhatsAppMarketingHub: React.FC<WhatsAppMarketingHubProps> = ({
       createdAt: string;
       status: 'active' | 'redeemed';
       terms?: string;
+      minBillAmount?: string;
       daysRemaining: number;
     }> = [];
 
@@ -144,6 +145,7 @@ export const WhatsAppMarketingHub: React.FC<WhatsAppMarketingHubProps> = ({
           createdAt: card.created_at || new Date().toISOString(),
           status: card.status === 'redeemed' ? 'redeemed' : 'active',
           terms: card.terms_conditions || 'Show this pass at billing counter to claim loyalty stamp or redemption.',
+          minBillAmount: card.min_bill_amount || 'Min bill ₹250',
           daysRemaining: days,
         });
       }
@@ -166,6 +168,7 @@ export const WhatsAppMarketingHub: React.FC<WhatsAppMarketingHubProps> = ({
           createdAt: play.scratched_at || play.created_at || new Date().toISOString(),
           status: play.status === 'redeemed' ? 'redeemed' : 'active',
           terms: play.terms_conditions || 'Valid for single use during checkout at cashier counter.',
+          minBillAmount: play.min_purchase_amount || 'Min bill ₹250',
           daysRemaining: days,
         });
       }
@@ -234,6 +237,7 @@ export const WhatsAppMarketingHub: React.FC<WhatsAppMarketingHubProps> = ({
     expiresAt: string;
     status: string;
     terms?: string;
+    minBillAmount?: string;
   }) => {
     if (!bizMarketingPhone) {
       onOpenBizPhoneModal();
@@ -255,6 +259,7 @@ export const WhatsAppMarketingHub: React.FC<WhatsAppMarketingHubProps> = ({
         bizMarketingPhone,
         businessAddress: business.address,
         status: reward.status,
+        minBillAmount: reward.minBillAmount,
       });
 
       setLastDispatchedNotice({

@@ -194,6 +194,7 @@ export const LoyaltyReminderManager: React.FC<LoyaltyReminderManagerProps> = ({
         bizMarketingPhone: bizPhone,
         businessAddress: business.address,
         status: reminder.status,
+        minBillAmount: 'Min bill ₹250',
       });
 
       // Prompt 2-step confirmation modal to finalize audit log

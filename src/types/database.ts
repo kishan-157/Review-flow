@@ -197,6 +197,7 @@ export interface LoyaltyCard {
   reward_description: string;
   reward_type: RewardType;
   reward_value: string;
+  min_bill_amount?: string;
   terms_conditions?: string;
   status: LoyaltyCardStatus;
   issue_rating?: number;

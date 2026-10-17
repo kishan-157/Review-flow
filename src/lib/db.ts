@@ -3154,6 +3154,7 @@ export async function issueLoyaltyCard(params: {
     reward_description: config.reward_description || 'Thank you for your valuable feedback!',
     reward_type: config.reward_type || 'discount_percentage',
     reward_value: config.reward_value || '15%',
+    min_bill_amount: config.min_bill_amount || 'Min bill ₹250',
     terms_conditions: config.terms_conditions || 'Valid for 30 days. Present at counter.',
     status: 'active',
     issue_rating: params.rating || 5,

@@ -12,6 +12,7 @@ export interface RewardDownloadOptions {
   terms?: string;
   rewardType?: 'loyalty' | 'scratch' | 'review';
   originLabel?: string;
+  minBillAmount?: string;
   quality?: 'fast' | 'hd'; // 'fast' = Turbo Mode (~20ms), 'hd' = Ultra HD Print (900x1160)
   forceRefresh?: boolean;
 }
@@ -48,6 +49,7 @@ export async function generateRewardPassDataUrl(
     createdAt,
     terms = 'Present this pass at billing counter during checkout to claim your reward.',
     originLabel,
+    minBillAmount,
     quality = 'fast',
     forceRefresh = false,
   } = options;
@@ -191,6 +193,26 @@ export async function generateRewardPassDataUrl(
     ctx.fillText(rewardValue, 160, 295);
   }
 
+  // Minimum Spend / Bill Requirement Badge (Prominently shown on front of pass)
+  const minSpendStr = minBillAmount
+    ? (minBillAmount.toLowerCase().includes('min') ? minBillAmount : `Min. Spend: ${minBillAmount}`)
+    : '';
+
+  if (minSpendStr) {
+    const badgeX = rewardValue ? 265 : 70;
+    const badgeW = 270;
+    ctx.fillStyle = 'rgba(245, 158, 11, 0.2)';
+    ctx.fillRect(badgeX, 265, badgeW, 42);
+    ctx.strokeStyle = '#F59E0B';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(badgeX, 265, badgeW, 42);
+    ctx.fillStyle = '#FDE68A';
+    ctx.font = 'bold 16px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`🏷️ ${minSpendStr}`, badgeX + badgeW / 2, 292);
+    ctx.textAlign = 'left';
+  }
+
   // Reward Title
   ctx.fillStyle = '#FFFFFF';
   ctx.font = '900 34px system-ui, -apple-system, sans-serif';
@@ -198,10 +220,13 @@ export async function generateRewardPassDataUrl(
   const cleanTitle = rewardTitle.length > 36 ? rewardTitle.slice(0, 34) + '...' : rewardTitle;
   ctx.fillText(cleanTitle, 75, 355);
 
-  // Subtitle / Instruction
+  // Subtitle / Instruction with Minimum Spend Note
   ctx.fillStyle = '#DDD6FE';
   ctx.font = '16px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Exclusive discount unlocked & verified for billing counter discount.', 75, 390);
+  const subText = minSpendStr
+    ? `Exclusive discount unlocked! Valid on ${minSpendStr} at billing counter.`
+    : 'Exclusive discount unlocked & verified for billing counter discount.';
+  ctx.fillText(subText, 75, 390);
 
   // Customer & Timeline Details Box (Grid 2 cols)
   // Left: Customer info
@@ -289,13 +314,22 @@ export async function generateRewardPassDataUrl(
 
   ctx.fillStyle = '#334155';
   ctx.font = '15px system-ui, -apple-system, sans-serif';
-  ctx.fillText('1. Show this QR code or Voucher code to cashier.', 380, 810);
-  ctx.fillText('2. Cashier scans QR with live camera to verify.', 380, 840);
-  ctx.fillText('3. Discount is applied directly on your bill.', 380, 870);
+  ctx.fillText('1. Show this QR code or Voucher code to cashier.', 380, 805);
+  ctx.fillText('2. Cashier scans QR with live camera to verify.', 380, 835);
+  if (minSpendStr) {
+    ctx.fillStyle = '#92400E';
+    ctx.font = 'bold 15px system-ui, -apple-system, sans-serif';
+    ctx.fillText(`3. Applicable on ${minSpendStr} at counter.`, 380, 865);
+    ctx.fillStyle = '#334155';
+    ctx.font = '15px system-ui, -apple-system, sans-serif';
+    ctx.fillText('4. Discount is applied directly on your bill.', 380, 895);
+  } else {
+    ctx.fillText('3. Discount is applied directly on your bill.', 380, 865);
+  }
 
   ctx.fillStyle = '#16A34A';
   ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
-  ctx.fillText('✓ 100% Genuine Issued Voucher • Single Use Only', 380, 915);
+  ctx.fillText('✓ 100% Genuine Issued Voucher • Single Use Only', 380, 922);
 
   // Terms & Conditions Footer
   ctx.textAlign = 'center';
@@ -536,6 +570,7 @@ export async function sendRewardImageDirectToWhatsAppNumber(params: {
   status?: string;
   dispatchMode?: 'app' | 'web';
   customShareText?: string;
+  minBillAmount?: string;
 }): Promise<{ method: 'native_share' | 'clipboard_and_tab'; success: boolean }> {
   const custName = params.customerName || 'Valued Customer';
   const expiry = params.expiresAt || new Date(Date.now() + 30 * 86400000).toISOString();
@@ -553,6 +588,7 @@ export async function sendRewardImageDirectToWhatsAppNumber(params: {
     customerPhone: params.customerPhone || params.targetPhone,
     expiresAt: expiry,
     terms: params.terms,
+    minBillAmount: params.minBillAmount,
     quality: 'fast',
   });
 
@@ -565,6 +601,7 @@ export async function sendRewardImageDirectToWhatsAppNumber(params: {
     customerPhone: params.customerPhone || params.targetPhone,
     expiresAt: expiry,
     terms: params.terms,
+    minBillAmount: params.minBillAmount,
     targetPhone: params.targetPhone,
     shareText,
     dispatchMode: params.dispatchMode || (typeof window !== 'undefined' && window.innerWidth < 768 ? 'app' : 'web'),
