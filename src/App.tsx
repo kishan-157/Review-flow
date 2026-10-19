@@ -18,6 +18,7 @@ import { AuthModal } from './components/AuthModal';
 import { LoginPage } from './components/LoginPage';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { RewardVerifyModal } from './components/RewardVerifyModal';
+import { PublicChatPage } from './components/PublicChatPage';
 
 export default function App() {
   const [session, setSession] = useState<AuthSession | null>(null);
@@ -26,6 +27,9 @@ export default function App() {
   const [authModalMode, setAuthModalMode] = useState<'login' | 'forgot'>('login');
   const [supabaseModalOpen, setSupabaseModalOpen] = useState(false);
   const [verifyVoucherCode, setVerifyVoucherCode] = useState<string | null>(null);
+
+  // Live Chat Route state (Customer-facing live chat)
+  const [activeChatSlug, setActiveChatSlug] = useState<string | null>(null);
 
   // Review Experience Preview / Live route state
   const [activeReviewSlug, setActiveReviewSlug] = useState<string | null>(null);
@@ -36,21 +40,44 @@ export default function App() {
   useEffect(() => {
     initDefaultData();
     syncWithServer().catch(() => {});
-    const saved = getCurrentSession();
-    if (saved) {
-      setSession(saved);
-      if (saved.user.role === 'admin') {
-        setCurrentView('admin');
-      } else {
-        setCurrentView('dashboard');
-      }
-    }
 
-    // Comprehensive route checker supporting hash (#review/, #/review/), pathname (/review/), and search params (?review=, ?slug=, ?b=)
-    const checkRoute = () => {
+    // Comprehensive route checker supporting hash (#review/, #chat/), pathname (/review/, /chat/), and search params
+    const checkRoute = (): boolean => {
       const hash = window.location.hash;
       const pathname = window.location.pathname.toLowerCase();
       const search = new URLSearchParams(window.location.search);
+
+      // 0. Check Short & Standard Live Chat routes: /c/slug, #c/slug, ?c=slug, /chat/slug, #chat/slug
+      let extractedChatSlug: string | null = null;
+      if (hash) {
+        const cleanHash = hash.replace(/^#\/?/, '');
+        if (cleanHash.startsWith('c/')) {
+          extractedChatSlug = cleanHash.replace(/^c\//, '');
+        } else if (cleanHash.startsWith('c=')) {
+          extractedChatSlug = cleanHash.replace(/^c=/, '');
+        } else if (cleanHash.startsWith('chat/')) {
+          extractedChatSlug = cleanHash.replace(/^chat\//, '');
+        } else if (cleanHash.startsWith('chat=')) {
+          extractedChatSlug = cleanHash.replace(/^chat=/, '');
+        }
+      }
+      if (!extractedChatSlug && pathname.startsWith('/c/')) {
+        extractedChatSlug = pathname.replace(/^\/c\//, '');
+      }
+      if (!extractedChatSlug && pathname.startsWith('/chat/')) {
+        extractedChatSlug = pathname.replace(/^\/chat\//, '');
+      }
+      if (!extractedChatSlug) {
+        extractedChatSlug = search.get('c') || search.get('chat') || null;
+      }
+      if (extractedChatSlug) {
+        const cleanSlug = extractedChatSlug.split('?')[0].split('&')[0].replace(/\/+$/, '').trim().toLowerCase();
+        if (cleanSlug) {
+          setActiveChatSlug(cleanSlug);
+          setCurrentView('chat');
+          return true;
+        }
+      }
 
       let extractedSlug: string | null = null;
 
@@ -75,16 +102,15 @@ export default function App() {
       }
 
       if (extractedSlug) {
-        // Strip any trailing slashes, hash artifacts, or nested query strings
         const cleanSlug = extractedSlug.split('?')[0].split('&')[0].replace(/\/+$/, '').trim().toLowerCase();
         if (cleanSlug) {
           setActiveReviewSlug(cleanSlug);
           setCurrentView('review');
-          return;
+          return true;
         }
       }
 
-      // Check for QR reward inspection parameter (?verify_reward=CODE or ?verify_voucher=CODE)
+      // Check for QR reward inspection parameter
       const verifyCode = search.get('verify_reward') || search.get('verify_voucher') || (hash.startsWith('#verify/') ? hash.replace(/^#verify\//, '') : null);
       if (verifyCode) {
         setVerifyVoucherCode(verifyCode.trim());
@@ -92,11 +118,25 @@ export default function App() {
 
       if (hash === '#login' || pathname === '/login' || search.get('view') === 'login') {
         setCurrentView('login');
-        return;
+        return true;
       }
+
+      return false;
     };
 
-    checkRoute();
+    const hasRoute = checkRoute();
+    if (!hasRoute) {
+      const saved = getCurrentSession();
+      if (saved) {
+        setSession(saved);
+        if (saved.user.role === 'admin') {
+          setCurrentView('admin');
+        } else {
+          setCurrentView('dashboard');
+        }
+      }
+    }
+
     window.addEventListener('hashchange', checkRoute);
     window.addEventListener('popstate', checkRoute);
     return () => {
@@ -174,7 +214,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans selection:bg-[#6C3BFF] selection:text-white">
       {/* Top Navbar */}
-      {currentView !== 'review' && currentView !== 'login' && (
+      {currentView !== 'review' && currentView !== 'login' && currentView !== 'chat' && (
         <Navbar
           session={session}
           currentView={currentView}
@@ -196,6 +236,21 @@ export default function App() {
           }}
           onSignOut={handleSignOut}
           onOpenSupabaseConfig={() => setSupabaseModalOpen(true)}
+        />
+      )}
+
+      {/* VIEW: Customer-Facing Public Live Chat */}
+      {currentView === 'chat' && activeChatSlug && (
+        <PublicChatPage
+          businessSlug={activeChatSlug}
+          onBackToApp={() => {
+            setActiveChatSlug(null);
+            window.location.hash = '';
+            if (window.location.search.includes('chat')) {
+              window.history.replaceState(null, '', window.location.pathname || '/');
+            }
+            setCurrentView(session ? (session.user.role === 'admin' ? 'admin' : 'dashboard') : 'landing');
+          }}
         />
       )}
 

@@ -103,6 +103,7 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
 
   // Google review click state
   const [googleClicked, setGoogleClicked] = useState<boolean>(false);
+  const [customerExperience, setCustomerExperience] = useState<string>('');
 
   // Loyalty Program State
   const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyProgramConfig | null>(null);
@@ -388,7 +389,7 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
     }
   };
 
-  // Regenerate suggestions when rating, categories, or language changes (Only for 4 & 5 stars)
+  // Regenerate suggestions when rating, categories, language, or customer experience changes (Only for 4 & 5 stars)
   useEffect(() => {
     if (rating && rating >= 4 && business) {
       const result = generateReviewSuggestions(
@@ -398,7 +399,9 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
         language,
         business.ai_keywords,
         business.ai_suggestions_preview,
-        business.category
+        business.category,
+        customerExperience,
+        business.address || ''
       );
       setEditableSuggestions(result.suggestions);
       if (result.suggestions.length > 0) {
@@ -408,7 +411,7 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
     } else {
       setEditableSuggestions([]);
     }
-  }, [rating, selectedCategories, language, business]);
+  }, [rating, selectedCategories, language, business, customerExperience]);
 
   const handleSelectRating = async (selected: number) => {
     setRating(selected);
@@ -950,6 +953,42 @@ export const ReviewExperience: React.FC<ReviewExperienceProps> = ({
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Customer's Actual Experience Input (Optional - Weaves with selected keyword naturally) */}
+                <div className="space-y-1.5 text-left bg-purple-50/40 p-3.5 rounded-2xl border border-purple-100">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-neutral-800 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#6C3BFF]" />
+                      <span>
+                        {language === 'hi'
+                          ? 'आज आपका अनुभव कैसा रहा? (वैकल्पिक)'
+                          : language === 'gu'
+                          ? 'આજનો તમારો અનુભવ કેવો રહ્યો? (વૈકલ્પિક)'
+                          : 'Your Actual Experience (Optional):'}
+                      </span>
+                    </label>
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={customerExperience}
+                    onChange={(e) => setCustomerExperience(e.target.value)}
+                    placeholder={
+                      language === 'hi'
+                        ? 'जैसे: आज क्या ऑर्डर किया या किस बात ने प्रभावित किया...'
+                        : language === 'gu'
+                        ? 'જેમ કે: આજે શું ઓર્ડર કર્યું અથવા શું સારું લાગ્યું...'
+                        : 'e.g., What did you order, purchase, or experience today?'
+                    }
+                    className="w-full p-2.5 text-xs bg-white border border-neutral-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-[#6C3BFF] leading-relaxed resize-none transition-all placeholder:text-neutral-400"
+                  />
+                  <p className="text-[10px] text-neutral-500">
+                    {language === 'hi'
+                      ? '💡 LocalBoost आपके इस अनुभव को चुने हुए कीवर्ड के साथ सहजता से जोड़ देता है।'
+                      : language === 'gu'
+                      ? '💡 LocalBoost તમારા અનુભવને પસંદ કરેલા કીવર્ડ સાથે સહજતાથી જોડી આપશે.'
+                      : '💡 LocalBoost naturally weaves your experience with the selected keywords.'}
+                  </p>
                 </div>
 
                 {/* Loyalty Reward Teaser for Step 2 */}

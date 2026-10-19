@@ -113,6 +113,7 @@ import { ScratchCampaignManager } from './ScratchCampaignManager';
 import { RewardQRScannerModal } from './RewardQRScannerModal';
 import { RewardAuditCard } from './RewardAuditCard';
 import { WhatsAppMarketingHub } from './WhatsAppMarketingHub';
+import { AiBusinessChatTab } from './AiBusinessChatTab';
 import {
   findRewardAuditDetails,
   RewardAuditDetails,
@@ -140,14 +141,14 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onOpenLiveReview,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'loyalty' | 'scratch_offers' | 'whatsapp_marketing' | 'birthday' | 'ai_agent' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
+    'dashboard' | 'loyalty' | 'scratch_offers' | 'whatsapp_marketing' | 'birthday' | 'ai_agent' | 'ai_chat' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
   >('dashboard');
   const [mobileCategory, setMobileCategory] = useState<'core' | 'rewards' | 'intelligence' | 'store'>('core');
   const [showAllModulesModal, setShowAllModulesModal] = useState<boolean>(false);
 
   const handleSelectTab = (tab: typeof activeTab) => {
     setActiveTab(tab);
-    if (tab === 'dashboard' || tab === 'qrcode' || tab === 'ai_agent') {
+    if (tab === 'dashboard' || tab === 'qrcode' || tab === 'ai_agent' || tab === 'ai_chat') {
       setMobileCategory('core');
     } else if (tab === 'loyalty' || tab === 'scratch_offers' || tab === 'whatsapp_marketing' || tab === 'birthday') {
       setMobileCategory('rewards');
@@ -1814,6 +1815,7 @@ Please generate:
                 {activeTab === 'dashboard' && 'Overview & Metrics'}
                 {activeTab === 'qrcode' && 'QR Standee & Code'}
                 {activeTab === 'ai_agent' && 'AI Review Engine'}
+                {activeTab === 'ai_chat' && '💬 AI Business Chat'}
                 {activeTab === 'loyalty' && 'Loyalty & Stamp Cards'}
                 {activeTab === 'scratch_offers' && 'Scratch & Win Game'}
                 {activeTab === 'whatsapp_marketing' && 'WhatsApp Marketing Hub'}
@@ -1953,6 +1955,19 @@ Please generate:
                   <Bot className="w-3.5 h-3.5" />
                   <span>AI Prompt Engine</span>
                   <span className="px-1 text-[9px] bg-white/20 rounded">Auto</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('ai_chat')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    activeTab === 'ai_chat'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/60'
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>AI Live Chat</span>
+                  <span className="px-1 text-[9px] bg-white/20 rounded">New</span>
                 </button>
               </>
             )}
@@ -2195,7 +2210,7 @@ Please generate:
                         handleSelectTab('ai_agent');
                         setShowAllModulesModal(false);
                       }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer sm:col-span-2 ${
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
                         activeTab === 'ai_agent' ? 'bg-[#6C3BFF] text-white border-[#6C3BFF]' : 'bg-purple-50/70 hover:bg-purple-100 border-purple-200/70 text-purple-900'
                       }`}
                     >
@@ -2203,6 +2218,26 @@ Please generate:
                       <div>
                         <div className="text-xs font-bold">AI Prompt Engine</div>
                         <div className={`text-[10px] ${activeTab === 'ai_agent' ? 'text-purple-200' : 'text-purple-700'}`}>Keyword extraction & 12 custom drafts</div>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectTab('ai_chat');
+                        setShowAllModulesModal(false);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                        activeTab === 'ai_chat' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50/70 hover:bg-emerald-100 border-emerald-200/70 text-emerald-950'
+                      }`}
+                    >
+                      <MessageSquare className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <div>
+                        <div className="text-xs font-bold flex items-center gap-1.5">
+                          <span>AI Business Chat</span>
+                          <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-bold">New</span>
+                        </div>
+                        <div className={`text-[10px] ${activeTab === 'ai_chat' ? 'text-emerald-100' : 'text-emerald-700'}`}>Rule-based customer Q&A chatbot & unique QR</div>
                       </div>
                     </button>
                   </div>
@@ -2493,6 +2528,25 @@ Please generate:
                   Auto
                 </span>
               </button>
+
+              <button
+                onClick={() => handleSelectTab('ai_chat')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'ai_chat'
+                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <MessageSquare className="w-4 h-4 text-emerald-600" />
+                  <span>AI Business Chat</span>
+                </div>
+                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                  activeTab === 'ai_chat' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  Live
+                </span>
+              </button>
             </div>
 
             {/* Section 2: Customer Retention */}
@@ -2769,6 +2823,7 @@ Please generate:
                     </div>
                   </div>
                 )}
+
 
                 {/* SMART PROMPT BUILDER: Google Link + Website AI Auto-Research */}
                 <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-5">
@@ -3426,6 +3481,25 @@ Please generate:
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* TAB: AI BUSINESS CHAT (Section 10 & 11: Live Rule-Based Customer Chatbot & QR) */}
+            {activeTab === 'ai_chat' && business && (
+              <AiBusinessChatTab
+                business={business}
+                onUpdateBusiness={async (updatedBiz) => {
+                  try {
+                    const saved = await updateBusiness(business.id, updatedBiz);
+                    setBusiness(saved);
+                    onSessionUpdated({ ...session, business: saved });
+                  } catch (err) {
+                    console.error('Failed to update business in chat tab:', err);
+                  }
+                }}
+                onOpenLiveChat={(slug) => {
+                  window.location.hash = `#chat/${slug}`;
+                }}
+              />
             )}
 
             {/* TAB: LOYALTY PROGRAM & DIGITAL VIP CARDS */}

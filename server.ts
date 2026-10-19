@@ -14,7 +14,14 @@ import {
   LoyaltyCard,
   ScratchCampaign,
   ScratchPlay,
+  ChatbotConfig,
+  ChatConversation,
+  ChatMessage,
 } from './src/types/database';
+import {
+  generateNaturalSingleReview,
+  generate12KeywordGrammarDrafts,
+} from './src/lib/keywordGrammarEngine';
 
 dotenv.config({ override: true });
 
@@ -1752,6 +1759,542 @@ app.get('/api/reward/inspect/:code', (req, res) => {
 });
 
 
+// ==========================================
+// LOCALBOOST AI — LIVE CHAT & PROMPT ENGINE APIS
+// 100% Deterministic & Local — Zero External AI APIs
+// Multi-tenant isolation strictly enforced
+// ==========================================
+
+// Serve SPA index.html for direct clean route hits like /c/:slug or /review/:slug
+app.get('/c/:slug', (_req, res) => {
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd) {
+    res.sendFile('dist/index.html', { root: '.' });
+  } else {
+    res.sendFile('index.html', { root: '.' });
+  }
+});
+
+app.get('/review/:slug', (_req, res) => {
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd) {
+    res.sendFile('dist/index.html', { root: '.' });
+  } else {
+    res.sendFile('index.html', { root: '.' });
+  }
+});
+
+// Public endpoint: Fetch business by slug for customer Live Chat & Review
+app.get('/api/business/by-slug/:slug', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const rawSlug = String(req.params.slug || '').trim().toLowerCase();
+    const cleanSlug = rawSlug.replace(/[\/\?\#].*$/, '');
+
+    const biz = db.businesses.find((b) => (b.unique_slug || '').toLowerCase() === cleanSlug);
+    if (!biz) {
+      return res.status(404).json({ error: `Business not found for slug "${cleanSlug}"` });
+    }
+
+    // Never leak sensitive private fields like auth tokens or credentials
+    const safePublicBiz = {
+      id: biz.id,
+      business_name: biz.business_name,
+      unique_slug: biz.unique_slug,
+      google_review_url: biz.google_review_url,
+      logo_url: biz.logo_url,
+      phone: biz.phone,
+      whatsapp_number: biz.whatsapp_number,
+      address: biz.address,
+      category: biz.category,
+      business_info: biz.business_info,
+      review_reward_mode: biz.review_reward_mode,
+      created_at: biz.created_at,
+    };
+
+    // Also attach chatbot config for instant client-side quick messages
+    const cfg = db.chatConfigs?.find((c) => c.business_id === biz.id);
+
+    return res.json({ success: true, business: safePublicBiz, config: cfg || null });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to lookup business' });
+  }
+});
+
+// Chatbot Configuration: GET
+app.get('/api/chat/business/:businessId/config', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const existing = db.chatConfigs?.find((c) => c.business_id === businessId);
+
+    if (existing) {
+      return res.json({ success: true, config: existing });
+    }
+
+    const biz = db.businesses.find((b) => b.id === businessId);
+    const bizName = biz?.business_name || 'Our Business';
+
+    const defaultConfig: ChatbotConfig = {
+      id: `cfg_${businessId}`,
+      business_id: businessId,
+      enabled: true,
+      welcome_message: {
+        en: `Hello! Welcome to ${bizName}. How can we assist you today? Feel free to ask about our hours, location, products, or services.`,
+        hi: `नमस्ते! ${bizName} में आपका स्वागत है। आज हम आपकी क्या सहायता कर सकते हैं? आप हमारे समय, प्रोडक्ट्स या पते के बारे में पूछ सकते हैं।`,
+        gu: `નમસ્તે! ${bizName} માં આપનું સ્વાગત છે. આજે અમે આપને કઈ રીતે મદદ કરી શકીએ? આપ અમારા સમય, પ્રોડક્ટ્સ કે સરનામા વિશે પૂછી શકો છો.`,
+      },
+      fallback_message: {
+        en: "I couldn't confirm that information from the business details available to me. Please contact the business directly for the correct information.",
+        hi: 'मुझे इस जानकारी की पुष्टि उपलब्ध बिज़नेस डिटेल्स से नहीं हो पाई। सही जानकारी के लिए कृपया बिज़नेस से सीधे संपर्क करें।',
+        gu: 'આ માહિતીની પુષ્ટિ ઉપલબ્ધ બિઝનેસ વિગતોમાંથી થઈ શકી નથી. સાચી માહિતી માટે કૃપા કરીને બિઝનેસનો સીધો સંપર્ક કરો.',
+      },
+      supported_languages: ['en', 'hi', 'gu'],
+      suggested_questions: [
+        'What are your opening hours?',
+        'Where is your shop located?',
+        'What products or services do you offer?',
+        'Which payment methods do you accept?',
+      ],
+      show_call_button: true,
+      show_whatsapp_button: true,
+      show_directions_button: true,
+      show_website_button: false,
+      visitor_privacy_notice:
+        'We respect your privacy. Chat transcripts are retained securely and only used to assist your customer inquiry.',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    return res.json({ success: true, config: defaultConfig });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to load chatbot config' });
+  }
+});
+
+// Chatbot Configuration: POST (Update or create)
+app.post('/api/chat/business/:businessId/config', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const { config } = req.body;
+
+    if (!config) {
+      return res.status(400).json({ error: 'Missing config payload' });
+    }
+
+    if (!db.chatConfigs) db.chatConfigs = [];
+
+    const idx = db.chatConfigs.findIndex((c) => c.business_id === businessId);
+    const updatedConfig: ChatbotConfig = {
+      ...config,
+      business_id: businessId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (idx !== -1) {
+      db.chatConfigs[idx] = updatedConfig;
+    } else {
+      db.chatConfigs.push(updatedConfig);
+    }
+
+    saveServerDb(db);
+    return res.json({ success: true, config: updatedConfig });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to save chatbot config' });
+  }
+});
+
+// Business Profile Info (Checklist Data): POST
+app.post('/api/chat/business/:businessId/info', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const { businessInfo } = req.body;
+
+    const bizIdx = db.businesses.findIndex((b) => b.id === businessId);
+    if (bizIdx === -1) {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+
+    db.businesses[bizIdx].business_info = businessInfo;
+    if (businessInfo.business_name) {
+      db.businesses[bizIdx].business_name = businessInfo.business_name;
+    }
+    if (businessInfo.address) {
+      db.businesses[bizIdx].address = businessInfo.address;
+    }
+    if (businessInfo.phone) {
+      db.businesses[bizIdx].phone = businessInfo.phone;
+    }
+    if (businessInfo.whatsapp) {
+      db.businesses[bizIdx].whatsapp_number = businessInfo.whatsapp;
+    }
+    if (businessInfo.category) {
+      db.businesses[bizIdx].category = businessInfo.category;
+    }
+    db.businesses[bizIdx].updated_at = new Date().toISOString();
+
+    saveServerDb(db);
+    return res.json({ success: true, businessInfo: db.businesses[bizIdx].business_info });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to save business info' });
+  }
+});
+
+// Short Slug Update: POST (Dedicated clean slug updater)
+app.post('/api/chat/business/:businessId/slug', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const { slug } = req.body;
+
+    const cleaned = String(slug || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '-');
+
+    if (!cleaned || cleaned.length < 2) {
+      return res.status(400).json({ error: 'Slug must be at least 2 alphanumeric characters' });
+    }
+
+    // Verify slug uniqueness against other businesses
+    const existing = db.businesses.find(
+      (b) => b.id !== businessId && (b.unique_slug || '').toLowerCase() === cleaned
+    );
+    if (existing) {
+      return res.status(409).json({ error: `Short link "${cleaned}" is already claimed by another business` });
+    }
+
+    const bizIdx = db.businesses.findIndex((b) => b.id === businessId);
+    if (bizIdx === -1) {
+      return res.status(404).json({ error: 'Business not found' });
+    }
+
+    db.businesses[bizIdx].unique_slug = cleaned;
+    db.businesses[bizIdx].updated_at = new Date().toISOString();
+
+    // Also update custom_short_slug in chatConfig if present
+    const cfgIdx = (db.chatConfigs || []).findIndex((c) => c.business_id === businessId);
+    if (cfgIdx !== -1 && db.chatConfigs) {
+      db.chatConfigs[cfgIdx].custom_short_slug = cleaned;
+      db.chatConfigs[cfgIdx].updated_at = new Date().toISOString();
+    }
+
+    saveServerDb(db);
+    return res.json({ success: true, slug: cleaned, business: db.businesses[bizIdx] });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to update short slug' });
+  }
+});
+
+// Chat History: GET (Paginated with search, tenant-isolated)
+app.get('/api/chat/business/:businessId/history', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const page = Math.max(1, parseInt(String(req.query.page || '1'), 10));
+    const limit = Math.max(1, Math.min(50, parseInt(String(req.query.limit || '20'), 10)));
+    const search = String(req.query.search || '').trim().toLowerCase();
+
+    if (!db.chatConversations) db.chatConversations = [];
+
+    // Tenant boundary: Only conversations for this businessId
+    let bizConvs = db.chatConversations.filter((c) => c.business_id === businessId);
+
+    if (search) {
+      bizConvs = bizConvs.filter(
+        (c) =>
+          c.id.toLowerCase().includes(search) ||
+          c.last_message_preview.toLowerCase().includes(search) ||
+          c.visitor_session_id.toLowerCase().includes(search)
+      );
+    }
+
+    // Sort descending by updated_at
+    bizConvs.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+    const total = bizConvs.length;
+    const totalPages = Math.ceil(total / limit) || 1;
+    const paginated = bizConvs.slice((page - 1) * limit, page * limit);
+
+    return res.json({
+      success: true,
+      conversations: paginated,
+      total,
+      page,
+      totalPages,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to retrieve chat history' });
+  }
+});
+
+// Chat Conversation Messages: GET (Tenant-isolated)
+app.get('/api/chat/business/:businessId/conversations/:convId/messages', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId, convId } = req.params;
+
+    if (!db.chatMessages) db.chatMessages = [];
+
+    // Verify conversation belongs to this business
+    const conv = db.chatConversations?.find((c) => c.id === convId && c.business_id === businessId);
+    if (!conv) {
+      return res.status(404).json({ error: 'Conversation not found or unauthorized' });
+    }
+
+    const messages = db.chatMessages
+      .filter((m) => m.conversation_id === convId && m.business_id === businessId)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    return res.json({ success: true, messages });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to retrieve conversation messages' });
+  }
+});
+
+// Delete Single Conversation (Tenant-isolated)
+app.delete('/api/chat/business/:businessId/conversations/:convId', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId, convId } = req.params;
+
+    if (!db.chatConversations) db.chatConversations = [];
+    if (!db.chatMessages) db.chatMessages = [];
+
+    // Verify ownership
+    const convIndex = db.chatConversations.findIndex(
+      (c) => c.id === convId && c.business_id === businessId
+    );
+    if (convIndex === -1) {
+      return res.status(404).json({ error: 'Conversation not found for this business' });
+    }
+
+    // Remove conversation
+    db.chatConversations.splice(convIndex, 1);
+
+    // Remove associated messages
+    db.chatMessages = db.chatMessages.filter(
+      (m) => !(m.conversation_id === convId && m.business_id === businessId)
+    );
+
+    saveServerDb(db);
+    return res.json({ success: true, deletedConversationId: convId });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to delete conversation' });
+  }
+});
+
+// Delete All Conversations for this business (Tenant-isolated)
+app.delete('/api/chat/business/:businessId/conversations', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+
+    if (!db.chatConversations) db.chatConversations = [];
+    if (!db.chatMessages) db.chatMessages = [];
+
+    const priorConvCount = db.chatConversations.filter((c) => c.business_id === businessId).length;
+
+    // Remove only conversations belonging to this business
+    db.chatConversations = db.chatConversations.filter((c) => c.business_id !== businessId);
+
+    // Remove only messages belonging to this business
+    db.chatMessages = db.chatMessages.filter((m) => m.business_id !== businessId);
+
+    saveServerDb(db);
+    return res.json({ success: true, deletedCount: priorConvCount });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to delete all conversations' });
+  }
+});
+
+// Chat Analytics: GET (Genuine aggregated data)
+app.get('/api/chat/business/:businessId/analytics', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+
+    const convs = (db.chatConversations || []).filter((c) => c.business_id === businessId);
+    const msgs = (db.chatMessages || []).filter((m) => m.business_id === businessId);
+    const clicks = (db.chatClicks || []).filter((c) => c.business_id === businessId);
+
+    const userMsgs = msgs.filter((m) => m.sender === 'user');
+    const botMsgs = msgs.filter((m) => m.sender === 'bot');
+
+    const unansweredBotMsgs = botMsgs.filter(
+      (m) => m.confidence === 'low' || m.intent === 'unknown'
+    );
+
+    // Top Intents count
+    const intentMap: Record<string, number> = {};
+    botMsgs.forEach((m) => {
+      const intent = m.intent || 'unknown';
+      intentMap[intent] = (intentMap[intent] || 0) + 1;
+    });
+
+    const topIntents = Object.entries(intentMap)
+      .map(([intent, count]) => ({ intent, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    // Top Questions count (frequency of normalized text)
+    const questionMap: Record<string, number> = {};
+    userMsgs.forEach((m) => {
+      const q = m.text.trim();
+      if (q.length > 2) {
+        questionMap[q] = (questionMap[q] || 0) + 1;
+      }
+    });
+
+    const topQuestions = Object.entries(questionMap)
+      .map(([question, count]) => ({ question, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    // Unanswered questions
+    const unansweredQuestions = unansweredBotMsgs.map((bm) => {
+      // Find the user message immediately preceding this bot message in the conversation
+      const priorUserMsg = msgs
+        .filter(
+          (m) =>
+            m.conversation_id === bm.conversation_id &&
+            m.sender === 'user' &&
+            new Date(m.created_at).getTime() <= new Date(bm.created_at).getTime()
+        )
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+
+      return {
+        question: priorUserMsg?.text || 'Unrecognized question',
+        count: 1,
+        lastAsked: bm.created_at,
+      };
+    }).slice(0, 10);
+
+    return res.json({
+      success: true,
+      analytics: {
+        totalConversations: convs.length,
+        totalMessages: msgs.length,
+        unansweredCount: unansweredBotMsgs.length,
+        contactClicksCount: clicks.length,
+        topIntents,
+        topQuestions,
+        unansweredQuestions,
+      },
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to calculate analytics' });
+  }
+});
+
+// Action Click Analytics: POST
+app.post('/api/chat/business/:businessId/click', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const { type, conversationId } = req.body;
+
+    if (!db.chatClicks) db.chatClicks = [];
+
+    db.chatClicks.push({
+      id: `clk_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      business_id: businessId,
+      conversation_id: conversationId,
+      type: String(type || 'contact'),
+      created_at: new Date().toISOString(),
+    });
+
+    if (conversationId && db.chatConversations) {
+      const conv = db.chatConversations.find(
+        (c) => c.id === conversationId && c.business_id === businessId
+      );
+      if (conv) conv.contact_clicked = true;
+    }
+
+    saveServerDb(db);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to record click' });
+  }
+});
+
+// Customer Public Chat Message Sync: POST
+app.post('/api/chat/message', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId, conversationId, userMessage, botMessage, language = 'en' } = req.body;
+
+    if (!businessId || !conversationId) {
+      return res.status(400).json({ error: 'Missing businessId or conversationId' });
+    }
+
+    if (!db.chatMessages) db.chatMessages = [];
+    if (!db.chatConversations) db.chatConversations = [];
+
+    // Append messages
+    if (userMessage) {
+      db.chatMessages.push({
+        id: userMessage.id || `msg_u_${Date.now()}`,
+        conversation_id: conversationId,
+        business_id: businessId,
+        sender: 'user',
+        text: String(userMessage.text || '').substring(0, 1000), // Protect against excessive input
+        created_at: userMessage.created_at || new Date().toISOString(),
+      });
+    }
+
+    if (botMessage) {
+      db.chatMessages.push({
+        id: botMessage.id || `msg_b_${Date.now()}`,
+        conversation_id: conversationId,
+        business_id: businessId,
+        sender: 'bot',
+        text: String(botMessage.text || '').substring(0, 2000),
+        intent: botMessage.intent,
+        confidence: botMessage.confidence,
+        suggested_actions: botMessage.suggested_actions,
+        created_at: botMessage.created_at || new Date().toISOString(),
+      });
+    }
+
+    // Upsert conversation metadata
+    const convIdx = db.chatConversations.findIndex(
+      (c) => c.id === conversationId && c.business_id === businessId
+    );
+
+    const now = new Date().toISOString();
+    const isUnresolved = botMessage?.confidence === 'low' || botMessage?.intent === 'unknown';
+
+    if (convIdx !== -1) {
+      db.chatConversations[convIdx].message_count += (userMessage ? 1 : 0) + (botMessage ? 1 : 0);
+      db.chatConversations[convIdx].last_message_preview = userMessage?.text || botMessage?.text || '';
+      db.chatConversations[convIdx].updated_at = now;
+      if (isUnresolved) {
+        db.chatConversations[convIdx].has_unresolved = true;
+      }
+    } else {
+      db.chatConversations.unshift({
+        id: conversationId,
+        business_id: businessId,
+        visitor_session_id: conversationId,
+        language: language || 'en',
+        message_count: (userMessage ? 1 : 0) + (botMessage ? 1 : 0),
+        last_message_preview: userMessage?.text || botMessage?.text || 'Conversation started',
+        has_unresolved: isUnresolved,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    saveServerDb(db);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to save chat message' });
+  }
+});
+
 // Server-side health and Supabase Secret Key status check (Zero secret leakage)
 app.get('/api/supabase/status', (_req, res) => {
   const secretKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '';
@@ -2025,78 +2568,109 @@ function generateSmartSummary(name: string, category: string, prompt: string): s
   return `${shortSnippet.trim()}. Known for great customer care, quality, and dependable service.`;
 }
 
-function generateSmartSuggestions(name: string, keywords: string[], language: string = 'en') {
-  const kws = keywords.filter(k => k && k.trim().length > 1);
-  const getKw = (idx: number) => {
-    return (kws[idx % (kws.length || 1)] || 'Quality Service').trim();
-  };
+function cleanKeywordPhrase(kw: string): string {
+  if (!kw) return '';
+  const trimmed = kw.trim();
+  if (/^[A-Z\s&/,-]+$/.test(trimmed) && trimmed.length > 5) {
+    return trimmed.toLowerCase();
+  }
+  return trimmed.toLowerCase();
+}
 
-  if (language === 'hi') {
+function generateLocalBoostNaturalReview(params: {
+  businessName: string;
+  category: string;
+  location?: string;
+  keyword: string;
+  experience?: string;
+  language: string;
+}): string {
+  return generateNaturalSingleReview({
+    businessName: params.businessName,
+    category: params.category,
+    location: params.location,
+    keyword: params.keyword,
+    customerExperience: params.experience,
+    language: (params.language === 'hi' || params.language === 'gu' ? params.language : 'en') as any,
+  });
+}
+
+function generateSmartSuggestions(name: string, keywords: string[], language: string = 'en') {
+  const safeLang = (language === 'hi' || language === 'gu' ? language : 'en') as any;
+  const positiveDrafts = generate12KeywordGrammarDrafts(name, keywords, safeLang);
+
+  if (safeLang === 'hi') {
     return {
-      positive: [
-        `सच में ${name} में हमारा अनुभव बहुत शानदार रहा! यहाँ की ${getKw(0)} और ${getKw(1)} दोनों वाकई लाजवाब हैं। सबको ज़रूर आने की सलाह दूंगा! ⭐⭐⭐⭐⭐`,
-        `${name} की सर्विस और ${getKw(0)} ने दिल जीत लिया! स्टाफ का व्यवहार बहुत विनम्र है और ${getKw(2)} भी बेहतरीन थी। पूरे 5 स्टार! 👍`,
-        `पहली बार ${name} विज़िट किया और बहुत अच्छा लगा। लाजवाब ${getKw(1)}, साफ-सुथरा माहौल और ${getKw(3)}। बार-बार आने का मन करेगा!`,
-        `एकदम पैसा वसूल अनुभव! ${name} पर ${getKw(2)} और ${getKw(0)} बहुत ही बढ़िया थे। यहाँ की सर्विस हमेशा याद रहेगी। ⭐`,
-        `अगर आप बेहतरीन ${getKw(0)} और बढ़िया सेवा ढूंढ रहे हैं, तो ${name} सबसे बेस्ट जगह है। ${getKw(3)} भी बहुत पसंद आया! ✨`,
-        `आज ${name} पर बहुत सुखद अनुभव रहा। यहाँ की ${getKw(1)} और ${getKw(2)} वाकई तारीफ के काबिल है। टीम का काम बहुत अच्छा है।`,
-        `${name} में सब कुछ बहुत ही व्यवस्थित था। स्टाफ बहुत मददगार है, और ${getKw(3)} के साथ ${getKw(4)} का अनुभव एकदम परफेक्ट रहा। 👍`,
-        `शानदार अनुभव! ${name} पर ${getKw(0)} की क्वालिटी बहुत बेहतरीन है और ${getKw(4)} ने हमारा दिल खुश कर दिया। 10/10 रेटिंग! ⭐`,
-        `बहुत ही बढ़िया जगह! ${name} का दोस्ताना माहौल, ${getKw(2)} और तुरंत मिलने वाली ${getKw(1)} सच में काबिले तारीफ है।`,
-        `${name} कभी निराश नहीं करता! यहाँ की ${getKw(0)} हमेशा की तरह शानदार थी और ${getKw(5)} का भी पूरा ध्यान रखा गया। बहुत-बहुत धन्यवाद! ✨`,
-        `हमारे पूरे परिवार को ${name} बहुत पसंद आया। खास तौर पर यहाँ की ${getKw(1)} और ${getKw(3)} ने सबका दिल जीत लिया। जरूर पधारें!`,
-        `उत्कृष्ट सेवा और बेहतरीन ${getKw(4)}! ${name} पर आकर बहुत खुशी हुई, ${getKw(2)} भी टॉप-क्लास थी। 5 स्टार अनुभव! ⭐`
-      ],
+      positive: positiveDrafts,
       neutral: [
-        `${name} पर अनुभव ठीक रहा। ${getKw(0)} अच्छा था, पर भीड़ के समय थोड़ा इंतज़ार करना पड़ा।`,
-        `${name} की विज़िट अच्छी रही। स्टाफ का व्यवहार मददगार था, सर्विस संतोषजनक है।`
+        `यहाँ का अनुभव सामान्य रहा। स्टाफ का व्यवहार ठीक था, लेकिन भीड़ के समय थोड़ा इंतज़ार करना पड़ा।`,
+        `विज़िट अच्छी रही। स्टाफ का व्यवहार मददगार था, सर्विस संतोषजनक है।`
       ]
     };
   }
 
-  if (language === 'gu') {
+  if (safeLang === 'gu') {
     return {
-      positive: [
-        `ખરેખર ${name} ખાતે અમારો અનુભવ ખૂબ જ અદ્ભુત રહ્યો! અહીંની ${getKw(0)} અને ${getKw(1)} બંને એકદમ શ્રેષ્ઠ છે. બધાને મુલાકાત લેવાની ભલામણ કરું છું! ⭐⭐⭐⭐⭐`,
-        `${name} ની સર્વિસ અને ${getKw(0)} એ દિલ જીતી લીધું! સ્ટાફનો વ્યવહાર ખૂબ જ નમ્ર છે અને ${getKw(2)} પણ ઉત્તમ હતી. પૂરા 5 સ્ટાર! 👍`,
-        `પહેલી વાર ${name} ની મુલાકાત લીધી અને ખૂબ મજા આવી. ઉત્તમ ${getKw(1)}, ચોખ્ખું વાતાવરણ અને ${getKw(3)}. વારંવાર આવવાનું મન થશે!`,
-        `એકદમ પૈસા વસૂલ અનુભવ! ${name} ખાતે ${getKw(2)} અને ${getKw(0)} બંને ખૂબ જ સારા હતા. અહીંની સર્વિસ હંમેશા યાદ રહેશે. ⭐`,
-        `જો તમે શ્રેષ્ઠ ${getKw(0)} અને ઉત્તમ સેવા શોધી રહ્યા હોવ, તો ${name} સૌથી બેસ્ટ જગ્યા છે. ${getKw(3)} પણ ખૂબ ગમ્યું! ✨`,
-        `આજે ${name} ખાતે ઘણો સારો અનુભવ રહ્યો. અહીંની ${getKw(1)} અને ${getKw(2)} ખરેખર પ્રશંસનીય છે. ટીમનું કામ ખૂબ સારું છે.`,
-        `${name} ખાતે બધું ખૂબ જ વ્યવસ્થિત હતું. સ્ટાફ ખૂબ મદદરૂપ છે, અને ${getKw(3)} સાથે ${getKw(4)} નો અનુભવ એકદમ પરફેક્ટ રહ્યો. 👍`,
-        `અદ્ભુત અનુભવ! ${name} પર ${getKw(0)} ની ક્વોલિટી ખૂબ ઉત્તમ છે અને ${getKw(4)} એ અમારું દિલ ખુશ કરી દીધું. 10/10 રેટિંગ! ⭐`,
-        `ખૂબ જ સરસ જગ્યા! ${name} નું વાતાવરણ, ${getKw(2)} અને ઝડપી ${getKw(1)} ખરેખર પ્રશંસનીય છે.`,
-        `${name} ક્યારેય નિરાશ કરતું નથી! અહીંની ${getKw(0)} હંમેશની જેમ અદ્ભુત હતી અને ${getKw(5)} નું પણ પૂરતું ધ્યાન રાખવામાં આવ્યું. ✨`,
-        `અમારા સમગ્ર પરિવારને ${name} ખૂબ ગમ્યું. ખાસ કરીને અહીંની ${getKw(1)} અને નમ્ર ${getKw(3)} એ સૌનું દિલ જીતી લીધું. ફરી જરૂર મુલાકાત લઈશું!`,
-        `ઉત્કૃષ્ટ સેવા અને શ્રેષ્ઠ ${getKw(4)}! ${name} ખાતે આવીને ખૂબ આનંદ થયો, ${getKw(2)} પણ ટોપ-ક્લાસ હતી. 5 સ્ટાર રેટિંગ! ⭐`
-      ],
+      positive: positiveDrafts,
       neutral: [
-        `${name} નો અનુભવ યોગ્ય રહ્યો. ${getKw(0)} સંતોષકારક હતું પરંતુ થોડી વધુ ઝડપ જરૂરી છે.`
+        `અહીંનો અનુભવ યોગ્ય રહ્યો. સેવા સંતોષકારક હતી પરંતુ થોડી વધુ ઝડપ જરૂરી છે.`
       ]
     };
   }
 
   return {
-    positive: [
-      `Honestly loved my experience at ${name}! The ${getKw(0)} and ${getKw(1)} were outstanding. Highly recommend to everyone! ⭐⭐⭐⭐⭐`,
-      `Really impressed with ${name}. Special shoutout for their ${getKw(0)} and courteous team. The ${getKw(2)} made the whole visit worthwhile! 👍`,
-      `First time visiting ${name} and it exceeded all expectations! Amazing ${getKw(1)}, spotless cleanliness, and great ${getKw(3)}. Will definitely be coming back!`,
-      `Top-notch ${getKw(0)} and super friendly staff at ${name}. Loved the ${getKw(2)}. 10/10 experience! ⭐`,
-      `Best place in town for ${getKw(0)}! Exceptional ${getKw(3)} and genuine value for money. Keep up the wonderful work ${name}! ✨`,
-      `Had a wonderful time at ${name}. What stood out most was their ${getKw(1)} and attention to ${getKw(2)}. Smooth and pleasant from start to finish.`,
-      `Such a pleasant experience at ${name}! Wonderful ${getKw(3)} along with ${getKw(4)}. Very welcoming atmosphere and polite service. 👍`,
-      `${name} never disappoints! Consistently great ${getKw(0)} and reliable ${getKw(4)}. My go-to recommendation for friends and family. ⭐`,
-      `Super fast service and top quality at ${name}. Their ${getKw(2)} is unbeatable, and the ${getKw(1)} makes it a true 5-star experience!`,
-      `The quality of ${getKw(0)} at ${name} is truly remarkable. Courteous staff, cozy vibes, and great ${getKw(5)}. Five stars all the way! ✨`,
-      `Outstanding hospitality at ${name}! Truly appreciated their ${getKw(1)} and helpful attitude. The ${getKw(3)} was a huge plus. Highly recommended!`,
-      `Totally satisfied with my visit to ${name}! From ${getKw(4)} to ${getKw(2)}, everything was handled with utmost care. Deserves 5 stars! ⭐`
-    ],
+    positive: positiveDrafts,
     neutral: [
-      `Decent experience at ${name}. The ${getKw(0)} was good, though service during rush hours has room for improvement.`,
-      `Visited ${name} for the first time. The ${getKw(1)} was polite, overall a satisfactory and fair experience.`
+      `Decent experience overall. Service was fine, though during rush hours there was a slight wait.`,
+      `Visited for the first time. The staff was polite, overall a satisfactory and fair experience.`
     ]
   };
 }
+
+// LocalBoost Natural Keyword Review Generation endpoint (100% Local, Zero external API)
+app.post('/api/ai/generate-review', async (req, res) => {
+  try {
+    const {
+      businessName = '',
+      businessCategory = '',
+      businessLocation = '',
+      selectedKeyword = '',
+      customerExperience = '',
+      language = 'en',
+    } = req.body;
+
+    const safeBusinessName = (businessName || 'Our Business').trim();
+    const safeCategory = (businessCategory || 'Local Business').trim();
+    const safeLocation = (businessLocation || '').trim();
+    const safeKeyword = (selectedKeyword || 'courteous team').trim();
+    const safeExperience = (customerExperience || '').trim();
+    const safeLanguage = language === 'hi' || language === 'gu' ? language : 'en';
+
+    const review = generateNaturalSingleReview({
+      businessName: safeBusinessName,
+      category: safeCategory,
+      location: safeLocation,
+      keyword: safeKeyword,
+      customerExperience: safeExperience,
+      language: safeLanguage as any,
+    });
+
+    return res.json({
+      success: true,
+      review,
+      source: 'local-natural-engine',
+      rulesApplied: [
+        'Natural sentence structure',
+        'No forced business name in opening sentence',
+        'Concise authentic customer tone',
+        'Fits customer actual experience',
+      ],
+    });
+  } catch (error: any) {
+    console.error('Failed to generate review draft:', error);
+    res.status(500).json({ error: error.message || 'Error generating review draft' });
+  }
+});
 
 // Mount Vite middleware in development
 async function startServer() {

@@ -56,6 +56,8 @@ export interface Business {
   birthday_min_bill_amount?: string;
   birthday_validity_days?: number;
   birthday_wish_template?: string;
+  // Comprehensive Business Profile Info for Checklist & Chatbot
+  business_info?: BusinessProfileInfo;
   created_at: string;
   updated_at: string;
 }
@@ -320,4 +322,189 @@ export interface ScratchPlay {
   redeemed_by?: string;
   created_at: string;
 }
+
+// ============================================================================
+// BUSINESS INFORMATION CHECKLIST & LIVE CHAT TYPES (100% Zero External AI)
+// ============================================================================
+
+export type ChecklistFieldStatus = 'complete' | 'missing' | 'needs_verification' | 'not_applicable';
+
+export interface DaySchedule {
+  open: string; // e.g. "09:00"
+  close: string; // e.g. "21:00"
+  closed: boolean;
+  lunch_start?: string;
+  lunch_end?: string;
+}
+
+export type WeekSchedule = Record<
+  'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday',
+  DaySchedule
+>;
+
+export type PriceType = 'fixed' | 'starting_from' | 'range' | 'quotation';
+
+export interface ProductServiceItem {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  price: string;
+  price_type: PriceType;
+  variants?: string; // e.g. "Small, Medium, Large" or "Full / Half"
+  available: boolean;
+  last_updated?: string;
+}
+
+export interface BusinessFaqItem {
+  id: string;
+  question: string;
+  variations: string[];
+  answer: string;
+  approved_for_public: boolean;
+}
+
+export interface BusinessProfileInfo {
+  // A. Identity
+  business_name: string;
+  category: string;
+  subcategory?: string;
+  short_description?: string;
+  detailed_description?: string;
+  address?: string;
+  area?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  google_maps_url?: string;
+  website_url?: string;
+  phone?: string;
+  whatsapp?: string;
+  public_email?: string;
+  owner_name?: string;
+  owner_name_public_approved?: boolean;
+  languages: SupportedLanguage[];
+  logo_url?: string;
+
+  // B. Opening Hours
+  opening_hours: {
+    schedule: WeekSchedule;
+    appointment_only?: boolean;
+    holiday_notice?: string;
+    last_updated?: string;
+  };
+
+  // C. Products and Services
+  products_services: ProductServiceItem[];
+
+  // D. Policies
+  policies: {
+    payment_methods: string[];
+    return_exchange?: string;
+    cancellation?: string;
+    refund?: string;
+    delivery?: string;
+    service_area?: string;
+    booking_policy?: string;
+    warranty?: string;
+    terms?: string;
+  };
+
+  // E. Customer Contact & Actions
+  contact_actions: {
+    call_enabled: boolean;
+    whatsapp_enabled: boolean;
+    website_enabled: boolean;
+    directions_enabled: boolean;
+    custom_cta_label?: string;
+    custom_cta_url?: string;
+  };
+
+  // F. Common FAQs
+  faqs: BusinessFaqItem[];
+
+  // G. Checklist Field Status Map & Verification Date
+  field_status: Record<string, ChecklistFieldStatus>;
+  last_verified_at?: string;
+}
+
+export interface ChatQuickPrompt {
+  id: string;
+  label: string; // Button text displayed to customer, e.g. "🕒 Opening Hours", "📍 Location"
+  question: string; // Question text sent into chat
+  direct_answer?: string; // Optional instant answer to reply immediately
+  category?: 'hours' | 'location' | 'product' | 'policy' | 'contact' | 'custom';
+  action_type?: 'message' | 'call' | 'whatsapp' | 'maps' | 'website';
+  action_value?: string;
+  is_active: boolean;
+}
+
+export interface ChatbotConfig {
+  id: string;
+  business_id: string;
+  enabled: boolean;
+  welcome_message?: {
+    en?: string;
+    hi?: string;
+    gu?: string;
+  };
+  fallback_message?: {
+    en?: string;
+    hi?: string;
+    gu?: string;
+  };
+  supported_languages: SupportedLanguage[];
+  suggested_questions: string[];
+  quick_prompts?: ChatQuickPrompt[];
+  custom_short_slug?: string;
+  show_call_button: boolean;
+  show_whatsapp_button: boolean;
+  show_directions_button: boolean;
+  show_website_button: boolean;
+  visitor_privacy_notice?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  business_id: string;
+  visitor_session_id: string;
+  language: SupportedLanguage;
+  message_count: number;
+  last_message_preview: string;
+  has_unresolved: boolean;
+  contact_clicked?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatActionOption {
+  type: 'call' | 'whatsapp' | 'maps' | 'website' | 'question';
+  label: string;
+  value: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  business_id: string;
+  sender: 'user' | 'bot';
+  text: string;
+  intent?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  suggested_actions?: ChatActionOption[];
+  created_at: string;
+}
+
+export interface ChatAnalyticsSummary {
+  totalConversations: number;
+  totalMessages: number;
+  unansweredCount: number;
+  contactClicksCount: number;
+  topIntents: Array<{ intent: string; count: number }>;
+  topQuestions: Array<{ question: string; count: number }>;
+  unansweredQuestions: Array<{ question: string; count: number; lastAsked: string }>;
+}
+
 

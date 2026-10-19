@@ -15,6 +15,9 @@ import {
   AuthSession,
   ScratchCampaign,
   ScratchPlay,
+  ChatbotConfig,
+  ChatConversation,
+  ChatMessage,
 } from '../types/database';
 
 export interface ServerDatabaseData {
@@ -32,6 +35,10 @@ export interface ServerDatabaseData {
   reminderAuditLogs: ReminderAuditLog[];
   scratchCampaigns: ScratchCampaign[];
   scratchPlays: ScratchPlay[];
+  chatConfigs: ChatbotConfig[];
+  chatConversations: ChatConversation[];
+  chatMessages: ChatMessage[];
+  chatClicks: Array<{ id: string; business_id: string; conversation_id?: string; type: string; created_at: string }>;
 }
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -193,6 +200,10 @@ function getInitialData(): ServerDatabaseData {
     reminderAuditLogs: [],
     scratchCampaigns: [],
     scratchPlays: [],
+    chatConfigs: [],
+    chatConversations: [],
+    chatMessages: [],
+    chatClicks: [],
   };
 }
 
@@ -238,6 +249,10 @@ export function loadServerDb(): ServerDatabaseData {
         reminderAuditLogs: parsed.reminderAuditLogs || [],
         scratchCampaigns: parsed.scratchCampaigns || [],
         scratchPlays: parsed.scratchPlays || [],
+        chatConfigs: parsed.chatConfigs || [],
+        chatConversations: parsed.chatConversations || [],
+        chatMessages: parsed.chatMessages || [],
+        chatClicks: parsed.chatClicks || [],
       };
       return cachedDb;
     }

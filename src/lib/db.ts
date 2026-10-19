@@ -1689,7 +1689,7 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
 
 export async function updateBusiness(
   businessId: string,
-  updates: Partial<Pick<Business, 'business_name' | 'google_review_url' | 'logo_url' | 'phone' | 'whatsapp_number' | 'address' | 'category' | 'unique_slug' | 'ai_prompt' | 'ai_keywords' | 'ai_suggestions_preview' | 'ai_summary' | 'ai_last_generated_at' | 'gps_verification_enabled' | 'latitude' | 'longitude' | 'gps_radius_meters' | 'review_reward_mode'>>
+  updates: Partial<Business>
 ): Promise<Business> {
   const supabase = getSupabaseClient();
   if (supabase) {
