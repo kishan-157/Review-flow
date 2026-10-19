@@ -1,6 +1,51 @@
 {
   "profiles": [
     {
+      "id": "usr_1792421780592_j1droi",
+      "full_name": "Sunil Kirana",
+      "email": "sunil.kirana@store.com",
+      "unique_customer_code": "LB-CUS-B9UACJ",
+      "role": "customer",
+      "status": "active",
+      "created_by_manager_id": "mgr_1792420935151_3k3zv",
+      "managed_by": "Demo",
+      "access_validity_type": "1_year",
+      "access_duration_days": 365,
+      "access_expires_at": "2027-10-19T14:56:20.592Z",
+      "created_at": "2026-10-19T14:56:20.592Z",
+      "updated_at": "2026-10-19T14:56:20.592Z",
+      "last_login_at": "2026-10-19T14:56:20.592Z"
+    },
+    {
+      "id": "usr_1792421428158_b6mjm3",
+      "full_name": "Rajesh Gupta",
+      "email": "rajesh.store@example.com",
+      "unique_customer_code": "LB-CUS-ATLC3S",
+      "role": "customer",
+      "status": "active",
+      "created_by_manager_id": "mgr_1792420935151_3k3zv",
+      "managed_by": "Demo",
+      "access_validity_type": "1_year",
+      "access_duration_days": 365,
+      "access_expires_at": "2027-10-19T14:50:28.158Z",
+      "created_at": "2026-10-19T14:50:28.158Z",
+      "updated_at": "2026-10-19T14:50:28.158Z",
+      "last_login_at": "2026-10-19T14:50:28.158Z"
+    },
+    {
+      "id": "mgr_1792420935151_3k3zv",
+      "full_name": "Demo",
+      "email": "demo@gmail.com",
+      "phone": "+919724852137",
+      "unique_customer_code": "LB-MGR-0WI0",
+      "role": "manager",
+      "status": "active",
+      "access_validity_type": "lifetime",
+      "created_at": "2026-10-19T14:42:15.151Z",
+      "updated_at": "2026-10-19T14:42:15.151Z",
+      "last_login_at": "2026-10-19T14:42:15.151Z"
+    },
+    {
       "id": "mgr_1792420798953_dfqby",
       "full_name": "Rahul Manager",
       "email": "rahul.manager2026@test.com",
@@ -80,7 +125,7 @@
       "access_validity_type": "lifetime",
       "created_at": "2026-10-11T13:53:07.512Z",
       "updated_at": "2026-10-11T13:53:07.512Z",
-      "last_login_at": "2026-10-19T13:55:08.634Z"
+      "last_login_at": "2026-10-19T14:41:45.960Z"
     },
     {
       "id": "admin_master_1",
@@ -109,6 +154,34 @@
     }
   ],
   "businesses": [
+    {
+      "id": "biz_1792421780592_c9phyh",
+      "user_id": "usr_1792421780592_j1droi",
+      "created_by_manager_id": "mgr_1792420935151_3k3zv",
+      "created_by_manager_name": "Demo",
+      "business_name": "Sunil Provision Store",
+      "unique_slug": "sunil-provision-store-wwmc",
+      "google_review_url": "https://maps.app.goo.gl/sample123",
+      "phone": "",
+      "address": "",
+      "category": "Restaurant & Hospitality",
+      "created_at": "2026-10-19T14:56:20.592Z",
+      "updated_at": "2026-10-19T14:56:20.592Z"
+    },
+    {
+      "id": "biz_1792421428158_cxafso",
+      "user_id": "usr_1792421428158_b6mjm3",
+      "created_by_manager_id": "mgr_1792420935151_3k3zv",
+      "created_by_manager_name": "Demo",
+      "business_name": "Rajesh Kirana Store",
+      "unique_slug": "rajesh-kirana-store-tfvp",
+      "google_review_url": "",
+      "phone": "",
+      "address": "",
+      "category": "Restaurant & Hospitality",
+      "created_at": "2026-10-19T14:50:28.158Z",
+      "updated_at": "2026-10-19T14:50:28.158Z"
+    },
     {
       "id": "biz_1792417921048_djrvne",
       "user_id": "usr_1792417921048_zvg7z7",
@@ -400,9 +473,44 @@
     "testmanager999@example.com": "MgrPass102279!",
     "lb-mgr-i3jn": "MgrPass102279!",
     "rahul.manager2026@test.com": "MgrPass569748!",
-    "lb-mgr-ebpg": "MgrPass569748!"
+    "lb-mgr-ebpg": "MgrPass569748!",
+    "demo@gmail.com": "MgrPass417955!",
+    "lb-mgr-0wi0": "MgrPass417955!",
+    "919724852137": "MgrPass417955!",
+    "rajesh.store@example.com": "LBPass222476!",
+    "lb-cus-atlc3s": "LBPass222476!",
+    "sunil.kirana@store.com": "LBPass328081!",
+    "lb-cus-b9uacj": "LBPass328081!"
   },
   "reviewSettings": [
+    {
+      "id": "rs_1792421780593",
+      "business_id": "biz_1792421780592_c9phyh",
+      "language": "en",
+      "welcome_text": "Welcome to Sunil Provision Store! How was your experience?",
+      "thank_you_text": "Thank you for your valuable feedback! ❤️",
+      "enabled": true,
+      "accent_color": "#6C3BFF",
+      "qr_show_logo": true,
+      "qr_logo_border_style": "circular",
+      "qr_color": "#1F1735",
+      "created_at": "2026-10-19T14:56:20.592Z",
+      "updated_at": "2026-10-19T14:56:20.592Z"
+    },
+    {
+      "id": "rs_1792421428158",
+      "business_id": "biz_1792421428158_cxafso",
+      "language": "en",
+      "welcome_text": "Welcome to Rajesh Kirana Store! How was your experience?",
+      "thank_you_text": "Thank you for your valuable feedback! ❤️",
+      "enabled": true,
+      "accent_color": "#6C3BFF",
+      "qr_show_logo": true,
+      "qr_logo_border_style": "circular",
+      "qr_color": "#1F1735",
+      "created_at": "2026-10-19T14:50:28.158Z",
+      "updated_at": "2026-10-19T14:50:28.158Z"
+    },
     {
       "id": "rs_1792417921049",
       "business_id": "biz_1792417921048_djrvne",

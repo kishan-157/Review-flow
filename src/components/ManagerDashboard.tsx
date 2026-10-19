@@ -36,6 +36,7 @@ import {
   Shield,
   MessageSquare,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { AuthSession, Business, Profile, UserStatus } from '../types/database';
 import {
@@ -78,6 +79,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [newGoogleReviewUrl, setNewGoogleReviewUrl] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [createModalError, setCreateModalError] = useState<string | null>(null);
 
   // Created Credentials Success Modal
   const [createdSuccessData, setCreatedSuccessData] = useState<{
@@ -97,6 +99,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [editStatus, setEditStatus] = useState<UserStatus>('active');
   const [editPassword, setEditPassword] = useState('');
   const [updating, setUpdating] = useState<boolean>(false);
+  const [editModalError, setEditModalError] = useState<string | null>(null);
 
   // Delete Confirmation State
   const [deleteItem, setDeleteItem] = useState<ManagerCustomerRow | null>(null);
@@ -132,11 +135,42 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const handleOpenCreateModal = () => {
+    setCreateModalError(null);
+    setNewBizName('');
+    setNewOwnerName('');
+    setNewEmail('');
+    setNewPhone('');
+    setNewCategory('Restaurant & Hospitality');
+    setNewGoogleReviewUrl('');
+    setNewAddress('');
+    setNewPassword('');
+    setCreateModalOpen(true);
+  };
+
   // Handle Create Business
   const handleCreateBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newBizName.trim() || !newOwnerName.trim() || !newEmail.trim()) {
-      showToast('Please fill in Business Name, Owner Name, and Email.', 'error');
+    setCreateModalError(null);
+
+    const cleanBiz = newBizName.trim();
+    const cleanOwner = newOwnerName.trim();
+    const cleanMail = newEmail.trim().toLowerCase();
+
+    if (!cleanBiz) {
+      setCreateModalError('Business / Store Name enter karna anivarya hai (दुकान/बिज़नेस का नाम आवश्यक है).');
+      return;
+    }
+    if (!cleanOwner) {
+      setCreateModalError('Owner Full Name enter karna anivarya hai (मालिक का नाम आवश्यक है).');
+      return;
+    }
+    if (!cleanMail) {
+      setCreateModalError('Login Email address enter karna anivarya hai (ईमेल आवश्यक है).');
+      return;
+    }
+    if (!cleanMail.includes('@') || !cleanMail.includes('.')) {
+      setCreateModalError('Kripya valid email address dalein (jaise: store@gmail.com).');
       return;
     }
 
@@ -144,10 +178,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     try {
       const result = await createCustomerByManager({
         managerId: manager.id,
-        fullName: newOwnerName.trim(),
-        email: newEmail.trim(),
+        fullName: cleanOwner,
+        email: cleanMail,
         password: newPassword.trim() || undefined,
-        businessName: newBizName.trim(),
+        businessName: cleanBiz,
         phone: newPhone.trim(),
         category: newCategory,
         googleReviewUrl: newGoogleReviewUrl.trim(),
@@ -165,9 +199,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       setNewGoogleReviewUrl('');
       setNewAddress('');
       setNewPassword('');
-      fetchManagedData();
+      await fetchManagedData();
     } catch (err: any) {
-      showToast(err.message || 'Failed to create business account.', 'error');
+      console.error('Error creating business account:', err);
+      setCreateModalError(err.message || 'Business account create karne me samasya aayi.');
     } finally {
       setCreating(false);
     }
@@ -191,6 +226,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editModalItem) return;
+    setEditModalError(null);
 
     setUpdating(true);
     try {
@@ -211,9 +247,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       showToast(`Business details updated successfully!`);
       setEditModalItem(null);
       setEditPassword('');
-      fetchManagedData();
+      await fetchManagedData();
     } catch (err: any) {
-      showToast(err.message || 'Failed to update business details.', 'error');
+      setEditModalError(err.message || 'Failed to update business details.');
     } finally {
       setUpdating(false);
     }
@@ -281,7 +317,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => setCreateModalOpen(true)}
+              onClick={handleOpenCreateModal}
               className="px-4 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs shadow-purple-600/30 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -450,7 +486,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               {!searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setCreateModalOpen(true)}
+                  onClick={handleOpenCreateModal}
                   className="px-4 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white text-xs font-bold rounded-xl shadow-xs shadow-purple-600/30 transition-all inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
@@ -598,30 +634,56 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       {/* CREATE BUSINESS MODAL */}
       {createModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 border border-neutral-200 shadow-2xl animate-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-5 border border-neutral-200 shadow-2xl animate-in zoom-in-95 duration-150 my-8">
             <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
               <div>
-                <h3 className="text-base font-extrabold text-neutral-900">Create New Business Account</h3>
+                <h3 className="text-base font-extrabold text-neutral-900">Create New Business Account (नया बिज़नेस अकाउंट बनाएं)</h3>
                 <p className="text-xs text-neutral-500">This business will be assigned directly under your manager account.</p>
               </div>
               <button
                 type="button"
-                onClick={() => setCreateModalOpen(false)}
-                className="p-1 text-neutral-400 hover:text-neutral-600 cursor-pointer"
+                onClick={() => {
+                  setCreateModalOpen(false);
+                  setCreateModalError(null);
+                }}
+                className="p-1 text-neutral-400 hover:text-neutral-600 rounded-lg hover:bg-neutral-100 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* IN-MODAL ERROR BANNER */}
+            {createModalError && (
+              <div className="p-3.5 bg-rose-50 border border-rose-300 text-rose-900 text-xs font-semibold rounded-2xl flex items-start gap-2.5 shadow-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <div className="space-y-0.5 flex-1">
+                  <p className="font-bold text-rose-800">Error / समस्या:</p>
+                  <p className="text-rose-700 leading-relaxed">{createModalError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCreateModalError(null)}
+                  className="text-rose-400 hover:text-rose-600 text-sm font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+
             <form onSubmit={handleCreateBusiness} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="space-y-1">
-                  <label className="font-bold text-neutral-700">Business / Store Name *</label>
+                  <label className="font-bold text-neutral-700">
+                    Business / Store Name <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
                     required
                     value={newBizName}
-                    onChange={(e) => setNewBizName(e.target.value)}
+                    onChange={(e) => {
+                      setNewBizName(e.target.value);
+                      if (createModalError) setCreateModalError(null);
+                    }}
                     placeholder="e.g. Royal Sweets & Bakery"
                     className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
                   />
@@ -648,24 +710,34 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="space-y-1">
-                  <label className="font-bold text-neutral-700">Owner Full Name *</label>
+                  <label className="font-bold text-neutral-700">
+                    Owner Full Name <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="text"
                     required
                     value={newOwnerName}
-                    onChange={(e) => setNewOwnerName(e.target.value)}
+                    onChange={(e) => {
+                      setNewOwnerName(e.target.value);
+                      if (createModalError) setCreateModalError(null);
+                    }}
                     placeholder="e.g. Rajesh Sharma"
                     className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-neutral-700">Login Email *</label>
+                  <label className="font-bold text-neutral-700">
+                    Login Email <span className="text-rose-500">*</span>
+                  </label>
                   <input
                     type="email"
                     required
                     value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
+                    onChange={(e) => {
+                      setNewEmail(e.target.value);
+                      if (createModalError) setCreateModalError(null);
+                    }}
                     placeholder="e.g. store@business.com"
                     className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
                   />
@@ -674,7 +746,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="space-y-1">
-                  <label className="font-bold text-neutral-700">Phone / WhatsApp Number</label>
+                  <label className="font-bold text-neutral-700">Phone / WhatsApp Number (Optional)</label>
                   <input
                     type="tel"
                     value={newPhone}
@@ -691,24 +763,25 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Auto-generated if left blank"
-                    className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
+                    className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden font-mono"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-neutral-700">Google Maps / Review URL</label>
+                <label className="font-bold text-neutral-700">Google Maps / Review URL (Optional)</label>
                 <input
-                  type="url"
+                  type="text"
                   value={newGoogleReviewUrl}
                   onChange={(e) => setNewGoogleReviewUrl(e.target.value)}
-                  placeholder="https://maps.app.goo.gl/..."
+                  placeholder="https://maps.app.goo.gl/... ya g.page/..."
                   className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
                 />
+                <p className="text-[10px] text-neutral-400">Yahan Google Review ka link dalein (optional).</p>
               </div>
 
               <div className="space-y-1">
-                <label className="font-bold text-neutral-700">Physical Store Address</label>
+                <label className="font-bold text-neutral-700">Physical Store Address (Optional)</label>
                 <input
                   type="text"
                   value={newAddress}
@@ -721,7 +794,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100">
                 <button
                   type="button"
-                  onClick={() => setCreateModalOpen(false)}
+                  onClick={() => {
+                    setCreateModalOpen(false);
+                    setCreateModalError(null);
+                  }}
                   className="px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
@@ -729,9 +805,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-5 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                 >
-                  {creating ? 'Creating Account...' : 'Create Business'}
+                  {creating && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{creating ? 'Creating Account...' : 'Create Business (बिज़नेस बनाएं)'}</span>
                 </button>
               </div>
             </form>
@@ -741,23 +818,31 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
       {/* CREATED ACCOUNT SUCCESS CREDENTIALS MODAL */}
       {createdSuccessData && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-neutral-200 shadow-2xl animate-in zoom-in-95">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-neutral-200 shadow-2xl animate-in zoom-in-95 my-8">
             <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-6 h-6" />
             </div>
 
             <div className="text-center space-y-1">
-              <h3 className="text-base font-extrabold text-neutral-900">Business Account Created!</h3>
+              <h3 className="text-base font-extrabold text-neutral-900">Business Account Created! (बिज़नेस बन गया)</h3>
               <p className="text-xs text-neutral-500">
-                Share these login credentials with the store owner or open their panel right away.
+                Aapke manager portfolio me naya customer account successfully create ho gaya hai.
               </p>
             </div>
 
-            <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-2xl space-y-2 text-xs">
+            <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-2xl space-y-2.5 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-neutral-500">Business Name:</span>
                 <span className="font-bold text-neutral-900">{createdSuccessData.business.business_name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">Customer ID Code:</span>
+                <span className="font-mono font-bold text-purple-700">{createdSuccessData.user.unique_customer_code}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">Owner Name:</span>
+                <span className="font-semibold text-neutral-800">{createdSuccessData.user.full_name}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-neutral-500">Login Email:</span>
@@ -777,23 +862,52 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  const shareText = `Hello ${createdSuccessData.user.full_name}!\nYour ${createdSuccessData.business.business_name} account has been created.\nLogin Email: ${createdSuccessData.user.email}\nPassword: ${createdSuccessData.tempPassword}\nLive Chat: ${window.location.origin}/?c=${createdSuccessData.business.unique_slug}`;
-                  navigator.clipboard.writeText(shareText);
-                  showToast('Account details copied to clipboard!');
+                  const row: ManagerCustomerRow = {
+                    id: createdSuccessData.business.id,
+                    user_id: createdSuccessData.user.id,
+                    business: createdSuccessData.business,
+                    profile: createdSuccessData.user,
+                    settings: null,
+                    password: createdSuccessData.tempPassword,
+                  };
+                  setCreatedSuccessData(null);
+                  handleOpenPanel(row);
                 }}
-                className="w-full py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 bg-gradient-to-r from-[#6C3BFF] to-[#8C52FF] hover:opacity-95 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
               >
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy Credentials for Owner</span>
+                <Eye className="w-3.5 h-3.5" />
+                <span>Open Customer Panel Now (कस्टमर पैनल खोलें)</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setCreatedSuccessData(null)}
-                className="w-full py-2.5 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                onClick={() => {
+                  const shareText = `Hello ${createdSuccessData.user.full_name}!\nYour ${createdSuccessData.business.business_name} account has been created.\nCustomer Code: ${createdSuccessData.user.unique_customer_code}\nLogin Email: ${createdSuccessData.user.email}\nPassword: ${createdSuccessData.tempPassword}\nLive Review Page: ${window.location.origin}/?c=${createdSuccessData.business.unique_slug}\nLogin URL: ${window.location.origin}/#login`;
+                  copyToClipboard(shareText, 'share_all');
+                  showToast('Account details copied to clipboard!');
+                }}
+                className="w-full py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Done
+                {copiedId === 'share_all' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedId === 'share_all' ? 'Copied Details!' : 'Copy Credentials for Owner'}</span>
               </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenCreateModal}
+                  className="flex-1 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  + Add Another
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreatedSuccessData(null)}
+                  className="flex-1 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -810,12 +924,22 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setEditModalItem(null)}
+                onClick={() => {
+                  setEditModalItem(null);
+                  setEditModalError(null);
+                }}
                 className="p-1 text-neutral-400 hover:text-neutral-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {editModalError && (
+              <div className="p-3 bg-rose-50 border border-rose-300 text-rose-800 text-xs font-semibold rounded-xl flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{editModalError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSaveEdit} className="space-y-3.5 text-xs">
               <div className="space-y-1">

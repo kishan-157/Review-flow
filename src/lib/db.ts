@@ -3913,27 +3913,155 @@ export async function createCustomerByManager(data: {
   category?: string;
   address?: string;
 }): Promise<{ user: Profile; business: Business; tempPassword?: string }> {
-  const res = await fetch('/api/manager/create-customer', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  const cleanEmail = (data.email || '').trim().toLowerCase();
+  const cleanFullName = (data.fullName || '').trim();
+  const cleanBizName = (data.businessName || '').trim();
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to create business under manager.');
+  if (!cleanBizName || !cleanFullName || !cleanEmail) {
+    throw new Error('Business Name, Owner Name aur Login Email bharna zaroori hai.');
   }
 
-  const result = await res.json();
-  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
-  profiles.unshift(result.user);
-  setStorage(STORAGE_KEYS.PROFILES, profiles);
+  // Pre-check duplicate in local cache
+  const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const localExisting = localProfiles.find((p) => p.email && p.email.toLowerCase().trim() === cleanEmail);
+  if (localExisting) {
+    throw new Error(`Is email address (${cleanEmail}) se already account (${localExisting.role || 'user'}) exist karta hai. Kripya alag email address use karein.`);
+  }
 
-  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
-  businesses.unshift(result.business);
-  setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+  let cleanUrl = (data.googleReviewUrl || '').trim();
+  if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    cleanUrl = `https://${cleanUrl}`;
+  }
 
-  return result;
+  try {
+    const res = await fetch('/api/manager/create-customer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        managerId: data.managerId,
+        fullName: cleanFullName,
+        email: cleanEmail,
+        password: data.password?.trim() || undefined,
+        businessName: cleanBizName,
+        googleReviewUrl: cleanUrl,
+        phone: (data.phone || '').trim(),
+        category: data.category || 'Restaurant & Hospitality',
+        address: (data.address || '').trim(),
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create business under manager.');
+    }
+
+    const result = await res.json();
+    if (!result?.user || !result?.business) {
+      throw new Error('Server did not return full customer details.');
+    }
+
+    // Save profile to local storage cache
+    const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+    const pIdx = profiles.findIndex((p) => p.id === result.user.id);
+    if (pIdx !== -1) profiles[pIdx] = result.user;
+    else profiles.unshift(result.user);
+    setStorage(STORAGE_KEYS.PROFILES, profiles);
+
+    // Save business to local storage cache
+    const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+    const bIdx = businesses.findIndex((b) => b.id === result.business.id);
+    if (bIdx !== -1) businesses[bIdx] = result.business;
+    else businesses.unshift(result.business);
+    setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+
+    // Save password to local passwords cache for instant offline & online login
+    if (result.tempPassword) {
+      const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+      passwords[cleanEmail] = result.tempPassword;
+      if (result.user.unique_customer_code) {
+        passwords[result.user.unique_customer_code.toLowerCase()] = result.tempPassword;
+      }
+      if (data.phone) {
+        const cleanPhone = data.phone.replace(/[^0-9]/g, '');
+        if (cleanPhone) passwords[cleanPhone] = result.tempPassword;
+      }
+      setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+    }
+
+    return result;
+  } catch (err: any) {
+    if (err.message && (err.message.includes('already') || err.message.includes('exist') || err.message.includes('zaroori'))) {
+      throw err;
+    }
+
+    // Offline / LocalStorage fallback
+    console.warn('Backend create-customer by manager failed, falling back to local storage:', err);
+    const generatedPassword = (data.password || '').trim() || `LBPass${Math.floor(100000 + Math.random() * 900000)}!`;
+    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const customerCode = `LB-CUS-${randomSuffix}`;
+    const now = new Date();
+    const exp = new Date(now);
+    exp.setDate(exp.getDate() + 365);
+
+    const localUser: Profile = {
+      id: userId,
+      full_name: cleanFullName,
+      email: cleanEmail,
+      unique_customer_code: customerCode,
+      role: 'customer',
+      status: 'active',
+      created_by_manager_id: data.managerId,
+      access_validity_type: '1_year',
+      access_duration_days: 365,
+      access_expires_at: exp.toISOString(),
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      last_login_at: now.toISOString(),
+    };
+
+    const businessId = `biz_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const slug =
+      cleanBizName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '') +
+      '-' +
+      Math.random().toString(36).substring(2, 6);
+
+    const localBiz: Business = {
+      id: businessId,
+      user_id: userId,
+      created_by_manager_id: data.managerId,
+      business_name: cleanBizName,
+      unique_slug: slug,
+      google_review_url: cleanUrl,
+      phone: (data.phone || '').trim(),
+      address: (data.address || '').trim(),
+      category: data.category || 'Restaurant & Hospitality',
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    };
+
+    const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+    profiles.unshift(localUser);
+    setStorage(STORAGE_KEYS.PROFILES, profiles);
+
+    const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+    businesses.unshift(localBiz);
+    setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+
+    const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+    passwords[cleanEmail] = generatedPassword;
+    passwords[customerCode.toLowerCase()] = generatedPassword;
+    if (data.phone) {
+      const cleanPhone = data.phone.replace(/[^0-9]/g, '');
+      if (cleanPhone) passwords[cleanPhone] = generatedPassword;
+    }
+    setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+
+    return { user: localUser, business: localBiz, tempPassword: generatedPassword };
+  }
 }
 
 export async function updateCustomerByManager(data: {

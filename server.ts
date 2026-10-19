@@ -657,15 +657,25 @@ app.get('/api/manager/:managerId/customers', (req, res) => {
     const db = loadServerDb();
     const { managerId } = req.params;
 
-    // Verify manager exists
-    const mgr = db.profiles.find((p) => p.id === managerId && p.role === 'manager');
+    // Verify manager exists (resilient matching by ID, email, or code)
+    const mgr = db.profiles.find(
+      (p) =>
+        (p.id === managerId ||
+          p.email.toLowerCase() === String(managerId).toLowerCase() ||
+          p.unique_customer_code?.toLowerCase() === String(managerId).toLowerCase()) &&
+        (p.role === 'manager' || p.role === 'admin')
+    );
     if (!mgr) {
-      return res.status(403).json({ error: 'Manager account not verified.' });
+      return res.status(403).json({ error: 'Manager account not verified (मैनेजर अकाउंट सत्यापित नहीं हुआ).' });
     }
+
+    const matchedManagerIds = new Set([managerId, mgr.id, mgr.email.toLowerCase()]);
 
     // Filter strictly to businesses created by this manager ONLY
     // Super admin businesses (created_by_manager_id == null/undefined) or other managers' businesses are strictly excluded
-    const managerBusinesses = db.businesses.filter((b) => b.created_by_manager_id === managerId);
+    const managerBusinesses = db.businesses.filter(
+      (b) => b.created_by_manager_id && matchedManagerIds.has(b.created_by_manager_id)
+    );
 
     const customers = managerBusinesses.map((b) => {
       const user = db.profiles.find((p) => p.id === b.user_id);
@@ -705,22 +715,38 @@ app.post('/api/manager/create-customer', (req, res) => {
     } = req.body;
 
     if (!managerId) {
-      return res.status(400).json({ error: 'Missing manager identifier.' });
+      return res.status(400).json({ error: 'Missing manager identifier (मैनेजर ID अनुपलब्ध है).' });
     }
 
-    const mgr = db.profiles.find((p) => p.id === managerId && p.role === 'manager');
+    const mgr = db.profiles.find(
+      (p) =>
+        (p.id === managerId ||
+          p.email.toLowerCase() === String(managerId).toLowerCase() ||
+          p.unique_customer_code?.toLowerCase() === String(managerId).toLowerCase()) &&
+        (p.role === 'manager' || p.role === 'admin')
+    );
     if (!mgr) {
-      return res.status(403).json({ error: 'Unauthorized: Manager account not found or invalid.' });
+      return res.status(403).json({ error: 'Unauthorized: Manager account not found or invalid (मैनेजर अकाउंट मान्य नहीं है).' });
     }
 
     const cleanEmail = (email || '').trim().toLowerCase();
-    if (!cleanEmail || !fullName || !businessName) {
-      return res.status(400).json({ error: 'Full name, email, and business name are required.' });
+    const cleanFullName = (fullName || '').trim();
+    const cleanBizName = (businessName || '').trim();
+
+    if (!cleanEmail || !cleanFullName || !cleanBizName) {
+      return res.status(400).json({ error: 'Business name, owner name, and email are required (बिज़नेस का नाम, ओनर का नाम और ईमेल आवश्यक है).' });
     }
 
     const existing = db.profiles.find((p) => p.email.toLowerCase() === cleanEmail);
     if (existing) {
-      return res.status(400).json({ error: 'An account with this email address already exists.' });
+      return res.status(400).json({
+        error: `Is email address (${cleanEmail}) se already ek account (${existing.role || 'user'}) exist karta hai. Kripya naya ya alag email address dalein.`
+      });
+    }
+
+    let cleanGoogleReviewUrl = (googleReviewUrl || '').trim();
+    if (cleanGoogleReviewUrl && !cleanGoogleReviewUrl.startsWith('http://') && !cleanGoogleReviewUrl.startsWith('https://')) {
+      cleanGoogleReviewUrl = `https://${cleanGoogleReviewUrl}`;
     }
 
     const generatedPassword = (password || '').trim() || `LBPass${Math.floor(100000 + Math.random() * 900000)}!`;
@@ -762,11 +788,11 @@ app.post('/api/manager/create-customer', (req, res) => {
     const newBusiness: any = {
       id: businessId,
       user_id: userId,
-      created_by_manager_id: managerId,
+      created_by_manager_id: mgr.id,
       created_by_manager_name: mgr.full_name,
-      business_name: businessName.trim(),
+      business_name: cleanBizName,
       unique_slug: slug,
-      google_review_url: (googleReviewUrl || '').trim(),
+      google_review_url: cleanGoogleReviewUrl,
       phone: (phone || '').trim(),
       address: (address || '').trim(),
       category: category || 'Restaurant & Hospitality',
