@@ -133,6 +133,13 @@ export const PublicChatPage: React.FC<PublicChatPageProps> = ({
           const filtered = filterPublicChatbotInfo(fullInfo);
           setPublicProfile(filtered);
 
+          // Set pure business owner branding (no platform branding when sharing or viewing)
+          document.title = `${biz.business_name} • Live Assistant & Support`;
+          const ogTitle = document.querySelector('meta[property="og:title"]');
+          if (ogTitle) ogTitle.setAttribute('content', `${biz.business_name} • Live Chat Assistant`);
+          const ogDesc = document.querySelector('meta[property="og:description"]');
+          if (ogDesc) ogDesc.setAttribute('content', `Chat live with ${biz.business_name}. Get instant answers about timings, products, and location.`);
+
           // If config wasn't attached, fetch directly
           if (!fetchedConfig) {
             try {
