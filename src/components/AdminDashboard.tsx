@@ -122,6 +122,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [adminSettings, setAdminSettings] = useState<Record<string, string>>({});
   const [auditLogs, setAuditLogs] = useState<ImpersonationAuditLog[]>([]);
   const [managersList, setManagersList] = useState<ManagerRow[]>([]);
+  const [managerTabAutoCreate, setManagerTabAutoCreate] = useState<boolean>(false);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -1220,14 +1221,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2.5 shrink-0">
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('managers')}
-                  className="px-5 py-2.5 bg-white hover:bg-neutral-100 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+                  onClick={() => {
+                    setManagerTabAutoCreate(true);
+                    setActiveTab('managers');
+                  }}
+                  className="px-4 py-2.5 bg-gradient-to-r from-[#6C3BFF] to-[#8C52FF] hover:opacity-95 text-white text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Create Manager (नया मैनेजर बनाएं)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManagerTabAutoCreate(false);
+                    setActiveTab('managers');
+                  }}
+                  className="px-4 py-2.5 bg-white hover:bg-neutral-100 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
                 >
                   <Users className="w-4 h-4 text-[#6C3BFF]" />
-                  <span>Manage &amp; Create Managers &rarr;</span>
+                  <span>View All Managers &rarr;</span>
                 </button>
               </div>
             </div>
@@ -1237,11 +1252,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* TAB: MANAGERS & SUB-ADMINS */}
         {activeTab === 'managers' && (
           <ManagersManagementTab
+            initialCreateOpen={managerTabAutoCreate}
             onImpersonateBusiness={(bizId) => {
               const row = customerRows.find((c) => c.business?.id === bizId);
               if (row && row.business) {
                 handleStartInspection(row.profile);
               }
+            }}
+            onManagersChanged={async () => {
+              const [updatedManagers, stats] = await Promise.all([
+                getAdminManagersList().catch(() => []),
+                getGlobalAnalytics().catch(() => null),
+              ]);
+              setManagersList(updatedManagers);
+              if (stats) setGlobalStats(stats);
             }}
           />
         )}

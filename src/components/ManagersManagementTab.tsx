@@ -34,6 +34,7 @@ import {
   EyeOff,
   X,
   ArrowRight,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   getAdminManagersList,
@@ -42,14 +43,18 @@ import {
   deleteManagerByAdmin,
   ManagerRow,
 } from '../lib/db';
-import { AuthSession } from '../types/database';
+import { AuthSession, Profile } from '../types/database';
 
 interface ManagersManagementTabProps {
   onImpersonateBusiness?: (businessId: string) => void;
+  onManagersChanged?: () => void;
+  initialCreateOpen?: boolean;
 }
 
 export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
   onImpersonateBusiness,
+  onManagersChanged,
+  initialCreateOpen = false,
 }) => {
   const [managers, setManagers] = useState<ManagerRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -60,13 +65,16 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
   const [expandedManagerId, setExpandedManagerId] = useState<string | null>(null);
 
   // Create Manager Modal State
-  const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
+  const [createModalOpen, setCreateModalOpen] = useState<boolean>(initialCreateOpen);
   const [creating, setCreating] = useState<boolean>(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [status, setStatus] = useState<'active' | 'disabled'>('active');
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [createdResult, setCreatedResult] = useState<{ manager: Profile; tempPassword?: string } | null>(null);
+  const [showCreatedPassword, setShowCreatedPassword] = useState<boolean>(true);
 
   // Edit Manager Modal State
   const [editManager, setEditManager] = useState<ManagerRow | null>(null);
@@ -76,6 +84,7 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
   const [editStatus, setEditStatus] = useState<'active' | 'disabled'>('active');
   const [editPassword, setEditPassword] = useState('');
   const [updating, setUpdating] = useState<boolean>(false);
+  const [editModalError, setEditModalError] = useState<string | null>(null);
 
   // Delete Confirmation State
   const [deleteManagerItem, setDeleteManagerItem] = useState<ManagerRow | null>(null);
@@ -116,34 +125,58 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
     setVisiblePasswords((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const handleOpenCreateModal = () => {
+    setModalError(null);
+    setCreatedResult(null);
+    setFullName('');
+    setEmail('');
+    setPassword('');
+    setPhone('');
+    setStatus('active');
+    setShowCreatedPassword(true);
+    setCreateModalOpen(true);
+  };
+
   // Handle Create Manager
   const handleCreateManager = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim()) {
-      showToast('Name and Email are required.', 'error');
+    setModalError(null);
+
+    const cleanName = fullName.trim();
+    const cleanMail = email.trim();
+
+    if (!cleanName) {
+      setModalError('Manager Full Name enter karna zaroori hai (मैनेजर का नाम आवश्यक है).');
+      return;
+    }
+    if (!cleanMail) {
+      setModalError('Manager Login Email enter karna zaroori hai (मैनेजर का ईमेल आवश्यक है).');
+      return;
+    }
+    if (!cleanMail.includes('@') || !cleanMail.includes('.')) {
+      setModalError('Kripya valid email address enter karein (jaise: manager@localboost.ai).');
       return;
     }
 
     setCreating(true);
     try {
       const result = await createManagerByAdmin({
-        fullName: fullName.trim(),
-        email: email.trim(),
+        fullName: cleanName,
+        email: cleanMail,
         password: password.trim() || undefined,
         phone: phone.trim() || undefined,
         status,
       });
 
-      showToast(`Manager "${result.manager.full_name}" created successfully!`);
-      setCreateModalOpen(false);
-      setFullName('');
-      setEmail('');
-      setPassword('');
-      setPhone('');
-      setStatus('active');
-      fetchManagers();
+      setCreatedResult(result);
+      showToast(`Manager "${result.manager.full_name}" successfully ban gaya!`);
+      await fetchManagers();
+      if (onManagersChanged) {
+        onManagersChanged();
+      }
     } catch (err: any) {
-      showToast(err.message || 'Failed to create manager.', 'error');
+      console.error('Error creating manager:', err);
+      setModalError(err.message || 'Manager create karne me anjaan samasya aayi. Kripya doosra email try karein.');
     } finally {
       setCreating(false);
     }
@@ -153,6 +186,7 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
   const handleUpdateManager = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editManager) return;
+    setEditModalError(null);
 
     setUpdating(true);
     try {
@@ -167,9 +201,12 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
 
       showToast('Manager details updated.');
       setEditManager(null);
-      fetchManagers();
+      await fetchManagers();
+      if (onManagersChanged) {
+        onManagersChanged();
+      }
     } catch (err: any) {
-      showToast(err.message || 'Failed to update manager.', 'error');
+      setEditModalError(err.message || 'Failed to update manager.');
     } finally {
       setUpdating(false);
     }
@@ -183,7 +220,10 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
       await deleteManagerByAdmin(deleteManagerItem.id);
       showToast('Manager removed successfully.');
       setDeleteManagerItem(null);
-      fetchManagers();
+      await fetchManagers();
+      if (onManagersChanged) {
+        onManagersChanged();
+      }
     } catch (err: any) {
       showToast(err.message || 'Failed to delete manager.', 'error');
     } finally {
@@ -290,7 +330,7 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setCreateModalOpen(true)}
+              onClick={handleOpenCreateModal}
               className="px-4 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -330,7 +370,7 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
             {!searchQuery && (
               <button
                 type="button"
-                onClick={() => setCreateModalOpen(true)}
+                onClick={handleOpenCreateModal}
                 className="px-4 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white text-xs font-bold rounded-xl shadow-xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
@@ -524,100 +564,284 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
 
       {/* CREATE MANAGER MODAL */}
       {createModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-slate-200 shadow-2xl animate-in zoom-in-95">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-slate-200 shadow-2xl animate-in zoom-in-95 my-8">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-extrabold text-slate-900">Create New Manager</h3>
-                <p className="text-xs text-slate-500">Manager can create and manage their own businesses.</p>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  {createdResult ? 'Manager Account Ban Gaya!' : 'Create New Manager (नया मैनेजर बनाएं)'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {createdResult
+                    ? 'Manager profile and login credentials are ready.'
+                    : 'Manager can create and manage their own businesses independently.'}
+                </p>
               </div>
               <button
                 type="button"
-                onClick={() => setCreateModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                onClick={() => {
+                  setCreateModalOpen(false);
+                  setCreatedResult(null);
+                  setModalError(null);
+                }}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateManager} className="space-y-3.5 text-xs">
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Manager Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Vikram Singhania"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
-                />
+            {/* IN-MODAL ERROR BANNER */}
+            {modalError && (
+              <div className="p-3.5 bg-rose-50 border border-rose-300 text-rose-900 text-xs font-semibold rounded-2xl flex items-start gap-2.5 shadow-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <div className="space-y-0.5 flex-1">
+                  <p className="font-bold text-rose-800">Error / समस्या:</p>
+                  <p className="text-rose-700 leading-relaxed">{modalError}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModalError(null)}
+                  className="text-rose-400 hover:text-rose-600 text-sm font-bold"
+                >
+                  &times;
+                </button>
               </div>
+            )}
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Manager Login Email *</label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. manager@localboost.ai"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
-                />
+            {createdResult ? (
+              /* SUCCESS CREDENTIALS VIEW */
+              <div className="space-y-4 text-xs">
+                <div className="p-4 bg-emerald-50/90 border border-emerald-200 rounded-2xl space-y-3.5 text-emerald-950">
+                  <div className="flex items-center gap-2 font-bold text-emerald-800 text-sm">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <span>Manager Successfully Provisioned!</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    <div className="p-3 bg-white rounded-xl border border-emerald-100 space-y-1">
+                      <span className="text-[11px] text-slate-500 block">Manager Name:</span>
+                      <span className="font-bold text-slate-900 text-xs block truncate">
+                        {createdResult.manager.full_name}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-xl border border-emerald-100 space-y-1">
+                      <span className="text-[11px] text-slate-500 block">Manager Code:</span>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-xs text-[#6C3BFF]">
+                          {createdResult.manager.unique_customer_code}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(createdResult.manager.unique_customer_code, 'modal_code')}
+                          className="text-slate-400 hover:text-purple-600 cursor-pointer p-0.5"
+                          title="Copy Code"
+                        >
+                          {copiedKey === 'modal_code' ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Credentials Box */}
+                  <div className="p-3.5 bg-white rounded-xl border border-emerald-100 space-y-2.5">
+                    <span className="text-[11px] text-slate-600 block font-bold uppercase tracking-wider">
+                      Manager Login Credentials (Any device se login kar sakte hain):
+                    </span>
+
+                    <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block">Login Email:</span>
+                        <span className="font-mono font-bold text-slate-900 select-all">
+                          {createdResult.manager.email}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(createdResult.manager.email, 'modal_email')}
+                        className="text-slate-400 hover:text-purple-600 cursor-pointer p-1"
+                        title="Copy Email"
+                      >
+                        {copiedKey === 'modal_email' ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    </div>
+
+                    {createdResult.tempPassword && (
+                      <div className="p-2.5 bg-purple-50/60 rounded-lg border border-purple-200 flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-purple-600 font-semibold block">Password:</span>
+                          <span className="font-mono font-bold text-slate-900 select-all">
+                            {showCreatedPassword ? createdResult.tempPassword : '••••••••••••'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowCreatedPassword(!showCreatedPassword)}
+                            className="text-slate-400 hover:text-slate-700 cursor-pointer p-1"
+                            title={showCreatedPassword ? 'Hide' : 'Show'}
+                          >
+                            {showCreatedPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(createdResult.tempPassword || '', 'modal_pass')}
+                            className="text-slate-400 hover:text-purple-600 cursor-pointer p-1"
+                            title="Copy Password"
+                          >
+                            {copiedKey === 'modal_pass' ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="text-[11px] text-emerald-800 bg-emerald-100/50 p-2.5 rounded-lg leading-relaxed">
+                      ✅ <strong>Login Guide:</strong> Manager kisi bhi phone ya computer par login page par jaakar apne Email ya Manager Code aur is Password se direct login karega. Login ke baad manager apne business accounts create kar sakega.
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const info = `LocalBoost AI Manager Credentials:\nName: ${createdResult.manager.full_name}\nManager ID: ${createdResult.manager.unique_customer_code}\nEmail: ${createdResult.manager.email}\nPassword: ${createdResult.tempPassword}\nLogin URL: ${window.location.origin}/#login`;
+                        copyToClipboard(info, 'modal_all');
+                      }}
+                      className="w-full sm:w-auto flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {copiedKey === 'modal_all' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedKey === 'modal_all' ? 'Copied All Details!' : 'Copy All Details'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenCreateModal}
+                      className="w-full sm:w-auto px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl transition-colors cursor-pointer"
+                    >
+                      + Create Another
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreateModalOpen(false);
+                        setCreatedResult(null);
+                        setModalError(null);
+                      }}
+                      className="w-full sm:w-auto px-5 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            ) : (
+              /* FORM VIEW */
+              <form onSubmit={handleCreateManager} className="space-y-3.5 text-xs">
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Phone Number</label>
+                  <label className="font-bold text-slate-700">
+                    Manager Full Name <span className="text-rose-500">*</span>
+                  </label>
                   <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g. +91 98765 43210"
+                    type="text"
+                    required
+                    value={fullName}
+                    onChange={(e) => {
+                      setFullName(e.target.value);
+                      if (modalError) setModalError(null);
+                    }}
+                    placeholder="e.g. Vikram Singhania"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Account Status</label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as any)}
+                  <label className="font-bold text-slate-700">
+                    Manager Login Email <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (modalError) setModalError(null);
+                    }}
+                    placeholder="e.g. manager@localboost.ai"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
-                  >
-                    <option value="active">Active</option>
-                    <option value="disabled">Disabled</option>
-                  </select>
+                  />
+                  <p className="text-[10px] text-slate-400">Yeh email manager ke login ke liye use hoga.</p>
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Manager Password (Optional)</label>
-                <input
-                  type="text"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Leave empty to auto-generate"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
-                />
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Phone Number (Optional)</label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="e.g. +91 98765 43210"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
+                    />
+                  </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setCreateModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-5 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {creating ? 'Creating...' : 'Create Manager'}
-                </button>
-              </div>
-            </form>
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Account Status</label>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as any)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
+                    >
+                      <option value="active">Active (सक्रिय)</option>
+                      <option value="disabled">Disabled (निष्क्रिय)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Manager Password (Optional)</label>
+                  <input
+                    type="text"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Khali chhodne par auto-generate hoga"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400">Khali chhodne par secure password banakar diya jayega.</p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreateModalOpen(false);
+                      setModalError(null);
+                    }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    className="px-5 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {creating && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                    <span>{creating ? 'Creating Manager...' : 'Create Manager (मैनेजर बनाएं)'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -633,12 +857,22 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setEditManager(null)}
+                onClick={() => {
+                  setEditManager(null);
+                  setEditModalError(null);
+                }}
                 className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {editModalError && (
+              <div className="p-3 bg-rose-50 border border-rose-300 text-rose-800 text-xs font-semibold rounded-xl flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{editModalError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleUpdateManager} className="space-y-3.5 text-xs">
               <div className="space-y-1">
@@ -694,14 +928,17 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
                   value={editPassword}
                   onChange={(e) => setEditPassword(e.target.value)}
                   placeholder="New password (min 6 chars)"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden font-mono"
                 />
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setEditManager(null)}
+                  onClick={() => {
+                    setEditManager(null);
+                    setEditModalError(null);
+                  }}
                   className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
@@ -709,9 +946,10 @@ export const ManagersManagementTab: React.FC<ManagersManagementTabProps> = ({
                 <button
                   type="submit"
                   disabled={updating}
-                  className="px-5 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                 >
-                  {updating ? 'Saving...' : 'Save Changes'}
+                  {updating && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{updating ? 'Saving...' : 'Save Changes'}</span>
                 </button>
               </div>
             </form>

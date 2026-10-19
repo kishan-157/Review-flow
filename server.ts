@@ -548,12 +548,14 @@ app.post('/api/admin/create-manager', (req, res) => {
 
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail || !fullName) {
-      return res.status(400).json({ error: 'Manager full name and email are required.' });
+      return res.status(400).json({ error: 'Manager full name and email are required (मैनेजर का नाम और ईमेल आवश्यक है).' });
     }
 
     const existing = db.profiles.find((p) => p.email.toLowerCase() === cleanEmail);
     if (existing) {
-      return res.status(400).json({ error: 'An account with this email address already exists.' });
+      return res.status(400).json({
+        error: `Is email address (${cleanEmail}) se already ek account (${existing.role || 'user'}) exist karta hai. Kripya naya ya alag email address dalein.`
+      });
     }
 
     const generatedPassword = (password || '').trim() || `MgrPass${Math.floor(100000 + Math.random() * 900000)}!`;

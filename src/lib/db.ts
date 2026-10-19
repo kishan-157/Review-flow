@@ -3717,22 +3717,111 @@ export async function createManagerByAdmin(data: {
   phone?: string;
   status?: 'active' | 'disabled';
 }): Promise<{ manager: Profile; tempPassword?: string }> {
-  const res = await fetch('/api/admin/create-manager', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  const cleanEmail = (data.email || '').trim().toLowerCase();
+  const cleanName = (data.fullName || '').trim();
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to create manager account.');
+  if (!cleanName || !cleanEmail) {
+    throw new Error('Manager Full Name aur Email address bharna anivarya hai.');
   }
 
-  const result = await res.json();
-  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
-  profiles.unshift(result.manager);
-  setStorage(STORAGE_KEYS.PROFILES, profiles);
-  return result;
+  // Pre-check duplicate in local cache
+  const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const localExisting = localProfiles.find((p) => p.email && p.email.toLowerCase().trim() === cleanEmail);
+  if (localExisting) {
+    throw new Error(`Is email address (${cleanEmail}) se already account (${localExisting.role || 'user'}) exist karta hai. Kripya doosra email address use karein.`);
+  }
+
+  try {
+    const res = await fetch('/api/admin/create-manager', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: cleanName,
+        email: cleanEmail,
+        password: data.password?.trim() || undefined,
+        phone: data.phone?.trim() || undefined,
+        status: data.status || 'active',
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to create manager account.');
+    }
+
+    const result = await res.json();
+    if (!result?.manager) {
+      throw new Error('Server did not return manager details.');
+    }
+
+    // Save profile to local storage cache
+    const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+    const pIdx = profiles.findIndex((p) => p.id === result.manager.id);
+    if (pIdx !== -1) {
+      profiles[pIdx] = result.manager;
+    } else {
+      profiles.unshift(result.manager);
+    }
+    setStorage(STORAGE_KEYS.PROFILES, profiles);
+
+    // Save password to local passwords cache for instant offline & online login
+    if (result.tempPassword) {
+      const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+      passwords[cleanEmail] = result.tempPassword;
+      if (result.manager.unique_customer_code) {
+        passwords[result.manager.unique_customer_code.toLowerCase()] = result.tempPassword;
+      }
+      if (data.phone) {
+        const cleanPhone = data.phone.replace(/[^0-9]/g, '');
+        if (cleanPhone) passwords[cleanPhone] = result.tempPassword;
+      }
+      setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+    }
+
+    return result;
+  } catch (err: any) {
+    // If it's a validation error or duplicate error, rethrow immediately
+    if (err.message && (err.message.includes('already') || err.message.includes('exist') || err.message.includes('anivarya'))) {
+      throw err;
+    }
+
+    // Fallback if server is unreachable
+    console.warn('Backend create-manager request failed, falling back to local creation:', err);
+    const generatedPassword = (data.password || '').trim() || `MgrPass${Math.floor(100000 + Math.random() * 900000)}!`;
+    const managerId = `mgr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const managerCode = `LB-MGR-${randomSuffix}`;
+    const now = new Date().toISOString();
+
+    const fallbackManager: Profile = {
+      id: managerId,
+      full_name: cleanName,
+      email: cleanEmail,
+      phone: (data.phone || '').trim(),
+      unique_customer_code: managerCode,
+      role: 'manager',
+      status: (data.status as any) || 'active',
+      access_validity_type: 'lifetime',
+      created_at: now,
+      updated_at: now,
+      last_login_at: now,
+    };
+
+    const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+    profiles.unshift(fallbackManager);
+    setStorage(STORAGE_KEYS.PROFILES, profiles);
+
+    const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+    passwords[cleanEmail] = generatedPassword;
+    passwords[managerCode.toLowerCase()] = generatedPassword;
+    if (data.phone) {
+      const cleanPhone = data.phone.replace(/[^0-9]/g, '');
+      if (cleanPhone) passwords[cleanPhone] = generatedPassword;
+    }
+    setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+
+    return { manager: fallbackManager, tempPassword: generatedPassword };
+  }
 }
 
 export async function updateManagerByAdmin(data: {

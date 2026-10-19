@@ -1,6 +1,32 @@
 {
   "profiles": [
     {
+      "id": "mgr_1792420798953_dfqby",
+      "full_name": "Rahul Manager",
+      "email": "rahul.manager2026@test.com",
+      "phone": "",
+      "unique_customer_code": "LB-MGR-EBPG",
+      "role": "manager",
+      "status": "active",
+      "access_validity_type": "lifetime",
+      "created_at": "2026-10-19T14:39:58.953Z",
+      "updated_at": "2026-10-19T14:39:58.953Z",
+      "last_login_at": "2026-10-19T14:39:58.953Z"
+    },
+    {
+      "id": "mgr_1792420261884_sjmur",
+      "full_name": "Test Manager",
+      "email": "testmanager999@example.com",
+      "phone": "",
+      "unique_customer_code": "LB-MGR-I3JN",
+      "role": "manager",
+      "status": "active",
+      "access_validity_type": "lifetime",
+      "created_at": "2026-10-19T14:31:01.884Z",
+      "updated_at": "2026-10-19T14:31:01.884Z",
+      "last_login_at": "2026-10-19T14:31:01.884Z"
+    },
+    {
       "id": "usr_1792417921048_zvg7z7",
       "full_name": "Cafe Owner John",
       "email": "cafe.owner.1792417921044@example.com",
@@ -27,7 +53,7 @@
       "status": "active",
       "access_validity_type": "lifetime",
       "created_at": "2026-10-19T13:52:01.025Z",
-      "updated_at": "2026-10-19T13:52:01.025Z",
+      "updated_at": "2026-10-19T13:59:53.873Z",
       "last_login_at": "2026-10-19T13:52:01.025Z"
     },
     {
@@ -54,7 +80,7 @@
       "access_validity_type": "lifetime",
       "created_at": "2026-10-11T13:53:07.512Z",
       "updated_at": "2026-10-11T13:53:07.512Z",
-      "last_login_at": "2026-10-16T10:12:22.935Z"
+      "last_login_at": "2026-10-19T13:55:08.634Z"
     },
     {
       "id": "admin_master_1",
@@ -370,7 +396,11 @@
     "cafe.owner.1792417921044@example.com": "NewSecretPassword999!",
     "lb-cus-u97rqw": "NewSecretPassword999!",
     "919998877766": "LBPass228666!",
-    "919998811122": "NewSecretPassword999!"
+    "919998811122": "NewSecretPassword999!",
+    "testmanager999@example.com": "MgrPass102279!",
+    "lb-mgr-i3jn": "MgrPass102279!",
+    "rahul.manager2026@test.com": "MgrPass569748!",
+    "lb-mgr-ebpg": "MgrPass569748!"
   },
   "reviewSettings": [
     {
