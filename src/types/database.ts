@@ -2,7 +2,7 @@
  * LocalBoost AI — Database and Application Types
  */
 
-export type UserRole = 'admin' | 'customer';
+export type UserRole = 'admin' | 'manager' | 'customer';
 export type UserStatus = 'active' | 'disabled';
 
 export type AccessValidityType = '1_month' | '3_months' | '6_months' | '1_year' | 'lifetime' | 'custom';
@@ -11,9 +11,12 @@ export interface Profile {
   id: string;
   full_name: string;
   email: string;
+  phone?: string;
   unique_customer_code: string;
   role: UserRole;
   status: UserStatus;
+  created_by_manager_id?: string;
+  managed_by?: string;
   access_validity_type?: AccessValidityType;
   access_duration_days?: number;
   access_expires_at?: string | null; // ISO timestamp string or null for lifetime
@@ -25,6 +28,8 @@ export interface Profile {
 export interface Business {
   id: string;
   user_id: string;
+  created_by_manager_id?: string;
+  created_by_manager_name?: string;
   business_name: string;
   unique_slug: string;
   google_review_url: string;
@@ -163,6 +168,7 @@ export interface AuthSession {
   user: Profile;
   business?: Business;
   impersonatingFromAdmin?: Profile;
+  impersonatingFromManager?: Profile;
 }
 
 export interface BusinessAnalyticsSummary {
@@ -462,6 +468,24 @@ export interface ChatbotConfig {
   show_directions_button: boolean;
   show_website_button: boolean;
   visitor_privacy_notice?: string;
+  personality_style?: 'professional' | 'friendly' | 'simple' | 'formal' | 'short' | 'detailed';
+  custom_instructions?: string;
+  theme_color?: string;
+  widget_position?: 'bottom-right' | 'bottom-left';
+  widget_size?: 'compact' | 'normal' | 'expanded';
+  appearance_mode?: 'dark' | 'light';
+  header_title?: string;
+  input_placeholder?: string;
+  scanned_sources?: Array<{
+    id: string;
+    type: 'website' | 'maps';
+    url: string;
+    title: string;
+    status: 'scanned' | 'error' | 'pending';
+    page_count?: number;
+    last_scanned: string;
+    conflict_warning?: string;
+  }>;
   created_at: string;
   updated_at: string;
 }

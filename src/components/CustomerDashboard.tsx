@@ -1570,6 +1570,25 @@ Please generate:
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900 pb-16">
+      {/* Manager Access Mode Banner */}
+      {session.impersonatingFromManager && (
+        <div className="bg-[#6C3BFF] text-white px-6 py-2.5 flex items-center justify-between text-xs font-semibold shadow-xs">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 shrink-0 text-white" />
+            <span>
+              MANAGER PANEL ACCESS: Managing customer account{' '}
+              <span className="font-bold underline">{session.business?.business_name || session.user.full_name}</span> ({session.user.email}).
+            </span>
+          </div>
+          <button
+            onClick={() => onSignOut()}
+            className="px-3 py-1 bg-white text-[#6C3BFF] rounded-md hover:bg-neutral-100 font-bold transition-colors shrink-0 cursor-pointer"
+          >
+            Return to Manager Dashboard
+          </button>
+        </div>
+      )}
+
       {/* Impersonation Banner if Active */}
       {session.impersonatingFromAdmin && (
         <div className="bg-amber-500 text-neutral-950 px-6 py-2.5 flex items-center justify-between text-xs font-semibold shadow-xs">

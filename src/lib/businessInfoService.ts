@@ -262,37 +262,27 @@ export function getDefaultBusinessFaqs(businessName: string, category?: string):
  * Zero duplicate profiles: Reuses business_name, phone, whatsapp_number, address, etc.
  */
 export function getDefaultBusinessProfileInfo(business: Business): BusinessProfileInfo {
-  if (business.business_info && business.business_info.business_name) {
-    return {
-      ...business.business_info,
-      business_name: business.business_name,
-      category: business.category || business.business_info.category || 'Local Business',
-      address: business.address || business.business_info.address || '',
-      phone: business.phone || business.business_info.phone || '',
-      whatsapp: business.whatsapp_number || business.business_info.whatsapp || business.phone || '',
-      google_maps_url: business.google_review_url || business.business_info.google_maps_url || '',
-      logo_url: business.logo_url || business.business_info.logo_url || '',
-    };
-  }
+  const existing: any = business.business_info || {};
+  const name = business.business_name || existing.business_name || 'Our Business';
+  const cat = business.category || existing.category || 'Local Business';
 
-  const name = business.business_name || 'Our Business';
-  const cat = business.category || 'Local Business';
+  const defaultSchedule = createDefaultSchedule();
 
   return {
     business_name: name,
     category: cat,
-    subcategory: `${cat} Specialists`,
-    short_description: `${name} is dedicated to providing high quality ${cat.toLowerCase()} services with warm customer care.`,
-    detailed_description: `${name} serves valued customers with verified quality standards, friendly assistance, and transparent pricing. Centrally located with easy parking and convenient payment options.`,
-    address: business.address || 'Main Market Road',
-    area: 'Central Commercial Hub',
-    city: 'City Center',
-    state: 'State',
-    pincode: '380001',
-    google_maps_url: business.google_review_url || '',
-    website_url: '',
-    phone: business.phone || '+91 98765 43210',
-    whatsapp: business.whatsapp_number || business.phone || '+91 98765 43210',
+    subcategory: existing.subcategory || `${cat} Specialists`,
+    short_description: existing.short_description || `${name} is dedicated to providing high quality ${cat.toLowerCase()} services with warm customer care.`,
+    detailed_description: existing.detailed_description || `${name} serves valued customers with verified quality standards, friendly assistance, and transparent pricing. Centrally located with easy parking and convenient payment options.`,
+    address: existing.address || business.address || '',
+    area: existing.area || '',
+    city: existing.city || '',
+    state: existing.state || '',
+    pincode: existing.pincode || '',
+    google_maps_url: existing.google_maps_url || business.google_review_url || '',
+    website_url: existing.website_url || existing.website || '',
+    phone: existing.phone || business.phone || '',
+    whatsapp: existing.whatsapp || business.whatsapp_number || business.phone || '',
     public_email: '',
     owner_name: '',
     owner_name_public_approved: false,

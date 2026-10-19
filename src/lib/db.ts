@@ -3647,4 +3647,267 @@ export async function redeemScratchVoucher(
   return play;
 }
 
+// ==============================================================================
+// SUPER ADMIN & MANAGER MULTI-TENANT RBAC CLIENT FUNCTIONS
+// ==============================================================================
+
+export interface ManagerRow {
+  id: string;
+  full_name: string;
+  email: string;
+  phone?: string;
+  unique_customer_code: string;
+  role: 'manager';
+  status: 'active' | 'disabled';
+  current_password?: string;
+  created_at: string;
+  last_login_at?: string;
+  businesses_count: number;
+  businesses: Array<{
+    id: string;
+    business_name: string;
+    unique_slug: string;
+    category?: string;
+    phone?: string;
+    created_at: string;
+  }>;
+}
+
+export async function getAdminManagersList(): Promise<ManagerRow[]> {
+  try {
+    const res = await fetch('/api/admin/managers');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.managers) return data.managers;
+    }
+  } catch {}
+
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []).filter((p) => p.role === 'manager');
+  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+
+  return profiles.map((m) => {
+    const managed = businesses.filter((b) => b.created_by_manager_id === m.id);
+    return {
+      id: m.id,
+      full_name: m.full_name,
+      email: m.email,
+      phone: m.phone || '',
+      unique_customer_code: m.unique_customer_code,
+      role: 'manager',
+      status: m.status,
+      created_at: m.created_at,
+      last_login_at: m.last_login_at,
+      businesses_count: managed.length,
+      businesses: managed.map((b) => ({
+        id: b.id,
+        business_name: b.business_name,
+        unique_slug: b.unique_slug,
+        category: b.category,
+        phone: b.phone,
+        created_at: b.created_at,
+      })),
+    };
+  });
+}
+
+export async function createManagerByAdmin(data: {
+  fullName: string;
+  email: string;
+  password?: string;
+  phone?: string;
+  status?: 'active' | 'disabled';
+}): Promise<{ manager: Profile; tempPassword?: string }> {
+  const res = await fetch('/api/admin/create-manager', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to create manager account.');
+  }
+
+  const result = await res.json();
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  profiles.unshift(result.manager);
+  setStorage(STORAGE_KEYS.PROFILES, profiles);
+  return result;
+}
+
+export async function updateManagerByAdmin(data: {
+  managerId: string;
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  status?: 'active' | 'disabled';
+  password?: string;
+}): Promise<Profile> {
+  const res = await fetch('/api/admin/update-manager', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update manager.');
+  }
+
+  const result = await res.json();
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const idx = profiles.findIndex((p) => p.id === data.managerId);
+  if (idx !== -1) {
+    profiles[idx] = result.manager;
+    setStorage(STORAGE_KEYS.PROFILES, profiles);
+  }
+  return result.manager;
+}
+
+export async function deleteManagerByAdmin(managerId: string): Promise<void> {
+  const res = await fetch('/api/admin/delete-manager', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ managerId }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to delete manager.');
+  }
+
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  setStorage(STORAGE_KEYS.PROFILES, profiles.filter((p) => p.id !== managerId));
+}
+
+export interface ManagerCustomerRow {
+  id: string;
+  user_id: string;
+  business: Business;
+  profile: Profile | null;
+  settings: ReviewSettings | null;
+  password?: string;
+}
+
+export async function getManagerCustomersList(managerId: string): Promise<ManagerCustomerRow[]> {
+  try {
+    const res = await fetch(`/api/manager/${managerId}/customers`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.customers) return data.customers;
+    }
+  } catch {}
+
+  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []).filter(
+    (b) => b.created_by_manager_id === managerId
+  );
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const reviewSettings = getStorage<ReviewSettings[]>(STORAGE_KEYS.REVIEW_SETTINGS, []);
+
+  return businesses.map((b) => ({
+    id: b.id,
+    user_id: b.user_id,
+    business: b,
+    profile: profiles.find((p) => p.id === b.user_id) || null,
+    settings: reviewSettings.find((s) => s.business_id === b.id) || null,
+  }));
+}
+
+export async function createCustomerByManager(data: {
+  managerId: string;
+  fullName: string;
+  email: string;
+  password?: string;
+  businessName: string;
+  googleReviewUrl?: string;
+  phone?: string;
+  category?: string;
+  address?: string;
+}): Promise<{ user: Profile; business: Business; tempPassword?: string }> {
+  const res = await fetch('/api/manager/create-customer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to create business under manager.');
+  }
+
+  const result = await res.json();
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  profiles.unshift(result.user);
+  setStorage(STORAGE_KEYS.PROFILES, profiles);
+
+  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+  businesses.unshift(result.business);
+  setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+
+  return result;
+}
+
+export async function updateCustomerByManager(data: {
+  managerId: string;
+  customerId: string;
+  businessId: string;
+  fullName?: string;
+  phone?: string;
+  password?: string;
+  businessName?: string;
+  googleReviewUrl?: string;
+  address?: string;
+  category?: string;
+  status?: UserStatus;
+}): Promise<void> {
+  const res = await fetch('/api/manager/update-customer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to update customer.');
+  }
+}
+
+export async function deleteCustomerByManager(data: {
+  managerId: string;
+  customerId: string;
+  businessId: string;
+}): Promise<void> {
+  const res = await fetch('/api/manager/delete-customer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to delete customer.');
+  }
+}
+
+export async function accessCustomerPanelByManager(data: {
+  managerId: string;
+  customerId: string;
+  businessId: string;
+}): Promise<AuthSession> {
+  const res = await fetch('/api/manager/access-panel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Failed to access customer dashboard.');
+  }
+
+  const result = await res.json();
+  return result.session;
+}
+
+
 

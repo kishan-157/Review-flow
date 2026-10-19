@@ -239,7 +239,8 @@ export const PublicChatPage: React.FC<PublicChatPageProps> = ({
         text,
         publicProfile,
         language,
-        activeQuickPrompts
+        activeQuickPrompts,
+        chatConfig || undefined
       );
 
       const botMsg: ChatMessage = {

@@ -14,6 +14,7 @@ import { LandingHero } from './components/LandingHero';
 import { ReviewExperience } from './components/ReviewExperience';
 import { CustomerDashboard } from './components/CustomerDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
+import { ManagerDashboard } from './components/ManagerDashboard';
 import { AuthModal } from './components/AuthModal';
 import { LoginPage } from './components/LoginPage';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
@@ -131,6 +132,8 @@ export default function App() {
         setSession(saved);
         if (saved.user.role === 'admin') {
           setCurrentView('admin');
+        } else if (saved.user.role === 'manager') {
+          setCurrentView('manager_dashboard');
         } else {
           setCurrentView('dashboard');
         }
@@ -146,6 +149,29 @@ export default function App() {
   }, []);
 
   const handleSignOut = async () => {
+    // If manager is currently viewing a customer panel, return to manager dashboard
+    if (session?.impersonatingFromManager) {
+      const managerSession: AuthSession = {
+        user: session.impersonatingFromManager,
+        business: undefined,
+      };
+      setSession(managerSession);
+      updateCurrentSession(managerSession);
+      setCurrentView('manager_dashboard');
+      return;
+    }
+    // If admin is currently impersonating, return to admin dashboard
+    if (session?.impersonatingFromAdmin) {
+      const adminSession: AuthSession = {
+        user: session.impersonatingFromAdmin,
+        business: undefined,
+      };
+      setSession(adminSession);
+      updateCurrentSession(adminSession);
+      setCurrentView('admin');
+      return;
+    }
+
     await signOutUser();
     setSession(null);
     setCurrentView('landing');
@@ -166,6 +192,8 @@ export default function App() {
     }
     if (newSession.user.role === 'admin') {
       setCurrentView('admin');
+    } else if (newSession.user.role === 'manager') {
+      setCurrentView('manager_dashboard');
     } else {
       setCurrentView('dashboard');
     }
@@ -311,6 +339,19 @@ export default function App() {
           onSignOut={handleSignOut}
           onSessionUpdated={(updated) => setSession(updated)}
           onPreviewReviewFlow={(b, s) => handlePreviewFlow(b, s)}
+          onOpenLiveReview={handleOpenLiveReview}
+        />
+      )}
+
+      {/* VIEW: Manager Control Dashboard */}
+      {currentView === 'manager_dashboard' && session && session.user.role === 'manager' && (
+        <ManagerDashboard
+          session={session}
+          onOpenCustomerPanel={(customerSession) => {
+            setSession(customerSession);
+            setCurrentView('dashboard');
+          }}
+          onSignOut={handleSignOut}
           onOpenLiveReview={handleOpenLiveReview}
         />
       )}

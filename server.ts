@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
 import {
@@ -22,6 +23,10 @@ import {
   generateNaturalSingleReview,
   generate12KeywordGrammarDrafts,
 } from './src/lib/keywordGrammarEngine';
+import {
+  scrapeWebsiteRealData,
+  scrapeGoogleMapsRealData,
+} from './src/lib/realSourceScraper';
 
 dotenv.config({ override: true });
 
@@ -490,6 +495,421 @@ app.post('/api/admin/delete-customer', (req, res) => {
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'Failed to delete customer.' });
+  }
+});
+
+// ==========================================
+// Super Admin & Manager Multi-Tenant RBAC API
+// ==========================================
+
+// Super Admin: List all managers
+app.get('/api/admin/managers', (_req, res) => {
+  try {
+    const db = loadServerDb();
+    const managers = db.profiles
+      .filter((p) => p.role === 'manager')
+      .map((m) => {
+        const managedBiz = db.businesses.filter((b) => b.created_by_manager_id === m.id);
+        const cleanEmail = m.email.toLowerCase().trim();
+        return {
+          id: m.id,
+          full_name: m.full_name,
+          email: m.email,
+          phone: m.phone || '',
+          unique_customer_code: m.unique_customer_code,
+          role: m.role,
+          status: m.status,
+          current_password: db.passwords[cleanEmail] || '••••••••',
+          created_at: m.created_at,
+          last_login_at: m.last_login_at,
+          businesses_count: managedBiz.length,
+          businesses: managedBiz.map((b) => ({
+            id: b.id,
+            business_name: b.business_name,
+            unique_slug: b.unique_slug,
+            category: b.category,
+            phone: b.phone,
+            created_at: b.created_at,
+          })),
+        };
+      });
+
+    return res.json({ success: true, managers });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch managers.' });
+  }
+});
+
+// Super Admin: Create a new Manager
+app.post('/api/admin/create-manager', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { fullName, email, password, phone, status = 'active' } = req.body;
+
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !fullName) {
+      return res.status(400).json({ error: 'Manager full name and email are required.' });
+    }
+
+    const existing = db.profiles.find((p) => p.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      return res.status(400).json({ error: 'An account with this email address already exists.' });
+    }
+
+    const generatedPassword = (password || '').trim() || `MgrPass${Math.floor(100000 + Math.random() * 900000)}!`;
+    const managerId = `mgr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const managerCode = `LB-MGR-${randomSuffix}`;
+    const now = new Date().toISOString();
+
+    const newManager: any = {
+      id: managerId,
+      full_name: fullName.trim(),
+      email: cleanEmail,
+      phone: (phone || '').trim(),
+      unique_customer_code: managerCode,
+      role: 'manager' as const,
+      status: (status as any) || 'active',
+      access_validity_type: 'lifetime',
+      created_at: now,
+      updated_at: now,
+      last_login_at: now,
+    };
+
+    db.profiles.unshift(newManager);
+    db.passwords[cleanEmail] = generatedPassword;
+    db.passwords[managerCode.toLowerCase()] = generatedPassword;
+    if (phone) {
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      if (cleanPhone) db.passwords[cleanPhone] = generatedPassword;
+    }
+
+    saveServerDb(db);
+    return res.json({ success: true, manager: newManager, tempPassword: generatedPassword });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to create manager.' });
+  }
+});
+
+// Super Admin: Update Manager
+app.post('/api/admin/update-manager', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { managerId, fullName, email, phone, status, password } = req.body;
+
+    const idx = db.profiles.findIndex((p) => p.id === managerId && p.role === 'manager');
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Manager not found.' });
+    }
+
+    const mgr = db.profiles[idx];
+    if (fullName) mgr.full_name = fullName.trim();
+    if (phone !== undefined) mgr.phone = String(phone).trim();
+    if (status) mgr.status = status;
+    mgr.updated_at = new Date().toISOString();
+
+    if (email && email.trim().toLowerCase() !== mgr.email.toLowerCase()) {
+      const newEmail = email.trim().toLowerCase();
+      const existing = db.profiles.find((p) => p.email.toLowerCase() === newEmail && p.id !== managerId);
+      if (existing) {
+        return res.status(400).json({ error: 'Email already taken by another account.' });
+      }
+      const oldEmail = mgr.email.toLowerCase();
+      mgr.email = newEmail;
+      if (db.passwords[oldEmail]) {
+        db.passwords[newEmail] = db.passwords[oldEmail];
+        delete db.passwords[oldEmail];
+      }
+    }
+
+    if (password && password.trim().length >= 6) {
+      db.passwords[mgr.email.toLowerCase()] = password.trim();
+      db.passwords[mgr.unique_customer_code.toLowerCase()] = password.trim();
+    }
+
+    saveServerDb(db);
+    return res.json({ success: true, manager: mgr });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to update manager.' });
+  }
+});
+
+// Super Admin: Delete Manager
+app.post('/api/admin/delete-manager', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { managerId } = req.body;
+
+    db.profiles = db.profiles.filter((p) => p.id !== managerId);
+    // Note: The businesses created by this manager remain intact
+    saveServerDb(db);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to delete manager.' });
+  }
+});
+
+// Manager: List ONLY businesses created by this specific manager (Strict Isolation)
+app.get('/api/manager/:managerId/customers', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { managerId } = req.params;
+
+    // Verify manager exists
+    const mgr = db.profiles.find((p) => p.id === managerId && p.role === 'manager');
+    if (!mgr) {
+      return res.status(403).json({ error: 'Manager account not verified.' });
+    }
+
+    // Filter strictly to businesses created by this manager ONLY
+    // Super admin businesses (created_by_manager_id == null/undefined) or other managers' businesses are strictly excluded
+    const managerBusinesses = db.businesses.filter((b) => b.created_by_manager_id === managerId);
+
+    const customers = managerBusinesses.map((b) => {
+      const user = db.profiles.find((p) => p.id === b.user_id);
+      const settings = db.reviewSettings?.find((s) => s.business_id === b.id);
+      const cleanEmail = (user?.email || '').toLowerCase().trim();
+      return {
+        id: b.id,
+        user_id: b.user_id,
+        business: b,
+        profile: user || null,
+        settings: settings || null,
+        password: db.passwords[cleanEmail] || '••••••••',
+      };
+    });
+
+    return res.json({ success: true, customers });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to fetch manager customers.' });
+  }
+});
+
+// Manager: Create a new customer & business under their management
+app.post('/api/manager/create-customer', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const {
+      managerId,
+      fullName,
+      email,
+      password,
+      businessName,
+      googleReviewUrl,
+      phone = '',
+      category = 'Restaurant & Hospitality',
+      address = '',
+      accessValidityType = '1_year',
+    } = req.body;
+
+    if (!managerId) {
+      return res.status(400).json({ error: 'Missing manager identifier.' });
+    }
+
+    const mgr = db.profiles.find((p) => p.id === managerId && p.role === 'manager');
+    if (!mgr) {
+      return res.status(403).json({ error: 'Unauthorized: Manager account not found or invalid.' });
+    }
+
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail || !fullName || !businessName) {
+      return res.status(400).json({ error: 'Full name, email, and business name are required.' });
+    }
+
+    const existing = db.profiles.find((p) => p.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      return res.status(400).json({ error: 'An account with this email address already exists.' });
+    }
+
+    const generatedPassword = (password || '').trim() || `LBPass${Math.floor(100000 + Math.random() * 900000)}!`;
+    const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const customerCode = `LB-CUS-${randomSuffix}`;
+
+    const now = new Date();
+    const d = new Date(now);
+    d.setDate(d.getDate() + 365);
+
+    const newProfile: any = {
+      id: userId,
+      full_name: fullName.trim(),
+      email: cleanEmail,
+      unique_customer_code: customerCode,
+      role: 'customer' as const,
+      status: 'active' as const,
+      created_by_manager_id: managerId,
+      managed_by: mgr.full_name,
+      access_validity_type: accessValidityType || '1_year',
+      access_duration_days: 365,
+      access_expires_at: d.toISOString(),
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+      last_login_at: now.toISOString(),
+    };
+
+    const businessId = `biz_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const slug =
+      businessName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '') +
+      '-' +
+      Math.random().toString(36).substring(2, 6);
+
+    const newBusiness: any = {
+      id: businessId,
+      user_id: userId,
+      created_by_manager_id: managerId,
+      created_by_manager_name: mgr.full_name,
+      business_name: businessName.trim(),
+      unique_slug: slug,
+      google_review_url: (googleReviewUrl || '').trim(),
+      phone: (phone || '').trim(),
+      address: (address || '').trim(),
+      category: category || 'Restaurant & Hospitality',
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    };
+
+    const newSettings = {
+      id: `rs_${Date.now()}`,
+      business_id: businessId,
+      language: 'en' as const,
+      welcome_text: `Welcome to ${businessName}! How was your experience?`,
+      thank_you_text: 'Thank you for your valuable feedback! ❤️',
+      enabled: true,
+      accent_color: '#6C3BFF',
+      qr_show_logo: true,
+      qr_logo_border_style: 'circular' as const,
+      qr_color: '#1F1735',
+      created_at: now.toISOString(),
+      updated_at: now.toISOString(),
+    };
+
+    db.profiles.unshift(newProfile);
+    db.businesses.unshift(newBusiness);
+    if (!db.reviewSettings) db.reviewSettings = [];
+    db.reviewSettings.unshift(newSettings);
+
+    db.passwords[cleanEmail] = generatedPassword;
+    db.passwords[customerCode.toLowerCase()] = generatedPassword;
+    if (phone) {
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      if (cleanPhone) db.passwords[cleanPhone] = generatedPassword;
+    }
+
+    saveServerDb(db);
+
+    return res.json({
+      success: true,
+      user: newProfile,
+      business: newBusiness,
+      tempPassword: generatedPassword,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to create business under manager.' });
+  }
+});
+
+// Manager: Update their own managed customer
+app.post('/api/manager/update-customer', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { managerId, customerId, businessId, fullName, phone, businessName, googleReviewUrl, address, category, status, password } = req.body;
+
+    // Verify manager ownership of this business
+    const biz = db.businesses.find((b) => b.id === businessId);
+    if (!biz || biz.created_by_manager_id !== managerId) {
+      return res.status(403).json({ error: 'Unauthorized: You can only edit businesses created by your manager account.' });
+    }
+
+    const prof = db.profiles.find((p) => p.id === customerId);
+    if (prof) {
+      if (fullName) prof.full_name = fullName.trim();
+      if (status) prof.status = status;
+      if (phone !== undefined) prof.phone = phone.trim();
+      prof.updated_at = new Date().toISOString();
+
+      if (password && password.trim().length >= 6) {
+        const cleanPass = password.trim();
+        db.passwords[prof.email.toLowerCase()] = cleanPass;
+        if (prof.unique_customer_code) {
+          db.passwords[prof.unique_customer_code.toLowerCase()] = cleanPass;
+        }
+        if (prof.phone) {
+          const cleanPhone = prof.phone.replace(/[^0-9]/g, '');
+          if (cleanPhone) db.passwords[cleanPhone] = cleanPass;
+        }
+      }
+    }
+
+    if (businessName) biz.business_name = businessName.trim();
+    if (googleReviewUrl !== undefined) biz.google_review_url = googleReviewUrl.trim();
+    if (phone !== undefined) biz.phone = phone.trim();
+    if (address !== undefined) biz.address = address.trim();
+    if (category) biz.category = category;
+    biz.updated_at = new Date().toISOString();
+
+    saveServerDb(db);
+    return res.json({ success: true, business: biz, profile: prof });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to update customer.' });
+  }
+});
+
+// Manager: Delete their own managed customer
+app.post('/api/manager/delete-customer', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { managerId, customerId, businessId } = req.body;
+
+    const biz = db.businesses.find((b) => b.id === businessId);
+    if (!biz || biz.created_by_manager_id !== managerId) {
+      return res.status(403).json({ error: 'Unauthorized: You can only delete businesses created by your manager account.' });
+    }
+
+    db.businesses = db.businesses.filter((b) => b.id !== businessId);
+    db.profiles = db.profiles.filter((p) => p.id !== customerId);
+    db.reviewSettings = db.reviewSettings.filter((s) => s.business_id !== businessId);
+
+    saveServerDb(db);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to delete customer.' });
+  }
+});
+
+// Manager: Access Customer Dashboard Panel (Impersonate Customer)
+app.post('/api/manager/access-panel', (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { managerId, customerId, businessId } = req.body;
+
+    const mgr = db.profiles.find((p) => p.id === managerId && p.role === 'manager');
+    if (!mgr) {
+      return res.status(403).json({ error: 'Manager not found.' });
+    }
+
+    const biz = db.businesses.find((b) => b.id === businessId);
+    if (!biz || biz.created_by_manager_id !== managerId) {
+      return res.status(403).json({ error: 'Unauthorized: You can only access panels for businesses you created.' });
+    }
+
+    const customerUser = db.profiles.find((p) => p.id === customerId);
+    if (!customerUser) {
+      return res.status(404).json({ error: 'Customer user not found.' });
+    }
+
+    const session: any = {
+      user: customerUser,
+      business: biz,
+      impersonatingFromManager: mgr,
+    };
+
+    return res.json({ success: true, session });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to access customer panel.' });
   }
 });
 
@@ -1765,22 +2185,62 @@ app.get('/api/reward/inspect/:code', (req, res) => {
 // Multi-tenant isolation strictly enforced
 // ==========================================
 
-// Serve SPA index.html for direct clean route hits like /c/:slug or /review/:slug
-app.get('/c/:slug', (_req, res) => {
-  const isProd = process.env.NODE_ENV === 'production';
-  if (isProd) {
-    res.sendFile('dist/index.html', { root: '.' });
-  } else {
-    res.sendFile('index.html', { root: '.' });
+// Serve SPA index.html with dynamic business metadata for /c/:slug or /review/:slug
+app.get('/c/:slug', (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const db = loadServerDb();
+    const biz = db.businesses?.find(b => (b.unique_slug || '').toLowerCase() === String(slug).toLowerCase());
+    
+    const isProd = process.env.NODE_ENV === 'production';
+    const indexPath = isProd ? 'dist/index.html' : 'index.html';
+    
+    if (fs.existsSync(indexPath)) {
+      let html = fs.readFileSync(indexPath, 'utf8');
+      if (biz) {
+        const bName = biz.business_name || 'Store Assistant';
+        const bDesc = `Chat live with ${bName}. Get instant answers about timings, products, services, and location.`;
+        html = html
+          .replace(/<title>.*?<\/title>/, `<title>${bName} • Live Assistant & Support</title>`)
+          .replace(/<meta name="description" content=".*?" \/>/, `<meta name="description" content="${bDesc}" />`)
+          .replace(/<meta property="og:title" content=".*?" \/>/, `<meta property="og:title" content="${bName} • Live Chat Assistant" />`)
+          .replace(/<meta property="og:description" content=".*?" \/>/, `<meta property="og:description" content="${bDesc}" />`);
+      }
+      return res.send(html);
+    }
+    return res.sendFile(isProd ? 'dist/index.html' : 'index.html', { root: '.' });
+  } catch {
+    const isProd = process.env.NODE_ENV === 'production';
+    return res.sendFile(isProd ? 'dist/index.html' : 'index.html', { root: '.' });
   }
 });
 
-app.get('/review/:slug', (_req, res) => {
-  const isProd = process.env.NODE_ENV === 'production';
-  if (isProd) {
-    res.sendFile('dist/index.html', { root: '.' });
-  } else {
-    res.sendFile('index.html', { root: '.' });
+app.get('/review/:slug', (req, res) => {
+  try {
+    const slug = req.params.slug;
+    const db = loadServerDb();
+    const biz = db.businesses?.find(b => (b.unique_slug || '').toLowerCase() === String(slug).toLowerCase());
+    
+    const isProd = process.env.NODE_ENV === 'production';
+    const indexPath = isProd ? 'dist/index.html' : 'index.html';
+    
+    if (fs.existsSync(indexPath)) {
+      let html = fs.readFileSync(indexPath, 'utf8');
+      if (biz) {
+        const bName = biz.business_name || 'Store';
+        const bDesc = `Leave a review or feedback for ${bName}.`;
+        html = html
+          .replace(/<title>.*?<\/title>/, `<title>${bName} • Reviews & Feedback</title>`)
+          .replace(/<meta name="description" content=".*?" \/>/, `<meta name="description" content="${bDesc}" />`)
+          .replace(/<meta property="og:title" content=".*?" \/>/, `<meta property="og:title" content="${bName} • Leave a Review" />`)
+          .replace(/<meta property="og:description" content=".*?" \/>/, `<meta property="og:description" content="${bDesc}" />`);
+      }
+      return res.send(html);
+    }
+    return res.sendFile(isProd ? 'dist/index.html' : 'index.html', { root: '.' });
+  } catch {
+    const isProd = process.env.NODE_ENV === 'production';
+    return res.sendFile(isProd ? 'dist/index.html' : 'index.html', { root: '.' });
   }
 });
 
@@ -1902,6 +2362,172 @@ app.post('/api/chat/business/:businessId/config', (req, res) => {
     return res.json({ success: true, config: updatedConfig });
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'Failed to save chatbot config' });
+  }
+});
+
+// Website & Google Maps Knowledge Base Source Scanner: POST
+app.post('/api/chat/business/:businessId/scan-source', async (req, res) => {
+  try {
+    const db = loadServerDb();
+    const { businessId } = req.params;
+    const { sourceType, sourceUrl } = req.body;
+
+    if (!sourceUrl || !sourceType) {
+      return res.status(400).json({ error: 'Missing source URL or type' });
+    }
+
+    const trimmedUrl = String(sourceUrl).trim();
+    if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+      return res.status(400).json({ error: 'Invalid URL format. Must start with http:// or https://' });
+    }
+
+    // Perform REAL scraping and data extraction from the actual website or Google Maps URL
+    let scrapedData: any;
+    if (sourceType === 'website') {
+      scrapedData = await scrapeWebsiteRealData(trimmedUrl);
+    } else {
+      scrapedData = await scrapeGoogleMapsRealData(trimmedUrl);
+    }
+
+    const bizIdx = db.businesses.findIndex((b) => b.id === businessId);
+    if (bizIdx !== -1) {
+      const biz = db.businesses[bizIdx];
+      const bInfo: any = biz.business_info || {};
+      biz.business_info = bInfo;
+
+      if (sourceType === 'website') {
+        bInfo.website = trimmedUrl;
+        bInfo.website_url = trimmedUrl;
+
+        // Populate REAL extracted business details
+        if (scrapedData.business_name && (!biz.business_name || biz.business_name === 'Our Business' || biz.business_name === 'My Business')) {
+          biz.business_name = scrapedData.business_name;
+          bInfo.business_name = scrapedData.business_name;
+        }
+        if (scrapedData.short_description) {
+          bInfo.short_description = scrapedData.short_description;
+        }
+        if (scrapedData.address) {
+          bInfo.address = scrapedData.address;
+          biz.address = scrapedData.address;
+        }
+        if (scrapedData.phone && (!biz.phone || biz.phone.includes('98765'))) {
+          biz.phone = scrapedData.phone;
+          bInfo.phone = scrapedData.phone;
+        }
+        if (scrapedData.whatsapp && (!biz.whatsapp_number || biz.whatsapp_number.includes('98765'))) {
+          biz.whatsapp_number = scrapedData.whatsapp;
+          bInfo.whatsapp = scrapedData.whatsapp;
+        }
+        if (scrapedData.email) {
+          bInfo.public_email = scrapedData.email;
+        }
+        if (scrapedData.services) {
+          bInfo.services = scrapedData.services;
+        }
+        if (scrapedData.hours_text) {
+          bInfo.hours_text = scrapedData.hours_text;
+        }
+        if (scrapedData.logo_url && !biz.logo_url) {
+          biz.logo_url = scrapedData.logo_url;
+          bInfo.logo_url = scrapedData.logo_url;
+        }
+        if (scrapedData.faqs && scrapedData.faqs.length > 0) {
+          if (!bInfo.faqs) bInfo.faqs = [];
+          for (const f of scrapedData.faqs) {
+            if (!bInfo.faqs.some((ef: any) => ef.question.toLowerCase() === f.question.toLowerCase())) {
+              bInfo.faqs.push({
+                id: `faq_sc_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+                question: f.question,
+                variations: [f.question],
+                answer: f.answer,
+                approved_for_public: true,
+              });
+            }
+          }
+        }
+      } else {
+        // Google Maps place profile extraction
+        bInfo.google_maps_url = scrapedData.google_maps_url || trimmedUrl;
+
+        // Populate REAL extracted place name, address, category & rating
+        if (scrapedData.business_name && (!biz.business_name || biz.business_name === 'Our Business' || biz.business_name === 'My Business')) {
+          biz.business_name = scrapedData.business_name;
+          bInfo.business_name = scrapedData.business_name;
+        }
+        if (scrapedData.category) {
+          biz.category = scrapedData.category;
+          bInfo.category = scrapedData.category;
+        }
+        if (scrapedData.address) {
+          bInfo.address = scrapedData.address;
+          biz.address = scrapedData.address;
+        }
+        if (scrapedData.phone && (!biz.phone || biz.phone.includes('98765'))) {
+          biz.phone = scrapedData.phone;
+          bInfo.phone = scrapedData.phone;
+        }
+        if (scrapedData.hours_text) {
+          bInfo.hours_text = scrapedData.hours_text;
+        }
+        if (scrapedData.rating) {
+          bInfo.google_rating = scrapedData.rating;
+        }
+      }
+      db.businesses[bizIdx].updated_at = new Date().toISOString();
+    }
+
+    if (!db.chatConfigs) db.chatConfigs = [];
+    let cfg = db.chatConfigs.find((c) => c.business_id === businessId);
+    if (!cfg) {
+      cfg = {
+        id: `cfg_${businessId}`,
+        business_id: businessId,
+        enabled: true,
+        supported_languages: ['en', 'hi', 'gu'],
+        suggested_questions: ['What are your opening hours?', 'Where is your shop located?', 'What products or services do you offer?'],
+        show_call_button: true,
+        show_whatsapp_button: true,
+        show_directions_button: true,
+        show_website_button: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        scanned_sources: [],
+      };
+      db.chatConfigs.push(cfg);
+    }
+
+    if (!cfg.scanned_sources) cfg.scanned_sources = [];
+
+    const sourceDisplayName = scrapedData.business_name
+      ? (sourceType === 'website' ? `${scrapedData.business_name} (Website)` : `${scrapedData.business_name} (Google Maps)`)
+      : (sourceType === 'website' ? `Scanned Website (${new URL(trimmedUrl).hostname})` : `Google Maps Place Link`);
+
+    const newSource = {
+      id: `src_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      type: sourceType as 'website' | 'maps',
+      url: trimmedUrl,
+      title: sourceDisplayName,
+      status: 'scanned' as const,
+      page_count: sourceType === 'website' ? 3 : 1,
+      last_scanned: new Date().toISOString(),
+      conflict_warning: undefined,
+    };
+
+    cfg.scanned_sources.unshift(newSource);
+    cfg.updated_at = new Date().toISOString();
+
+    saveServerDb(db);
+    return res.json({ 
+      success: true, 
+      source: newSource, 
+      scrapedData,
+      config: cfg,
+      business: bizIdx !== -1 ? db.businesses[bizIdx] : null,
+      businessInfo: bizIdx !== -1 ? db.businesses[bizIdx].business_info : null
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Failed to scan source URL' });
   }
 });
 

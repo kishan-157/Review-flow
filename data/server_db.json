@@ -1,6 +1,36 @@
 {
   "profiles": [
     {
+      "id": "usr_1792417921048_zvg7z7",
+      "full_name": "Cafe Owner John",
+      "email": "cafe.owner.1792417921044@example.com",
+      "unique_customer_code": "LB-CUS-U97RQW",
+      "role": "customer",
+      "status": "active",
+      "created_by_manager_id": "mgr_1792417921025_8a0au",
+      "managed_by": "Test Regional Manager",
+      "access_validity_type": "1_year",
+      "access_duration_days": 365,
+      "access_expires_at": "2027-10-19T13:52:01.048Z",
+      "created_at": "2026-10-19T13:52:01.048Z",
+      "updated_at": "2026-10-19T13:52:01.059Z",
+      "last_login_at": "2026-10-19T13:52:01.048Z",
+      "phone": "+91 99988 11122"
+    },
+    {
+      "id": "mgr_1792417921025_8a0au",
+      "full_name": "Test Regional Manager",
+      "email": "test.manager.1792417920902@example.com",
+      "phone": "+91 98765 43210",
+      "unique_customer_code": "LB-MGR-YWYZ",
+      "role": "manager",
+      "status": "active",
+      "access_validity_type": "lifetime",
+      "created_at": "2026-10-19T13:52:01.025Z",
+      "updated_at": "2026-10-19T13:52:01.025Z",
+      "last_login_at": "2026-10-19T13:52:01.025Z"
+    },
+    {
       "id": "usr_1791726816264_4hm5bq",
       "full_name": "Amit Verma",
       "email": "amit.hotel@gmail.com",
@@ -12,7 +42,7 @@
       "access_expires_at": "2027-10-11T13:53:36.264Z",
       "created_at": "2026-10-11T13:53:36.264Z",
       "updated_at": "2026-10-11T13:53:36.264Z",
-      "last_login_at": "2026-10-16T10:12:22.939Z"
+      "last_login_at": "2026-10-19T13:02:50.591Z"
     },
     {
       "id": "admin_kishan_1",
@@ -54,17 +84,263 @@
   ],
   "businesses": [
     {
+      "id": "biz_1792417921048_djrvne",
+      "user_id": "usr_1792417921048_zvg7z7",
+      "created_by_manager_id": "mgr_1792417921025_8a0au",
+      "created_by_manager_name": "Test Regional Manager",
+      "business_name": "John Artisanal Bakery",
+      "unique_slug": "john-fresh-bakes-2xn7",
+      "google_review_url": "",
+      "phone": "+91 99988 11122",
+      "address": "123 Baker Street",
+      "category": "Bakery & Cafe",
+      "created_at": "2026-10-19T13:52:01.048Z",
+      "updated_at": "2026-10-19T13:52:01.059Z"
+    },
+    {
       "id": "biz_1791726816264_0gsmn7",
       "user_id": "usr_1791726816264_4hm5bq",
       "business_name": "Grand Royal Hotel",
       "unique_slug": "grand-royal-hotel-pugh",
       "google_review_url": "https://maps.google.com/test",
-      "phone": "",
-      "address": "",
+      "phone": "+91 98765 43210",
+      "address": "Main Market Road",
       "category": "Restaurant & Hospitality",
       "created_at": "2026-10-11T13:53:36.264Z",
-      "updated_at": "2026-10-16T09:16:22.651Z",
-      "review_reward_mode": "scratch_card"
+      "updated_at": "2026-10-19T13:06:09.656Z",
+      "review_reward_mode": "scratch_card",
+      "whatsapp_number": "+91 98765 43210",
+      "ai_prompt": "Business Name: Grand Royal Hotel | Category: Restaurant & Hospitality (Restaurant & Hospitality Specialists) | Overview: Official website for Stores | Location: Main Market Road | Contact: Phone: +91 98765 43210, WhatsApp: +91 98765 43210 | Timings: Mon-Sat 09:00 to 21:00, Sun 10:00 to 20:00 | Key Offerings: Signature Chef Special Platter (₹299), Handcrafted Artisan Beverages (₹120) | Payments: Cash, UPI (Google Pay, PhonePe, Paytm), Credit & Debit Cards | Delivery: Fast local delivery available within 5 km radius.",
+      "ai_keywords": [
+        "Grand Royal",
+        "Royal Hotel",
+        "Hospitality Specialists",
+        "Main Market",
+        "Market Road",
+        "Grand",
+        "Royal",
+        "Hotel",
+        "Restaurant",
+        "Hospitality",
+        "Friendly Staff",
+        "Fast Service",
+        "High Quality",
+        "Value for Money"
+      ],
+      "ai_suggestions_preview": {
+        "positive": [
+          "We had a pleasant experience at Grand Royal Hotel. Everything was handled smoothly and professionally.",
+          "Good overall visit today. Everything was handled smoothly and without unnecessary delays.",
+          "Prompt and courteous assistance from start to finish. Appreciated their attention to customer satisfaction.",
+          "The team was attentive and took time to guide us properly. Very satisfied with the service.",
+          "Smooth and straightforward visit. Appreciated the transparent guidance and polite communication.",
+          "Welcoming atmosphere and respectful staff. Their reliable and attentive support made the entire visit worthwhile.",
+          "Everything went seamlessly today. Dependable service and helpful team members throughout.",
+          "Very polite behavior from the staff members. The entire process was organized and efficient.",
+          "Quick turnaround and helpful communication. Really pleased with their reliable service.",
+          "Pleasant ambience and well-managed service. The team took good care of our requirements.",
+          "Helpful staff who answered our questions patiently. Good experience with their reliable service.",
+          "Well-organized and professional approach. Appreciated the prompt assistance and fair process."
+        ],
+        "neutral": [
+          "Decent experience overall. Service was fine, though during rush hours there was a slight wait.",
+          "Visited for the first time. The staff was polite, overall a satisfactory and fair experience."
+        ]
+      },
+      "business_info": {
+        "business_name": "Grand Royal Hotel",
+        "category": "Restaurant & Hospitality",
+        "subcategory": "Restaurant & Hospitality Specialists",
+        "short_description": "Official website for Stores",
+        "detailed_description": "Grand Royal Hotel serves valued customers with verified quality standards, friendly assistance, and transparent pricing. Centrally located with easy parking and convenient payment options.",
+        "address": "Main Market Road",
+        "area": "",
+        "city": "",
+        "state": "",
+        "pincode": "",
+        "google_maps_url": "https://maps.google.com/test",
+        "website_url": "https://stores.styleunion.in/style-union/clothing-stores-in-ahmedabad/clothing-stores-in-nikol/style-union-nikol-in-nikol-ahmedabad--77129215-62c1-4640-bca6-75729694046f/home",
+        "phone": "+91 98765 43210",
+        "whatsapp": "+91 98765 43210",
+        "public_email": "",
+        "owner_name": "",
+        "owner_name_public_approved": false,
+        "languages": [
+          "en",
+          "hi",
+          "gu"
+        ],
+        "logo_url": "",
+        "opening_hours": {
+          "schedule": {
+            "monday": {
+              "open": "09:00",
+              "close": "21:00",
+              "closed": false
+            },
+            "tuesday": {
+              "open": "09:00",
+              "close": "21:00",
+              "closed": false
+            },
+            "wednesday": {
+              "open": "09:00",
+              "close": "21:00",
+              "closed": false
+            },
+            "thursday": {
+              "open": "09:00",
+              "close": "21:00",
+              "closed": false
+            },
+            "friday": {
+              "open": "09:00",
+              "close": "21:00",
+              "closed": false
+            },
+            "saturday": {
+              "open": "09:00",
+              "close": "21:00",
+              "closed": false
+            },
+            "sunday": {
+              "open": "10:00",
+              "close": "20:00",
+              "closed": false
+            }
+          },
+          "appointment_only": false,
+          "holiday_notice": "",
+          "last_updated": "2026-10-19T13:04:08.387Z"
+        },
+        "products_services": [
+          {
+            "id": "prod_1",
+            "name": "Signature Chef Special Platter",
+            "category": "Main Course",
+            "description": "Freshly prepared signature meal served with house special sides and garnish.",
+            "price": "₹299",
+            "price_type": "fixed",
+            "variants": "Full, Half",
+            "available": true,
+            "last_updated": "2026-10-19T13:04:08.387Z"
+          },
+          {
+            "id": "prod_2",
+            "name": "Handcrafted Artisan Beverages",
+            "category": "Beverages",
+            "description": "Freshly brewed artisan coffees, teas, and specialty iced coolers.",
+            "price": "₹120",
+            "price_type": "starting_from",
+            "variants": "Hot, Cold",
+            "available": true,
+            "last_updated": "2026-10-19T13:04:08.387Z"
+          }
+        ],
+        "policies": {
+          "payment_methods": [
+            "Cash",
+            "UPI (Google Pay, PhonePe, Paytm)",
+            "Credit & Debit Cards"
+          ],
+          "return_exchange": "Items or services may be exchanged or addressed within 2 business days with bill proof.",
+          "cancellation": "Appointments or orders can be rescheduled or cancelled 2 hours prior without penalty.",
+          "refund": "Eligible refunds processed back to original payment mode or store credit within 2-3 business days.",
+          "delivery": "Fast local delivery available within 5 km radius.",
+          "service_area": "City Center and surrounding 7 km radius.",
+          "booking_policy": "Walk-ins always welcome. Prior appointment recommended during evening rush hours.",
+          "warranty": "Standard quality guarantee on all products and authorized services.",
+          "terms": "Standard terms of polite service and fair trade apply."
+        },
+        "contact_actions": {
+          "call_enabled": true,
+          "whatsapp_enabled": true,
+          "website_enabled": false,
+          "directions_enabled": true,
+          "custom_cta_label": "Chat on WhatsApp",
+          "custom_cta_url": ""
+        },
+        "faqs": [
+          {
+            "id": "faq_1",
+            "question": "What are your shop opening hours and timings?",
+            "variations": [
+              "Shop kab khulti hai?",
+              "Opening hours kya hain?",
+              "Dukaan kitne baje khulti hai?",
+              "દુકાન કેટલા વાગ્યે ખુલે છે?",
+              "Timings"
+            ],
+            "answer": "Grand Royal Hotel is open Monday through Saturday from 9:00 AM to 9:00 PM and Sundays from 10:00 AM to 8:00 PM.",
+            "approved_for_public": true
+          },
+          {
+            "id": "faq_2",
+            "question": "Where are you located and how do I get directions?",
+            "variations": [
+              "Where is your shop?",
+              "Address kya hai?",
+              "Location bhejo",
+              "Kahan par hai?",
+              "તમારું સરનામું શું છે?",
+              "Google maps location"
+            ],
+            "answer": "We are conveniently located in the central market area. You can tap the \"Directions\" button above to view our live location on Google Maps.",
+            "approved_for_public": true
+          },
+          {
+            "id": "faq_3",
+            "question": "Which payment methods do you accept?",
+            "variations": [
+              "Do you accept UPI?",
+              "Google Pay chalega?",
+              "Paytm accept karte ho?",
+              "Card payment available?",
+              "Cash only?"
+            ],
+            "answer": "We accept all convenient payment modes including Cash, UPI (Google Pay, PhonePe, Paytm), and Credit/Debit Cards.",
+            "approved_for_public": true
+          },
+          {
+            "id": "faq_4",
+            "question": "Do you offer home delivery or shipping?",
+            "variations": [
+              "Home delivery available?",
+              "Delivery karte ho?",
+              "Ghar par delivery milegi?",
+              "Delivery charges kitne hain?"
+            ],
+            "answer": "Yes, local delivery is available for orders within our service area. Please reach out on WhatsApp to check delivery time and minimum order details.",
+            "approved_for_public": true
+          },
+          {
+            "id": "faq_5",
+            "question": "How can I contact or message you directly?",
+            "variations": [
+              "Contact number do",
+              "Phone number kya hai?",
+              "WhatsApp number",
+              "Kaise baat karein?"
+            ],
+            "answer": "You can reach out to us directly by tapping the \"WhatsApp\" or \"Call\" buttons on this screen for instant assistance.",
+            "approved_for_public": true
+          }
+        ],
+        "field_status": {
+          "business_name": "complete",
+          "category": "complete",
+          "short_description": "complete",
+          "address": "complete",
+          "phone": "complete",
+          "whatsapp": "complete",
+          "google_maps_url": "complete",
+          "opening_hours": "complete",
+          "products_services": "complete",
+          "payment_methods": "complete",
+          "faqs": "complete"
+        },
+        "last_verified_at": "2026-10-19T13:06:08.215Z"
+      }
     },
     {
       "id": "biz_foodbites_demo",
@@ -87,9 +363,30 @@
     "lb-cus-8f42k9": "DemoPass123!",
     "+15550199": "DemoPass123!",
     "amit.hotel@gmail.com": "MySecretPass123!",
-    "lb-cus-eam670": "MySecretPass123!"
+    "lb-cus-eam670": "MySecretPass123!",
+    "test.manager.1792417920902@example.com": "ManagerPassword123!",
+    "lb-mgr-ywyz": "ManagerPassword123!",
+    "919876543210": "ManagerPassword123!",
+    "cafe.owner.1792417921044@example.com": "NewSecretPassword999!",
+    "lb-cus-u97rqw": "NewSecretPassword999!",
+    "919998877766": "LBPass228666!",
+    "919998811122": "NewSecretPassword999!"
   },
   "reviewSettings": [
+    {
+      "id": "rs_1792417921049",
+      "business_id": "biz_1792417921048_djrvne",
+      "language": "en",
+      "welcome_text": "Welcome to John Fresh Bakes! How was your experience?",
+      "thank_you_text": "Thank you for your valuable feedback! ❤️",
+      "enabled": true,
+      "accent_color": "#6C3BFF",
+      "qr_show_logo": true,
+      "qr_logo_border_style": "circular",
+      "qr_color": "#1F1735",
+      "created_at": "2026-10-19T13:52:01.048Z",
+      "updated_at": "2026-10-19T13:52:01.048Z"
+    },
     {
       "id": "rs_1791726816264",
       "business_id": "biz_1791726816264_0gsmn7",
@@ -293,11 +590,11 @@
       "expires_at": "2026-10-31T05:17:26.311Z",
       "stage": "7_days",
       "stage_label": "7 Days Remaining",
-      "days_remaining": 15,
+      "days_remaining": 12,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-EWMM) has 7 days remaining before expiry. Visit us soon to redeem!",
+      "message_template": "Hello Demo! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-EWMM) has 7 days remaining before expiry. Visit us soon to redeem! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -313,11 +610,11 @@
       "expires_at": "2026-10-31T05:17:26.311Z",
       "stage": "3_days",
       "stage_label": "3 Days Remaining",
-      "days_remaining": 15,
+      "days_remaining": 12,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-EWMM)! Don't miss out, visit us today!",
+      "message_template": "Hello Demo! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-EWMM)! Don't miss out, visit us today! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -333,11 +630,11 @@
       "expires_at": "2026-10-31T05:17:26.311Z",
       "stage": "expiry_day",
       "stage_label": "Expiry Day (Today)",
-      "days_remaining": 15,
+      "days_remaining": 12,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-EWMM)! Visit us before closing to claim!",
+      "message_template": "Hello Demo! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-EWMM)! Visit us before closing to claim! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -353,11 +650,11 @@
       "expires_at": "2026-10-30T02:40:20.820Z",
       "stage": "7_days",
       "stage_label": "7 Days Remaining",
-      "days_remaining": 14,
+      "days_remaining": 11,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Kishan! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-WQA6) has 7 days remaining before expiry. Visit us soon to redeem!",
+      "message_template": "Hello Kishan! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-WQA6) has 7 days remaining before expiry. Visit us soon to redeem! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -373,11 +670,11 @@
       "expires_at": "2026-10-30T02:40:20.820Z",
       "stage": "3_days",
       "stage_label": "3 Days Remaining",
-      "days_remaining": 14,
+      "days_remaining": 11,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Kishan! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-WQA6)! Don't miss out, visit us today!",
+      "message_template": "Hello Kishan! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-WQA6)! Don't miss out, visit us today! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -393,11 +690,11 @@
       "expires_at": "2026-10-30T02:40:20.820Z",
       "stage": "expiry_day",
       "stage_label": "Expiry Day (Today)",
-      "days_remaining": 14,
+      "days_remaining": 11,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Kishan! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-WQA6)! Visit us before closing to claim!",
+      "message_template": "Hello Kishan! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-WQA6)! Visit us before closing to claim! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -413,11 +710,11 @@
       "expires_at": "2026-10-29T17:31:58.905Z",
       "stage": "7_days",
       "stage_label": "7 Days Remaining",
-      "days_remaining": 13,
+      "days_remaining": 10,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-FM46) has 7 days remaining before expiry. Visit us soon to redeem!",
+      "message_template": "Hello Demo! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-FM46) has 7 days remaining before expiry. Visit us soon to redeem! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -433,11 +730,11 @@
       "expires_at": "2026-10-29T17:31:58.905Z",
       "stage": "3_days",
       "stage_label": "3 Days Remaining",
-      "days_remaining": 13,
+      "days_remaining": 10,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-FM46)! Don't miss out, visit us today!",
+      "message_template": "Hello Demo! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-FM46)! Don't miss out, visit us today! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -453,11 +750,11 @@
       "expires_at": "2026-10-29T17:31:58.905Z",
       "stage": "expiry_day",
       "stage_label": "Expiry Day (Today)",
-      "days_remaining": 13,
+      "days_remaining": 10,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-FM46)! Visit us before closing to claim!",
+      "message_template": "Hello Demo! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-FM46)! Visit us before closing to claim! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -473,11 +770,11 @@
       "expires_at": "2026-10-27T04:30:17.223Z",
       "stage": "7_days",
       "stage_label": "7 Days Remaining",
-      "days_remaining": 11,
+      "days_remaining": 8,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-8BKM) has 7 days remaining before expiry. Visit us soon to redeem!",
+      "message_template": "Hello Demo! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-8BKM) has 7 days remaining before expiry. Visit us soon to redeem! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -493,11 +790,11 @@
       "expires_at": "2026-10-27T04:30:17.223Z",
       "stage": "3_days",
       "stage_label": "3 Days Remaining",
-      "days_remaining": 11,
+      "days_remaining": 8,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-8BKM)! Don't miss out, visit us today!",
+      "message_template": "Hello Demo! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-8BKM)! Don't miss out, visit us today! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -513,11 +810,11 @@
       "expires_at": "2026-10-27T04:30:17.223Z",
       "stage": "expiry_day",
       "stage_label": "Expiry Day (Today)",
-      "days_remaining": 11,
+      "days_remaining": 8,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-8BKM)! Visit us before closing to claim!",
+      "message_template": "Hello Demo! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-8BKM)! Visit us before closing to claim! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -533,11 +830,11 @@
       "expires_at": "2026-11-10T17:49:34.631Z",
       "stage": "7_days",
       "stage_label": "7 Days Remaining",
-      "days_remaining": 25,
+      "days_remaining": 22,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo1! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-N29K) has 7 days remaining before expiry. Visit us soon to redeem!",
+      "message_template": "Hello Demo1! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-N29K) has 7 days remaining before expiry. Visit us soon to redeem! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -553,11 +850,11 @@
       "expires_at": "2026-11-10T17:49:34.631Z",
       "stage": "3_days",
       "stage_label": "3 Days Remaining",
-      "days_remaining": 25,
+      "days_remaining": 22,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo1! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-N29K)! Don't miss out, visit us today!",
+      "message_template": "Hello Demo1! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-N29K)! Don't miss out, visit us today! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -573,11 +870,11 @@
       "expires_at": "2026-11-10T17:49:34.631Z",
       "stage": "expiry_day",
       "stage_label": "Expiry Day (Today)",
-      "days_remaining": 25,
+      "days_remaining": 22,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo1! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-N29K)! Visit us before closing to claim!",
+      "message_template": "Hello Demo1! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-N29K)! Visit us before closing to claim! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -593,11 +890,11 @@
       "expires_at": "2026-11-10T17:46:03.706Z",
       "stage": "7_days",
       "stage_label": "7 Days Remaining",
-      "days_remaining": 25,
+      "days_remaining": 22,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-AFT4) has 7 days remaining before expiry. Visit us soon to redeem!",
+      "message_template": "Hello Demo! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-AFT4) has 7 days remaining before expiry. Visit us soon to redeem! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -613,11 +910,11 @@
       "expires_at": "2026-11-10T17:46:03.706Z",
       "stage": "3_days",
       "stage_label": "3 Days Remaining",
-      "days_remaining": 25,
+      "days_remaining": 22,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-AFT4)! Don't miss out, visit us today!",
+      "message_template": "Hello Demo! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-AFT4)! Don't miss out, visit us today! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
     },
@@ -633,13 +930,193 @@
       "expires_at": "2026-11-10T17:46:03.706Z",
       "stage": "expiry_day",
       "stage_label": "Expiry Day (Today)",
-      "days_remaining": 25,
+      "days_remaining": 22,
       "status": "PENDING",
       "sent_at": null,
       "sent_by": null,
-      "message_template": "Hello Demo! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-AFT4)! Visit us before closing to claim!",
+      "message_template": "Hello Demo! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-AFT4)! Visit us before closing to claim! 📞 Contact Grand Royal Hotel: +91 98765 43210",
       "created_at": "2026-10-16T09:13:51.874Z",
       "updated_at": "2026-10-16T09:13:51.874Z"
+    },
+    {
+      "id": "card_1792392087205_7u0na_7_days",
+      "reward_id": "card_1792392087205_7u0na",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "customer_name": "kishan ladani",
+      "customer_phone": "09724852137",
+      "voucher_code": "VIP-GD6L",
+      "reward_title": "Flat 15% Off Your Next Visit",
+      "reward_value": "15%",
+      "expires_at": "2026-11-03T06:41:27.205Z",
+      "stage": "7_days",
+      "stage_label": "7 Days Remaining",
+      "days_remaining": 15,
+      "status": "PENDING",
+      "sent_at": null,
+      "sent_by": null,
+      "message_template": "Hello kishan ladani! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-GD6L) has 7 days remaining before expiry. Visit us soon to redeem! 📞 Contact Grand Royal Hotel: +91 98765 43210",
+      "created_at": "2026-10-19T11:39:48.255Z",
+      "updated_at": "2026-10-19T11:39:48.255Z"
+    },
+    {
+      "id": "card_1792392087205_7u0na_3_days",
+      "reward_id": "card_1792392087205_7u0na",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "customer_name": "kishan ladani",
+      "customer_phone": "09724852137",
+      "voucher_code": "VIP-GD6L",
+      "reward_title": "Flat 15% Off Your Next Visit",
+      "reward_value": "15%",
+      "expires_at": "2026-11-03T06:41:27.205Z",
+      "stage": "3_days",
+      "stage_label": "3 Days Remaining",
+      "days_remaining": 15,
+      "status": "PENDING",
+      "sent_at": null,
+      "sent_by": null,
+      "message_template": "Hello kishan ladani! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-GD6L)! Don't miss out, visit us today! 📞 Contact Grand Royal Hotel: +91 98765 43210",
+      "created_at": "2026-10-19T11:39:48.255Z",
+      "updated_at": "2026-10-19T11:39:48.255Z"
+    },
+    {
+      "id": "card_1792392087205_7u0na_expiry_day",
+      "reward_id": "card_1792392087205_7u0na",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "customer_name": "kishan ladani",
+      "customer_phone": "09724852137",
+      "voucher_code": "VIP-GD6L",
+      "reward_title": "Flat 15% Off Your Next Visit",
+      "reward_value": "15%",
+      "expires_at": "2026-11-03T06:41:27.205Z",
+      "stage": "expiry_day",
+      "stage_label": "Expiry Day (Today)",
+      "days_remaining": 15,
+      "status": "PENDING",
+      "sent_at": null,
+      "sent_by": null,
+      "message_template": "Hello kishan ladani! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-GD6L)! Visit us before closing to claim! 📞 Contact Grand Royal Hotel: +91 98765 43210",
+      "created_at": "2026-10-19T11:39:48.255Z",
+      "updated_at": "2026-10-19T11:39:48.255Z"
+    },
+    {
+      "id": "card_1792234478600_5v57f_7_days",
+      "reward_id": "card_1792234478600_5v57f",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "customer_name": "De",
+      "customer_phone": "9724852137",
+      "voucher_code": "VIP-82KR",
+      "reward_title": "🎂 Special Birthday Gift — Flat 20% OFF",
+      "reward_value": "20% OFF",
+      "expires_at": "2026-11-01T10:54:38.599Z",
+      "stage": "7_days",
+      "stage_label": "7 Days Remaining",
+      "days_remaining": 13,
+      "status": "PENDING",
+      "sent_at": null,
+      "sent_by": null,
+      "message_template": "Hello De! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"🎂 Special Birthday Gift — Flat 20% OFF\" (Code: VIP-82KR) has 7 days remaining before expiry. Visit us soon to redeem! 📞 Contact Grand Royal Hotel: +91 98765 43210",
+      "created_at": "2026-10-19T11:39:48.255Z",
+      "updated_at": "2026-10-19T11:39:48.255Z"
+    },
+    {
+      "id": "card_1792234478600_5v57f_3_days",
+      "reward_id": "card_1792234478600_5v57f",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "customer_name": "De",
+      "customer_phone": "9724852137",
+      "voucher_code": "VIP-82KR",
+      "reward_title": "🎂 Special Birthday Gift — Flat 20% OFF",
+      "reward_value": "20% OFF",
+      "expires_at": "2026-11-01T10:54:38.599Z",
+      "stage": "3_days",
+      "stage_label": "3 Days Remaining",
+      "days_remaining": 13,
+      "status": "PENDING",
+      "sent_at": null,
+      "sent_by": null,
+      "message_template": "Hello De! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"🎂 Special Birthday Gift — Flat 20% OFF\" (Code: VIP-82KR)! Don't miss out, visit us today! 📞 Contact Grand Royal Hotel: +91 98765 43210",
+      "created_at": "2026-10-19T11:39:48.255Z",
+      "updated_at": "2026-10-19T11:39:48.255Z"
+    },
+    {
+      "id": "card_1792234478600_5v57f_expiry_day",
+      "reward_id": "card_1792234478600_5v57f",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "customer_name": "De",
+      "customer_phone": "9724852137",
+      "voucher_code": "VIP-82KR",
+      "reward_title": "🎂 Special Birthday Gift — Flat 20% OFF",
+      "reward_value": "20% OFF",
+      "expires_at": "2026-11-01T10:54:38.599Z",
+      "stage": "expiry_day",
+      "stage_label": "Expiry Day (Today)",
+      "days_remaining": 13,
+      "status": "PENDING",
+      "sent_at": null,
+      "sent_by": null,
+      "message_template": "Hello De! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"🎂 Special Birthday Gift — Flat 20% OFF\" (Code: VIP-82KR)! Visit us before closing to claim! 📞 Contact Grand Royal Hotel: +91 98765 43210",
+      "created_at": "2026-10-19T11:39:48.255Z",
+      "updated_at": "2026-10-19T11:39:48.255Z"
+    },
+    {
+      "id": "card_1792234351332_x53qp_7_days",
+      "reward_id": "card_1792234351332_x53qp",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "customer_name": "De",
+      "customer_phone": "9724852137",
+      "voucher_code": "VIP-T458",
+      "reward_title": "Flat 15% Off Your Next Visit",
+      "reward_value": "15%",
+      "expires_at": "2026-11-01T10:52:31.332Z",
+      "stage": "7_days",
+      "stage_label": "7 Days Remaining",
+      "days_remaining": 13,
+      "status": "PENDING",
+      "sent_at": null,
+      "sent_by": null,
+      "message_template": "Hello De! 🌟 Friendly reminder from Grand Royal Hotel: Your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-T458) has 7 days remaining before expiry. Visit us soon to redeem! 📞 Contact Grand Royal Hotel: +91 98765 43210",
+      "created_at": "2026-10-19T11:39:48.255Z",
+      "updated_at": "2026-10-19T11:39:48.255Z"
+    },
+    {
+      "id": "card_1792234351332_x53qp_3_days",
+      "reward_id": "card_1792234351332_x53qp",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "customer_name": "De",
+      "customer_phone": "9724852137",
+      "voucher_code": "VIP-T458",
+      "reward_title": "Flat 15% Off Your Next Visit",
+      "reward_value": "15%",
+      "expires_at": "2026-11-01T10:52:31.332Z",
+      "stage": "3_days",
+      "stage_label": "3 Days Remaining",
+      "days_remaining": 13,
+      "status": "PENDING",
+      "sent_at": null,
+      "sent_by": null,
+      "message_template": "Hello De! ⏰ Urgent reminder from Grand Royal Hotel: Only 3 days left to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-T458)! Don't miss out, visit us today! 📞 Contact Grand Royal Hotel: +91 98765 43210",
+      "created_at": "2026-10-19T11:39:48.255Z",
+      "updated_at": "2026-10-19T11:39:48.255Z"
+    },
+    {
+      "id": "card_1792234351332_x53qp_expiry_day",
+      "reward_id": "card_1792234351332_x53qp",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "customer_name": "De",
+      "customer_phone": "9724852137",
+      "voucher_code": "VIP-T458",
+      "reward_title": "Flat 15% Off Your Next Visit",
+      "reward_value": "15%",
+      "expires_at": "2026-11-01T10:52:31.332Z",
+      "stage": "expiry_day",
+      "stage_label": "Expiry Day (Today)",
+      "days_remaining": 13,
+      "status": "PENDING",
+      "sent_at": null,
+      "sent_by": null,
+      "message_template": "Hello De! 🚨 Final Call from Grand Royal Hotel: TODAY IS THE LAST DAY to redeem your VIP Reward \"Flat 15% Off Your Next Visit\" (Code: VIP-T458)! Visit us before closing to claim! 📞 Contact Grand Royal Hotel: +91 98765 43210",
+      "created_at": "2026-10-19T11:39:48.255Z",
+      "updated_at": "2026-10-19T11:39:48.255Z"
     }
   ],
   "reminderAuditLogs": [],
@@ -685,6 +1162,305 @@
       "created_at": "2026-10-13T19:07:44.789Z",
       "redeemed_at": "2026-10-13T19:07:44.802Z",
       "redeemed_by": "Cashier Rahul"
+    }
+  ],
+  "chatConfigs": [
+    {
+      "id": "cfg_biz_1791726816264_0gsmn7",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "enabled": true,
+      "supported_languages": [
+        "en",
+        "hi",
+        "gu"
+      ],
+      "suggested_questions": [
+        "What are your opening hours?",
+        "Where is your shop located?",
+        "What products or services do you offer?"
+      ],
+      "show_call_button": true,
+      "show_whatsapp_button": true,
+      "show_directions_button": true,
+      "show_website_button": false,
+      "created_at": "2026-10-19T11:59:45.795Z",
+      "updated_at": "2026-10-19T13:04:07.177Z",
+      "scanned_sources": [
+        {
+          "id": "src_1792415047177_nirg",
+          "type": "website",
+          "url": "https://stores.styleunion.in/style-union/clothing-stores-in-ahmedabad/clothing-stores-in-nikol/style-union-nikol-in-nikol-ahmedabad--77129215-62c1-4640-bca6-75729694046f/home",
+          "title": "Stores (Website)",
+          "status": "scanned",
+          "page_count": 3,
+          "last_scanned": "2026-10-19T13:04:07.177Z"
+        },
+        {
+          "id": "src_1792414501255_hefp",
+          "type": "website",
+          "url": "https://stores.styleunion.in/style-union/clothing-stores-in-ahmedabad/clothing-stores-in-nikol/style-union-nikol-in-nikol-ahmedabad--77129215-62c1-4640-bca6-75729694046f/home",
+          "title": "Scanned Website (stores.styleunion.in)",
+          "status": "scanned",
+          "page_count": 6,
+          "last_scanned": "2026-10-19T12:55:01.255Z"
+        },
+        {
+          "id": "src_1792411185795_9ztx",
+          "type": "website",
+          "url": "https://stores.styleunion.in/style-union/clothing-stores-in-ahmedabad/clothing-stores-in-nikol/style-union-nikol-in-nikol-ahmedabad--77129215-62c1-4640-bca6-75729694046f/home",
+          "title": "Scanned Website (stores.styleunion.in)",
+          "status": "scanned",
+          "page_count": 7,
+          "last_scanned": "2026-10-19T11:59:45.795Z",
+          "conflict_warning": "Minor discrepancy detected in operating hours between source and profile."
+        }
+      ]
+    }
+  ],
+  "chatConversations": [
+    {
+      "id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "visitor_session_id": "conv_1792414018098_bcbj8",
+      "language": "en",
+      "message_count": 10,
+      "last_message_preview": "Order dene ke liye kya karna hoga",
+      "has_unresolved": true,
+      "created_at": "2026-10-19T12:47:05.893Z",
+      "updated_at": "2026-10-19T13:08:06.308Z",
+      "contact_clicked": true
+    },
+    {
+      "id": "conv_1792410317065_d2kec",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "visitor_session_id": "conv_1792410317065_d2kec",
+      "language": "en",
+      "message_count": 4,
+      "last_message_preview": "Which payment methods do you accept?",
+      "has_unresolved": false,
+      "created_at": "2026-10-19T11:45:21.625Z",
+      "updated_at": "2026-10-19T11:45:24.149Z"
+    }
+  ],
+  "chatMessages": [
+    {
+      "id": "msg_usr_1792410321234_mgv",
+      "conversation_id": "conv_1792410317065_d2kec",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "user",
+      "text": "What are your opening hours today?",
+      "created_at": "2026-10-19T11:45:21.234Z"
+    },
+    {
+      "id": "msg_bot_1792410321430_eji",
+      "conversation_id": "conv_1792410317065_d2kec",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "bot",
+      "text": "Grand Royal Hotel Operating Hours:\n• Mon - Sat: 09:00 to 21:00\n• Sunday: 10:00 to 20:00\n\nStatus: 🟢 Currently OPEN (Today: 09:00 - 21:00)",
+      "intent": "timings_hours",
+      "confidence": "high",
+      "suggested_actions": [
+        {
+          "type": "whatsapp",
+          "label": "💬 Chat on WhatsApp",
+          "value": "https://wa.me/919876543210?text=Hello%20Grand%20Royal%20Hotel%2C%20I%20have%20a%20question%3A"
+        },
+        {
+          "type": "call",
+          "label": "📞 Call (+91 98765 43210)",
+          "value": "tel:+919876543210"
+        }
+      ],
+      "created_at": "2026-10-19T11:45:21.431Z"
+    },
+    {
+      "id": "msg_usr_1792410323783_res",
+      "conversation_id": "conv_1792410317065_d2kec",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "user",
+      "text": "Which payment methods do you accept?",
+      "created_at": "2026-10-19T11:45:23.783Z"
+    },
+    {
+      "id": "msg_bot_1792410323968_1nb",
+      "conversation_id": "conv_1792410317065_d2kec",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "bot",
+      "text": "💳 Accepted Payment Methods at Grand Royal Hotel:\n• Cash, UPI (Google Pay, PhonePe, Paytm), Credit & Debit Cards\n\nFast, secure and contact-less digital payments are fully supported.",
+      "intent": "payment_methods",
+      "confidence": "high",
+      "suggested_actions": [
+        {
+          "type": "whatsapp",
+          "label": "💬 Chat on WhatsApp",
+          "value": "https://wa.me/919876543210?text=Hello%20Grand%20Royal%20Hotel%2C%20I%20have%20a%20question%3A"
+        }
+      ],
+      "created_at": "2026-10-19T11:45:23.968Z"
+    },
+    {
+      "id": "msg_usr_1792414025489_0kt",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "user",
+      "text": "Which payment methods do you accept?",
+      "created_at": "2026-10-19T12:47:05.490Z"
+    },
+    {
+      "id": "msg_bot_1792414025685_rd4",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "bot",
+      "text": "💳 Accepted Payment Methods at Grand Royal Hotel:\n• Cash, UPI (Google Pay, PhonePe, Paytm), Credit & Debit Cards\n\nFast, secure and contact-less digital payments are fully supported.",
+      "intent": "payment_methods",
+      "confidence": "high",
+      "suggested_actions": [
+        {
+          "type": "whatsapp",
+          "label": "💬 Chat on WhatsApp",
+          "value": "https://wa.me/919876543210?text=Hello%20Grand%20Royal%20Hotel%2C%20I%20have%20a%20question%3A"
+        }
+      ],
+      "created_at": "2026-10-19T12:47:05.685Z"
+    },
+    {
+      "id": "msg_usr_1792414029650_llu",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "user",
+      "text": "Where is your shop located?",
+      "created_at": "2026-10-19T12:47:09.650Z"
+    },
+    {
+      "id": "msg_bot_1792414029838_i3z",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "bot",
+      "text": "I couldn’t confirm that specific information from the verified details available to me. Please contact Grand Royal Hotel directly via WhatsApp or phone for immediate assistance!",
+      "intent": "fallback_unknown",
+      "confidence": "low",
+      "suggested_actions": [
+        {
+          "type": "whatsapp",
+          "label": "💬 Chat on WhatsApp",
+          "value": "https://wa.me/919876543210?text=Hello%20Grand%20Royal%20Hotel%2C%20I%20have%20a%20question%3A"
+        },
+        {
+          "type": "call",
+          "label": "📞 Call (+91 98765 43210)",
+          "value": "tel:+919876543210"
+        },
+        {
+          "type": "maps",
+          "label": "📍 Directions on Google Maps",
+          "value": "https://maps.google.com/test"
+        }
+      ],
+      "created_at": "2026-10-19T12:47:09.838Z"
+    },
+    {
+      "id": "msg_usr_1792415210876_fsq",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "user",
+      "text": "Aap ki shop kitne baje khulta hai",
+      "created_at": "2026-10-19T13:06:50.876Z"
+    },
+    {
+      "id": "msg_bot_1792415211061_wqd",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "bot",
+      "text": "Grand Royal Hotel का समय:\n• सोमवार से शनिवार: सुबह 09:00 से रात 21:00\n• रविवार: 10:00 से 20:00\n\nवर्तमान स्थिति: 🟢 अभी खुला है (Today: 09:00 - 21:00)",
+      "intent": "timings_hours",
+      "confidence": "high",
+      "suggested_actions": [
+        {
+          "type": "whatsapp",
+          "label": "💬 Chat on WhatsApp",
+          "value": "https://wa.me/919876543210?text=Hello%20Grand%20Royal%20Hotel%2C%20I%20have%20a%20question%3A"
+        },
+        {
+          "type": "call",
+          "label": "📞 Call (+91 98765 43210)",
+          "value": "tel:+919876543210"
+        }
+      ],
+      "created_at": "2026-10-19T13:06:51.061Z"
+    },
+    {
+      "id": "msg_usr_1792415252800_pgp",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "user",
+      "text": "Aap ki shop par kya milta hai",
+      "created_at": "2026-10-19T13:07:32.800Z"
+    },
+    {
+      "id": "msg_bot_1792415252987_poq",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "bot",
+      "text": "📋 Grand Royal Hotel की प्रमुख वस्तुएं व सेवाएं:\n• Signature Chef Special Platter - ₹299 (Main Course)\n• Handcrafted Artisan Beverages - ₹120 (Beverages)\n\nऑर्डर या किसी विशेष वस्तु की जानकारी के लिए WhatsApp पर पूछें।",
+      "intent": "products_services_catalog",
+      "confidence": "high",
+      "suggested_actions": [
+        {
+          "type": "whatsapp",
+          "label": "💬 Chat on WhatsApp",
+          "value": "https://wa.me/919876543210?text=Hello%20Grand%20Royal%20Hotel%2C%20I%20have%20a%20question%3A"
+        },
+        {
+          "type": "call",
+          "label": "📞 Call (+91 98765 43210)",
+          "value": "tel:+919876543210"
+        }
+      ],
+      "created_at": "2026-10-19T13:07:32.987Z"
+    },
+    {
+      "id": "msg_usr_1792415285829_83r",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "user",
+      "text": "Order dene ke liye kya karna hoga",
+      "created_at": "2026-10-19T13:08:05.829Z"
+    },
+    {
+      "id": "msg_bot_1792415286016_u9x",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "sender": "bot",
+      "text": "मुझे इस जानकारी की पुष्टि उपलब्ध बिज़नेस डिटेल्स से नहीं हो पाई। सही जानकारी के लिए कृपया Grand Royal Hotel से सीधे WhatsApp या फोन पर संपर्क करें।",
+      "intent": "fallback_unknown",
+      "confidence": "low",
+      "suggested_actions": [
+        {
+          "type": "whatsapp",
+          "label": "💬 Chat on WhatsApp",
+          "value": "https://wa.me/919876543210?text=Hello%20Grand%20Royal%20Hotel%2C%20I%20have%20a%20question%3A"
+        },
+        {
+          "type": "call",
+          "label": "📞 Call (+91 98765 43210)",
+          "value": "tel:+919876543210"
+        },
+        {
+          "type": "maps",
+          "label": "📍 Directions on Google Maps",
+          "value": "https://maps.google.com/test"
+        }
+      ],
+      "created_at": "2026-10-19T13:08:06.016Z"
+    }
+  ],
+  "chatClicks": [
+    {
+      "id": "clk_1792415308429_kmz5",
+      "business_id": "biz_1791726816264_0gsmn7",
+      "conversation_id": "conv_1792414018098_bcbj8",
+      "type": "whatsapp",
+      "created_at": "2026-10-19T13:08:28.429Z"
     }
   ]
 }

@@ -19,6 +19,7 @@ import {
   ChatMessage,
   ChatActionOption,
   ChatQuickPrompt,
+  ChatbotConfig,
 } from '../types/database';
 import { PublicBusinessChatProfile } from './businessInfoService';
 
@@ -291,7 +292,8 @@ export function answerCustomerQuestion(
   messageText: string,
   profile: PublicBusinessChatProfile,
   preferredLanguage: SupportedLanguage = 'en',
-  quickPrompts?: ChatQuickPrompt[]
+  quickPrompts?: ChatQuickPrompt[],
+  chatConfig?: ChatbotConfig
 ): ChatEngineResult {
   const rawText = messageText.trim();
   const lang = detectLanguage(rawText, preferredLanguage);

@@ -49,6 +49,8 @@ import {
   CheckCircle,
   Smartphone,
   CheckSquare,
+  Globe,
+  Sliders,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import {
@@ -126,8 +128,15 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
   onOpenLiveChat,
 }) => {
   const [subTab, setSubTab] = useState<
-    'overview' | 'quick_prompts' | 'checklist' | 'settings' | 'history' | 'share' | 'analytics'
+    'overview' | 'quick_prompts' | 'checklist' | 'settings' | 'history' | 'share' | 'analytics' | 'sources' | 'personality' | 'test_bot' | 'embed'
   >('overview');
+  const [websiteUrlInput, setWebsiteUrlInput] = useState('');
+  const [mapsUrlInput, setMapsUrlInput] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
+  const [testMessages, setTestMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string; source?: string }>>([
+    { sender: 'bot', text: `Hello! I am the verified AI assistant for ${business.business_name}. Ask me anything about hours, services, or location!` }
+  ]);
+  const [testInput, setTestInput] = useState('');
   const [businessInfo, setBusinessInfo] = useState<BusinessProfileInfo>(() =>
     getDefaultBusinessProfileInfo(business)
   );
@@ -223,6 +232,13 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
     Array<{ sender: 'user' | 'bot'; text: string; id: string; actions?: any[] }>
   >([]);
   const [simulatedTyping, setSimulatedTyping] = useState<boolean>(false);
+
+  // Synchronize businessInfo whenever business changes
+  useEffect(() => {
+    if (business) {
+      setBusinessInfo(getDefaultBusinessProfileInfo(business));
+    }
+  }, [business]);
 
   // Load backend chat history, config & analytics
   useEffect(() => {
@@ -524,6 +540,85 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2500);
     } catch {}
+  };
+
+  const handleScanSource = async (sourceType: 'website' | 'maps', sourceUrl: string) => {
+    if (!sourceUrl.trim()) return;
+    setIsScanning(true);
+    try {
+      const res = await fetch(`/api/chat/business/${business.id}/scan-source`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourceType, sourceUrl }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config) setChatConfig(data.config);
+
+        // Merge updated business & info
+        const updatedBiz: Business = data.business || {
+          ...business,
+          address: data.businessInfo?.address || business.address,
+          business_info: {
+            ...business.business_info,
+            ...data.businessInfo,
+          },
+        };
+
+        const updatedProfile = getDefaultBusinessProfileInfo(updatedBiz);
+        setBusinessInfo(updatedProfile);
+
+        // Notify parent dashboard and persist to DB
+        await onUpdateBusiness(updatedBiz);
+
+        setStatusNotice(`${sourceType === 'website' ? 'Website' : 'Google Maps'} scanned & populated into Store Facts!`);
+        if (sourceType === 'website') setWebsiteUrlInput('');
+        else setMapsUrlInput('');
+
+        // Instantly switch to the 'checklist' (Store Facts & Verified Profile) subtab so the user immediately sees it!
+        setSubTab('checklist');
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to scan source');
+      }
+    } catch (err: any) {
+      setStatusNotice(`Error scanning source: ${err.message}`);
+    } finally {
+      setIsScanning(false);
+      setTimeout(() => setStatusNotice(null), 4000);
+    }
+  };
+
+  const handleTestChatSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testInput.trim()) return;
+    const userText = testInput.trim();
+    setTestInput('');
+    const newMsgs = [...testMessages, { sender: 'user' as const, text: userText }];
+    setTestMessages(newMsgs);
+
+    setTimeout(() => {
+      const lower = userText.toLowerCase();
+      let botAnswer = chatConfig.fallback_message?.en || "I couldn't confirm that information from the business details available. Please contact us directly.";
+      let matchedSource = 'Direct Business Knowledge Base';
+
+      if (lower.includes('hour') || lower.includes('time') || lower.includes('open') || lower.includes('samay')) {
+        const h = (business.business_info as any)?.hours_text || 'Monday to Sunday: 9:00 AM - 10:00 PM';
+        botAnswer = `Our operating hours are: ${h}`;
+        matchedSource = 'Operating Hours & Schedule Record';
+      } else if (lower.includes('locat') || lower.includes('address') || lower.includes('where') || lower.includes('pata')) {
+        botAnswer = `We are located at: ${business.address || (business.business_info as any)?.address || 'Main Street, City'}.`;
+        matchedSource = 'Google Maps & Store Address Record';
+      } else if (lower.includes('service') || lower.includes('product') || lower.includes('menu') || lower.includes('offer')) {
+        botAnswer = `We offer premium services and products at ${business.business_name}. ${(business.business_info as any)?.services || ''}`;
+        matchedSource = 'Website Products & Services Index';
+      } else if (lower.includes('contact') || lower.includes('phone') || lower.includes('call') || lower.includes('whatsapp')) {
+        botAnswer = `You can reach us at phone: ${business.phone || 'Available'} or WhatsApp: ${business.whatsapp_number || 'Available'}.`;
+        matchedSource = 'Verified Contact Directory';
+      }
+
+      setTestMessages([...newMsgs, { sender: 'bot', text: botAnswer, source: matchedSource }]);
+    }, 400);
   };
 
   const handleDownloadQr = () => {
@@ -867,17 +962,21 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
           { id: 'overview', label: 'Overview', icon: <Layers className="w-3.5 h-3.5" /> },
           {
             id: 'quick_prompts',
-            label: '⚡ Quick Messages (क्विक बटन)',
+            label: '⚡ Quick Messages',
             icon: <Zap className="w-3.5 h-3.5 text-amber-500" />,
             badge: `${activePrompts.length}`,
           },
+          { id: 'sources', label: '🌐 Website & Maps', icon: <Globe className="w-3.5 h-3.5 text-blue-500" /> },
+          { id: 'personality', label: '🧠 Personality & UI', icon: <Sliders className="w-3.5 h-3.5 text-purple-600" /> },
+          { id: 'test_bot', label: '🧪 Test Bot', icon: <Bot className="w-3.5 h-3.5 text-emerald-600" /> },
+          { id: 'embed', label: '💻 Embed Code', icon: <ExternalLink className="w-3.5 h-3.5 text-amber-500" /> },
           {
             id: 'checklist',
-            label: 'Store Facts Checklist',
+            label: 'Store Facts',
             icon: <ShieldCheck className="w-3.5 h-3.5" />,
             badge: `${checklist.percentage}%`,
           },
-          { id: 'settings', label: 'Chatbot Settings', icon: <Settings className="w-3.5 h-3.5" /> },
+          { id: 'settings', label: 'Settings', icon: <Settings className="w-3.5 h-3.5" /> },
           {
             id: 'history',
             label: 'Chat History',
@@ -1935,6 +2034,249 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* SUBTAB: WEBSITE & MAPS SOURCES SCANNER */}
+      {subTab === 'sources' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-6">
+            <div className="border-b border-neutral-100 pb-3">
+              <h3 className="text-base font-bold text-neutral-900">Website &amp; Google Maps Knowledge Base Scanner</h3>
+              <p className="text-xs text-neutral-500">
+                Connect your website URL or Google Maps link to automatically extract operating hours, services, products, FAQs, and contact details.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-5 bg-neutral-50 rounded-2xl border border-neutral-200 space-y-3">
+                <h4 className="text-xs font-bold text-neutral-900 flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-blue-600" />
+                  <span>1. Website URL Scanner</span>
+                </h4>
+                <p className="text-[11px] text-neutral-500">
+                  Enter your public business website. We discover sitemaps, headings, FAQs, and hours securely.
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={websiteUrlInput}
+                    onChange={(e) => setWebsiteUrlInput(e.target.value)}
+                    placeholder="https://yourbusiness.com"
+                    className="flex-1 px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:border-[#6C3BFF] focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={isScanning || !websiteUrlInput.trim()}
+                    onClick={() => handleScanSource('website', websiteUrlInput)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {isScanning ? 'Scanning...' : 'Scan Website'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 bg-neutral-50 rounded-2xl border border-neutral-200 space-y-3">
+                <h4 className="text-xs font-bold text-neutral-900 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-emerald-600" />
+                  <span>2. Google Maps Place Link</span>
+                </h4>
+                <p className="text-[11px] text-neutral-500">
+                  Paste Google Maps share link (e.g. maps.app.goo.gl or standard Google Maps URL).
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={mapsUrlInput}
+                    onChange={(e) => setMapsUrlInput(e.target.value)}
+                    placeholder="https://maps.app.goo.gl/..."
+                    className="flex-1 px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:border-[#6C3BFF] focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    disabled={isScanning || !mapsUrlInput.trim()}
+                    onClick={() => handleScanSource('maps', mapsUrlInput)}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {isScanning ? 'Importing...' : 'Import Maps'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-neutral-100 space-y-3">
+              <h4 className="text-xs font-bold text-neutral-900">Connected Knowledge Base Sources</h4>
+              {(!chatConfig.scanned_sources || chatConfig.scanned_sources.length === 0) ? (
+                <div className="p-6 bg-neutral-50 rounded-xl border border-neutral-200 text-center text-xs text-neutral-500">
+                  No external website or maps sources connected yet. Add your URL above to begin indexing.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {chatConfig.scanned_sources.map((src) => (
+                    <div key={src.id} className="p-4 bg-white rounded-xl border border-neutral-200 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${src.type === 'website' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                          {src.type === 'website' ? <Globe className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-neutral-900 truncate">{src.title}</div>
+                          <a href={src.url} target="_blank" rel="noreferrer" className="text-[11px] text-[#6C3BFF] hover:underline truncate block">
+                            {src.url}
+                          </a>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 text-right">
+                        <div>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            {src.status.toUpperCase()} ({src.page_count || 1} pages)
+                          </span>
+                          <div className="text-[10px] text-neutral-400 mt-0.5">{new Date(src.last_scanned).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUBTAB: PERSONALITY & APPEARANCE */}
+      {subTab === 'personality' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-6">
+            <div className="border-b border-neutral-100 pb-3">
+              <h3 className="text-base font-bold text-neutral-900">Chatbot Personality &amp; Appearance Customization</h3>
+              <p className="text-xs text-neutral-500">Configure how your chatbot speaks, responds, and matches your brand aesthetic.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-neutral-900 block">Response Style / Persona</label>
+                <select
+                  value={chatConfig.personality_style || 'friendly'}
+                  onChange={(e) => setChatConfig({ ...chatConfig, personality_style: e.target.value as any })}
+                  className="w-full px-3 py-2.5 text-xs bg-neutral-50 border border-neutral-300 rounded-xl focus:border-[#6C3BFF] focus:outline-hidden font-medium"
+                >
+                  <option value="professional">Professional &amp; Business-like</option>
+                  <option value="friendly">Friendly &amp; Warm</option>
+                  <option value="simple">Simple &amp; Conversational</option>
+                  <option value="formal">Formal</option>
+                  <option value="short">Short &amp; Direct Answers</option>
+                  <option value="detailed">Detailed &amp; Informative</option>
+                </select>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-neutral-900 block">Widget Primary Theme Color</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={chatConfig.theme_color || '#6C3BFF'}
+                    onChange={(e) => setChatConfig({ ...chatConfig, theme_color: e.target.value })}
+                    className="w-10 h-10 rounded-xl border border-neutral-300 cursor-pointer p-1"
+                  />
+                  <span className="text-xs font-mono font-bold text-neutral-700">{chatConfig.theme_color || '#6C3BFF'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-neutral-900 block">Custom Business Instructions / Guardrails</label>
+              <textarea
+                rows={3}
+                value={chatConfig.custom_instructions || ''}
+                onChange={(e) => setChatConfig({ ...chatConfig, custom_instructions: e.target.value })}
+                placeholder="e.g. Always highlight our parking availability and weekend offers..."
+                className="w-full px-3.5 py-2.5 text-xs bg-neutral-50 border border-neutral-300 rounded-xl focus:border-[#6C3BFF] focus:outline-hidden"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUBTAB: TEST CHATBOT */}
+      {subTab === 'test_bot' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-4">
+            <div className="border-b border-neutral-100 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-neutral-900">Test Your AI Chatbot</h3>
+                <p className="text-xs text-neutral-500">Ask questions as a customer before publishing your widget.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTestMessages([{ sender: 'bot', text: `Hello! I am the verified AI assistant for ${business.business_name}. Ask me anything!` }])}
+                className="px-3 py-1.5 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl cursor-pointer"
+              >
+                Reset Chat
+              </button>
+            </div>
+
+            <div className="bg-neutral-950 rounded-2xl border border-neutral-800 p-4 h-[420px] flex flex-col justify-between">
+              <div className="overflow-y-auto space-y-3 pr-2 flex-1 text-xs">
+                {testMessages.map((m, idx) => (
+                  <div key={idx} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'} space-y-1`}>
+                    <div className={`p-3.5 rounded-2xl max-w-[85%] ${m.sender === 'user' ? 'bg-[#6C3BFF] text-white rounded-br-xs' : 'bg-neutral-900 text-neutral-100 border border-neutral-800 rounded-bl-xs'}`}>
+                      {m.text}
+                    </div>
+                    {m.source && (
+                      <span className="text-[9px] text-emerald-400 font-mono px-1">Source: {m.source}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <form onSubmit={handleTestChatSend} className="pt-3 border-t border-neutral-800 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={testInput}
+                  onChange={(e) => setTestInput(e.target.value)}
+                  placeholder="Ask about hours, location, services..."
+                  className="flex-1 px-4 py-2.5 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:border-[#6C3BFF] focus:outline-hidden"
+                />
+                <button
+                  type="submit"
+                  className="px-4 py-2.5 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Send
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUBTAB: EMBED CODE */}
+      {subTab === 'embed' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-6">
+            <div className="border-b border-neutral-100 pb-3">
+              <h3 className="text-base font-bold text-neutral-900">Publish &amp; Embed Widget</h3>
+              <p className="text-xs text-neutral-500">Add your chatbot widget to any website using our copyable HTML snippet.</p>
+            </div>
+
+            <div className="p-5 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3">
+              <h4 className="text-xs font-bold text-purple-950">Embed Code Snippet (HTML Script)</h4>
+              <p className="text-xs text-purple-900">Paste this code right before the closing <code className="bg-white px-1.5 py-0.5 rounded font-mono">&lt;/body&gt;</code> tag of your website.</p>
+              <div className="p-3 bg-neutral-900 text-purple-200 rounded-xl font-mono text-[11px] overflow-x-auto select-all">
+                {`<script src="${window.location.origin}/widget.js" data-business-id="${business.id}" data-slug="${business.unique_slug}" async></script>`}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(`<script src="${window.location.origin}/widget.js" data-business-id="${business.id}" data-slug="${business.unique_slug}" async></script>`);
+                  setStatusNotice('Embed snippet copied to clipboard!');
+                  setTimeout(() => setStatusNotice(null), 3000);
+                }}
+                className="px-4 py-2 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copy Embed Code</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

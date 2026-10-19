@@ -320,38 +320,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
-          {/* Customer sign-in reference note & quick fill chips */}
+          {/* Customer sign-in reference note */}
           {mode === 'login' && (
             <div className="pt-2 text-center space-y-2">
               <p className="text-[11px] text-neutral-400 leading-relaxed px-2">
-                💡 <span className="text-purple-300 font-medium">Customer:</span> Admin dwara banaye gaye <span className="text-white">Email</span> ya <span className="text-[#9D7AFF]">Customer ID</span> aur Password se direct login karein.
+                💡 <span className="text-purple-300 font-medium">Customer:</span> Apne <span className="text-white">Email</span> ya <span className="text-[#9D7AFF]">Customer ID</span> aur Password se sign in karein.
               </p>
-
-              {/* Quick test buttons for mobile testers */}
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('amit.hotel@gmail.com');
-                    setPassword('MySecretPass123!');
-                    setErrorMsg(null);
-                  }}
-                  className="px-2.5 py-1 text-[10px] font-medium bg-white/5 hover:bg-white/10 text-purple-300 rounded-lg border border-purple-500/20 transition-colors"
-                >
-                  ⚡ Test: Amit Verma (Grand Royal)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('cafe@foodbites.com');
-                    setPassword('DemoPass123!');
-                    setErrorMsg(null);
-                  }}
-                  className="px-2.5 py-1 text-[10px] font-medium bg-white/5 hover:bg-white/10 text-neutral-300 rounded-lg border border-white/10 transition-colors"
-                >
-                  ⚡ Test: Food Bites Cafe
-                </button>
-              </div>
             </div>
           )}
 

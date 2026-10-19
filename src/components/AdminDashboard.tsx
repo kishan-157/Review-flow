@@ -86,7 +86,10 @@ import {
   exportDatabaseBackup,
   importDatabaseBackup,
   getDatabaseDiagnostics,
+  getAdminManagersList,
+  ManagerRow,
 } from '../lib/db';
+import { ManagersManagementTab } from './ManagersManagementTab';
 
 interface AdminDashboardProps {
   session: AuthSession;
@@ -101,7 +104,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSignOut,
   onOpenLiveReview,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'announcements' | 'settings' | 'audit'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'managers' | 'customers' | 'announcements' | 'settings' | 'audit'>('overview');
 
   // Data states
   const [globalStats, setGlobalStats] = useState({
@@ -118,6 +121,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [adminSettings, setAdminSettings] = useState<Record<string, string>>({});
   const [auditLogs, setAuditLogs] = useState<ImpersonationAuditLog[]>([]);
+  const [managersList, setManagersList] = useState<ManagerRow[]>([]);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -501,13 +505,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const loadAll = async () => {
     try {
       setLoading(true);
-      const [stats, customers, anns, settings, logs, diag] = await Promise.all([
+      const [stats, customers, anns, settings, logs, diag, managers] = await Promise.all([
         getGlobalAnalytics(),
         getAdminCustomersList(),
         getAllAnnouncements(),
         getAdminSettings(),
         getImpersonationLogs(),
         getDatabaseDiagnostics(),
+        getAdminManagersList().catch(() => []),
       ]);
 
       setGlobalStats(stats);
@@ -516,6 +521,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setAdminSettings(settings);
       setAuditLogs(logs);
       setDbDiagnostics(diag);
+      setManagersList(managers);
     } catch (err) {
       console.error('Error loading admin dashboard', err);
     } finally {
@@ -1032,6 +1038,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('managers')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap shrink-0 snap-start cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'managers'
+                ? 'bg-slate-950 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-950 hover:bg-white/60'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-purple-400" />
+            <span>Managers &amp; Sub-Admins</span>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                activeTab === 'managers'
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-purple-100 text-purple-700'
+              }`}
+            >
+              {managersList.length}
+            </span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('customers')}
             className={`px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap shrink-0 snap-start cursor-pointer ${
               activeTab === 'customers'
@@ -1169,7 +1196,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
               </div>
             </div>
+
+            {/* Quick Manager Control Card */}
+            <div className="bg-gradient-to-r from-purple-950 via-slate-900 to-slate-950 p-6 rounded-3xl text-white shadow-lg border border-purple-800/40 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-1.5 max-w-xl">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                  <Users className="w-3 h-3 text-purple-400" />
+                  <span>Sub-Admin Delegation & Multi-Tenant Access Control</span>
+                </div>
+                <h3 className="text-lg font-extrabold tracking-tight">Manager &amp; Sub-Admin Management (मैनेजर प्रबंधन)</h3>
+                <p className="text-xs text-purple-200/80 leading-relaxed">
+                  Super Admin can create Managers. Each Manager can create businesses and manage their accounts with 1-click access to the customer dashboard. Strict isolation ensures Managers can only see accounts they created.
+                </p>
+                <div className="flex items-center gap-4 pt-2 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span className="text-purple-200">Total Managers: <strong className="text-white font-bold">{managersList.length}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-purple-400" />
+                    <span className="text-purple-200">Active: <strong className="text-white font-bold">{managersList.filter((m) => m.status === 'active').length}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('managers')}
+                  className="px-5 py-2.5 bg-white hover:bg-neutral-100 text-slate-950 text-xs font-bold rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <Users className="w-4 h-4 text-[#6C3BFF]" />
+                  <span>Manage &amp; Create Managers &rarr;</span>
+                </button>
+              </div>
+            </div>
           </div>
+        )}
+
+        {/* TAB: MANAGERS & SUB-ADMINS */}
+        {activeTab === 'managers' && (
+          <ManagersManagementTab
+            onImpersonateBusiness={(bizId) => {
+              const row = customerRows.find((c) => c.business?.id === bizId);
+              if (row && row.business) {
+                handleStartInspection(row.profile);
+              }
+            }}
+          />
         )}
 
         {/* TAB 2: CUSTOMER MANAGEMENT */}
@@ -1377,11 +1451,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <span className="font-medium text-neutral-800 block">
                               {row.business?.business_name || '—'}
                             </span>
-                            {row.business?.phone && (
-                              <span className="text-[11px] text-neutral-500">
-                                {row.business.phone}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {row.business?.created_by_manager_name ? (
+                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-purple-50 text-purple-700 border border-purple-200">
+                                  Manager: {row.business.created_by_manager_name}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+                                  Super Admin
+                                </span>
+                              )}
+                              {row.business?.phone && (
+                                <span className="text-[11px] text-neutral-500">
+                                  • {row.business.phone}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-4">
                             {(() => {
