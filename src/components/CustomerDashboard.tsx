@@ -140,26 +140,63 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onPreviewReviewFlow,
   onOpenLiveReview,
 }) => {
+  const [business, setBusiness] = useState<Business | null>(session.business || null);
+
+  // Feature Access Control: determine which modules this customer account is permitted to use
+  const rawAllowedFeatures =
+    (business?.allowed_features && business.allowed_features.length > 0
+      ? business.allowed_features
+      : session.user.allowed_features && session.user.allowed_features.length > 0
+      ? session.user.allowed_features
+      : null);
+
+  const hasFeatureRestriction = Array.isArray(rawAllowedFeatures) && rawAllowedFeatures.length > 0;
+  const isFeatureAllowed = (tabKey: string): boolean => {
+    if (!hasFeatureRestriction || !rawAllowedFeatures) return true;
+    return rawAllowedFeatures.includes(tabKey);
+  };
+
+  const getCategoryForTab = (tab: string): 'core' | 'rewards' | 'intelligence' | 'store' => {
+    if (tab === 'dashboard' || tab === 'qrcode' || tab === 'ai_agent' || tab === 'ai_chat') return 'core';
+    if (tab === 'loyalty' || tab === 'scratch_offers' || tab === 'whatsapp_marketing' || tab === 'birthday') return 'rewards';
+    if (tab === 'analytics' || tab === 'feedback') return 'intelligence';
+    return 'store';
+  };
+
+  const initialTab = (
+    hasFeatureRestriction && rawAllowedFeatures && !rawAllowedFeatures.includes('dashboard')
+      ? rawAllowedFeatures[0]
+      : 'dashboard'
+  ) as 'dashboard' | 'loyalty' | 'scratch_offers' | 'whatsapp_marketing' | 'birthday' | 'ai_agent' | 'ai_chat' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security';
+
   const [activeTab, setActiveTab] = useState<
     'dashboard' | 'loyalty' | 'scratch_offers' | 'whatsapp_marketing' | 'birthday' | 'ai_agent' | 'ai_chat' | 'business' | 'settings' | 'qrcode' | 'analytics' | 'feedback' | 'announcements' | 'support' | 'security'
-  >('dashboard');
-  const [mobileCategory, setMobileCategory] = useState<'core' | 'rewards' | 'intelligence' | 'store'>('core');
+  >(initialTab);
+  const [mobileCategory, setMobileCategory] = useState<'core' | 'rewards' | 'intelligence' | 'store'>(
+    getCategoryForTab(initialTab)
+  );
   const [showAllModulesModal, setShowAllModulesModal] = useState<boolean>(false);
 
   const handleSelectTab = (tab: typeof activeTab) => {
+    if (!isFeatureAllowed(tab)) return;
     setActiveTab(tab);
-    if (tab === 'dashboard' || tab === 'qrcode' || tab === 'ai_agent' || tab === 'ai_chat') {
-      setMobileCategory('core');
-    } else if (tab === 'loyalty' || tab === 'scratch_offers' || tab === 'whatsapp_marketing' || tab === 'birthday') {
-      setMobileCategory('rewards');
-    } else if (tab === 'analytics' || tab === 'feedback') {
-      setMobileCategory('intelligence');
-    } else {
-      setMobileCategory('store');
-    }
+    setMobileCategory(getCategoryForTab(tab));
   };
 
-  const [business, setBusiness] = useState<Business | null>(session.business || null);
+  useEffect(() => {
+    if (hasFeatureRestriction && rawAllowedFeatures && !rawAllowedFeatures.includes(activeTab)) {
+      const fallbackTab = rawAllowedFeatures[0] as typeof activeTab;
+      setActiveTab(fallbackTab);
+      setMobileCategory(getCategoryForTab(fallbackTab));
+    }
+  }, [hasFeatureRestriction, rawAllowedFeatures, activeTab]);
+
+  const allowedCoreTabs = (['dashboard', 'qrcode', 'ai_agent', 'ai_chat'] as const).filter(isFeatureAllowed);
+  const allowedRewardsTabs = (['loyalty', 'scratch_offers', 'whatsapp_marketing', 'birthday'] as const).filter(isFeatureAllowed);
+  const allowedIntelligenceTabs = (['analytics', 'feedback'] as const).filter(isFeatureAllowed);
+  const allowedStoreTabs = (['business', 'settings', 'announcements', 'security', 'support'] as const).filter(isFeatureAllowed);
+  const totalAllowedModulesCount =
+    allowedCoreTabs.length + allowedRewardsTabs.length + allowedIntelligenceTabs.length + allowedStoreTabs.length;
   const [settings, setSettings] = useState<ReviewSettings | null>(null);
   const [analytics, setAnalytics] = useState<BusinessAnalyticsSummary>({
     totalScans: 0,
@@ -815,19 +852,19 @@ export const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     setSaveSuccessMsg(null);
     setSaveErrorMsg(null);
 
-    // Validate Google Review URL
+    let cleanReviewUrl = bizForm.google_review_url.trim();
     if (
-      !bizForm.google_review_url.startsWith('https://') &&
-      !bizForm.google_review_url.startsWith('http://')
+      cleanReviewUrl &&
+      !cleanReviewUrl.startsWith('https://') &&
+      !cleanReviewUrl.startsWith('http://')
     ) {
-      setSaveErrorMsg('Google Review URL must begin with https://');
-      return;
+      cleanReviewUrl = `https://${cleanReviewUrl}`;
     }
 
     try {
       const updated = await updateBusiness(business.id, {
         business_name: bizForm.business_name.trim(),
-        google_review_url: bizForm.google_review_url.trim(),
+        google_review_url: cleanReviewUrl,
         logo_url: bizForm.logo_url.trim() || undefined,
         phone: bizForm.phone.trim() || undefined,
         whatsapp_number: bizForm.phone.trim() || undefined,
@@ -1707,7 +1744,7 @@ Please generate:
                     </div>
 
                     {/* Preview Review Flow */}
-                    {settings && (
+                    {settings && (isFeatureAllowed('dashboard') || isFeatureAllowed('qrcode') || isFeatureAllowed('settings')) && (
                       <button
                         type="button"
                         onClick={() => onPreviewReviewFlow(business, settings)}
@@ -1719,81 +1756,85 @@ Please generate:
                     )}
 
                     {/* Direct Google Review Link */}
-                    <a
-                      href={business.google_review_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-extrabold text-neutral-950 bg-white hover:bg-neutral-100 rounded-xl shadow-md transition-all cursor-pointer"
-                    >
-                      <span>Google Reviews</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                    {business.google_review_url && (isFeatureAllowed('dashboard') || isFeatureAllowed('qrcode')) && (
+                      <a
+                        href={business.google_review_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-extrabold text-neutral-950 bg-white hover:bg-neutral-100 rounded-xl shadow-md transition-all cursor-pointer"
+                      >
+                        <span>Google Reviews</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    )}
                   </div>
                 </div>
 
-                {/* Integrated Executive Brand Metrics Strip */}
-                <div className="mt-6 pt-5 border-t border-neutral-800/80 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-purple-400 shrink-0">
-                      <QrCode className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <span className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight tabular-nums block">
-                        {analytics.totalScans}
-                      </span>
-                      <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
-                        Total QR Scans
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-amber-400 shrink-0">
-                      <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xl sm:text-2xl font-black font-mono text-amber-400 tracking-tight tabular-nums">
-                          {analytics.averageRating > 0 ? analytics.averageRating : '5.0'}
-                        </span>
-                        <div className="flex items-center text-amber-400">
-                          <Star className="w-3.5 h-3.5 fill-amber-400" />
-                        </div>
+                {/* Integrated Executive Brand Metrics Strip (shown when Dashboard or Analytics is enabled) */}
+                {(isFeatureAllowed('dashboard') || isFeatureAllowed('analytics')) && (
+                  <div className="mt-6 pt-5 border-t border-neutral-800/80 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-purple-400 shrink-0">
+                        <QrCode className="w-5 h-5" />
                       </div>
-                      <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
-                        Store Rating
-                      </span>
+                      <div>
+                        <span className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight tabular-nums block">
+                          {analytics.totalScans}
+                        </span>
+                        <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
+                          Total QR Scans
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400 shrink-0">
-                      <CheckCircle2 className="w-5 h-5" />
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-amber-400 shrink-0">
+                        <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xl sm:text-2xl font-black font-mono text-amber-400 tracking-tight tabular-nums">
+                            {analytics.averageRating > 0 ? analytics.averageRating : '5.0'}
+                          </span>
+                          <div className="flex items-center text-amber-400">
+                            <Star className="w-3.5 h-3.5 fill-amber-400" />
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
+                          Store Rating
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-xl sm:text-2xl font-black font-mono text-emerald-400 tracking-tight tabular-nums block">
-                        {analytics.googleClicks}
-                      </span>
-                      <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
-                        5★ Google Clicks
-                      </span>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-amber-400 shrink-0">
-                      <Gift className="w-5 h-5" />
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-emerald-400 shrink-0">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-xl sm:text-2xl font-black font-mono text-emerald-400 tracking-tight tabular-nums block">
+                          {analytics.googleClicks}
+                        </span>
+                        <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
+                          5★ Google Clicks
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight tabular-nums block">
-                        {loyaltyCards.length > 0 ? `${loyaltyCards.length} Active` : 'Ready'}
-                      </span>
-                      <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
-                        Loyalty Program
-                      </span>
+
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-center text-amber-400 shrink-0">
+                        <Gift className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight tabular-nums block">
+                          {loyaltyCards.length > 0 ? `${loyaltyCards.length} Active` : 'Ready'}
+                        </span>
+                        <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider block">
+                          Loyalty Program
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Account Validity Expired Notice Banner */}
@@ -1849,316 +1890,358 @@ Please generate:
               </span>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowAllModulesModal(true)}
-              className="px-2.5 py-1 text-[11px] font-bold text-[#6C3BFF] bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <span>All 14 Modules</span>
-              <ChevronDown className="w-3 h-3" />
-            </button>
+            {totalAllowedModulesCount > 1 && (
+              <button
+                type="button"
+                onClick={() => setShowAllModulesModal(true)}
+                className="px-2.5 py-1 text-[11px] font-bold text-[#6C3BFF] bg-purple-50 hover:bg-purple-100 border border-purple-200/80 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>All {totalAllowedModulesCount} Modules</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            )}
           </div>
 
-          {/* 4 Clean Brand Pillar Tabs */}
-          <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/90 rounded-xl text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => {
-                setMobileCategory('core');
-                if (!['dashboard', 'qrcode', 'ai_agent'].includes(activeTab)) {
-                  handleSelectTab('dashboard');
-                }
-              }}
-              className={`py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
-                mobileCategory === 'core'
-                  ? 'bg-slate-950 text-white shadow-xs font-extrabold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Core</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setMobileCategory('rewards');
-                if (!['loyalty', 'scratch_offers', 'whatsapp_marketing', 'birthday'].includes(activeTab)) {
-                  handleSelectTab('loyalty');
-                }
-              }}
-              className={`py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
-                mobileCategory === 'rewards'
-                  ? 'bg-amber-500 text-neutral-950 shadow-xs font-extrabold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Gift className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Rewards</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setMobileCategory('intelligence');
-                if (!['analytics', 'feedback'].includes(activeTab)) {
-                  handleSelectTab('analytics');
-                }
-              }}
-              className={`py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
-                mobileCategory === 'intelligence'
-                  ? 'bg-slate-950 text-white shadow-xs font-extrabold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Insights</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setMobileCategory('store');
-                if (!['business', 'settings', 'announcements', 'security', 'support'].includes(activeTab)) {
-                  handleSelectTab('business');
-                }
-              }}
-              className={`py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
-                mobileCategory === 'store'
-                  ? 'bg-slate-950 text-white shadow-xs font-extrabold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Store className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Store</span>
-            </button>
-          </div>
-
-          {/* Sub-items for the active category - cleanly laid out, no horizontal mess */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            {mobileCategory === 'core' && (
-              <>
+          {/* 4 Clean Brand Pillar Tabs (Only show categories that have at least 1 allowed module) */}
+          {totalAllowedModulesCount > 1 && (
+            <div className="flex gap-1 p-1 bg-slate-100/90 rounded-xl text-xs font-bold">
+              {allowedCoreTabs.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => handleSelectTab('dashboard')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'dashboard'
-                      ? 'bg-slate-950 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  onClick={() => {
+                    setMobileCategory('core');
+                    if (!allowedCoreTabs.includes(activeTab as any)) {
+                      handleSelectTab(allowedCoreTabs[0]);
+                    }
+                  }}
+                  className={`flex-1 py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                    mobileCategory === 'core'
+                      ? 'bg-slate-950 text-white shadow-xs font-extrabold'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   <LayoutDashboard className="w-3.5 h-3.5" />
-                  <span>Overview & Metrics</span>
+                  <span className="text-[11px]">Core</span>
                 </button>
+              )}
+
+              {allowedRewardsTabs.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => handleSelectTab('qrcode')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'qrcode'
-                      ? 'bg-slate-950 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  onClick={() => {
+                    setMobileCategory('rewards');
+                    if (!allowedRewardsTabs.includes(activeTab as any)) {
+                      handleSelectTab(allowedRewardsTabs[0]);
+                    }
+                  }}
+                  className={`flex-1 py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                    mobileCategory === 'rewards'
+                      ? 'bg-amber-500 text-neutral-950 shadow-xs font-extrabold'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <QrCode className="w-3.5 h-3.5" />
-                  <span>QR Standee</span>
+                  <Gift className="w-3.5 h-3.5" />
+                  <span className="text-[11px]">Rewards</span>
                 </button>
+              )}
+
+              {allowedIntelligenceTabs.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => handleSelectTab('ai_agent')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'ai_agent'
-                      ? 'bg-[#6C3BFF] text-white shadow-xs'
-                      : 'bg-purple-50 text-[#6C3BFF] hover:bg-purple-100 border border-purple-200/60'
+                  onClick={() => {
+                    setMobileCategory('intelligence');
+                    if (!allowedIntelligenceTabs.includes(activeTab as any)) {
+                      handleSelectTab(allowedIntelligenceTabs[0]);
+                    }
+                  }}
+                  className={`flex-1 py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                    mobileCategory === 'intelligence'
+                      ? 'bg-slate-950 text-white shadow-xs font-extrabold'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <Bot className="w-3.5 h-3.5" />
-                  <span>AI Prompt Engine</span>
-                  <span className="px-1 text-[9px] bg-white/20 rounded">Auto</span>
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span className="text-[11px]">Insights</span>
                 </button>
+              )}
+
+              {allowedStoreTabs.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => handleSelectTab('ai_chat')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'ai_chat'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/60'
+                  onClick={() => {
+                    setMobileCategory('store');
+                    if (!allowedStoreTabs.includes(activeTab as any)) {
+                      handleSelectTab(allowedStoreTabs[0]);
+                    }
+                  }}
+                  className={`flex-1 py-1.5 px-1 rounded-lg text-center transition-all flex flex-col sm:flex-row items-center justify-center gap-1 cursor-pointer ${
+                    mobileCategory === 'store'
+                      ? 'bg-slate-950 text-white shadow-xs font-extrabold'
+                      : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  <span>AI Live Chat</span>
-                  <span className="px-1 text-[9px] bg-white/20 rounded">New</span>
+                  <Store className="w-3.5 h-3.5" />
+                  <span className="text-[11px]">Store</span>
                 </button>
+              )}
+            </div>
+          )}
+
+          {/* Sub-items for the active category - cleanly laid out, filtered by allowed_features */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            {mobileCategory === 'core' && (
+              <>
+                {isFeatureAllowed('dashboard') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('dashboard')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'dashboard'
+                        ? 'bg-slate-950 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <LayoutDashboard className="w-3.5 h-3.5" />
+                    <span>Overview & Metrics</span>
+                  </button>
+                )}
+                {isFeatureAllowed('qrcode') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('qrcode')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'qrcode'
+                        ? 'bg-slate-950 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>QR Standee</span>
+                  </button>
+                )}
+                {isFeatureAllowed('ai_agent') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('ai_agent')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'ai_agent'
+                        ? 'bg-[#6C3BFF] text-white shadow-xs'
+                        : 'bg-purple-50 text-[#6C3BFF] hover:bg-purple-100 border border-purple-200/60'
+                    }`}
+                  >
+                    <Bot className="w-3.5 h-3.5" />
+                    <span>AI Prompt Engine</span>
+                    <span className="px-1 text-[9px] bg-white/20 rounded">Auto</span>
+                  </button>
+                )}
+                {isFeatureAllowed('ai_chat') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('ai_chat')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'ai_chat'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/60'
+                    }`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>AI Live Chat</span>
+                    <span className="px-1 text-[9px] bg-white/20 rounded">New</span>
+                  </button>
+                )}
               </>
             )}
 
             {mobileCategory === 'rewards' && (
               <>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('loyalty')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'loyalty'
-                      ? 'bg-amber-500 text-neutral-950 shadow-xs font-black'
-                      : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200/70'
-                  }`}
-                >
-                  <Gift className="w-3.5 h-3.5" />
-                  <span>Loyalty & Stamp Cards</span>
-                  {loyaltyCards.length > 0 && (
-                    <span className="px-1 text-[9px] bg-neutral-950 text-white rounded">
-                      {loyaltyCards.length}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('scratch_offers')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'scratch_offers'
-                      ? 'bg-purple-700 text-white shadow-xs'
-                      : 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200/70'
-                  }`}
-                >
-                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Scratch & Win Draw</span>
-                  <span className="px-1 text-[9px] bg-white/30 rounded">20% Win</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('whatsapp_marketing')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'whatsapp_marketing'
-                      ? 'bg-emerald-600 text-white shadow-xs font-black'
-                      : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-200/70'
-                  }`}
-                >
-                  <Send className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>WhatsApp Marketing</span>
-                  <span className="px-1 text-[9px] bg-amber-400 text-slate-950 font-black rounded">1-Click</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('birthday')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'birthday'
-                      ? 'bg-pink-600 text-white shadow-xs font-black'
-                      : 'bg-pink-50 text-pink-900 hover:bg-pink-100 border border-pink-200/70'
-                  }`}
-                >
-                  <Cake className="w-3.5 h-3.5 text-pink-500" />
-                  <span>Birthday Club</span>
-                  <span className="px-1 text-[9px] bg-pink-100 text-pink-900 font-black rounded">🎂 VIP</span>
-                </button>
+                {isFeatureAllowed('loyalty') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('loyalty')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'loyalty'
+                        ? 'bg-amber-500 text-neutral-950 shadow-xs font-black'
+                        : 'bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200/70'
+                    }`}
+                  >
+                    <Gift className="w-3.5 h-3.5" />
+                    <span>Loyalty & Stamp Cards</span>
+                    {loyaltyCards.length > 0 && (
+                      <span className="px-1 text-[9px] bg-neutral-950 text-white rounded">
+                        {loyaltyCards.length}
+                      </span>
+                    )}
+                  </button>
+                )}
+                {isFeatureAllowed('scratch_offers') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('scratch_offers')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'scratch_offers'
+                        ? 'bg-purple-700 text-white shadow-xs'
+                        : 'bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200/70'
+                    }`}
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Scratch & Win Draw</span>
+                    <span className="px-1 text-[9px] bg-white/30 rounded">20% Win</span>
+                  </button>
+                )}
+                {isFeatureAllowed('whatsapp_marketing') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('whatsapp_marketing')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'whatsapp_marketing'
+                        ? 'bg-emerald-600 text-white shadow-xs font-black'
+                        : 'bg-emerald-50 text-emerald-900 hover:bg-emerald-100 border border-emerald-200/70'
+                    }`}
+                  >
+                    <Send className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>WhatsApp Marketing</span>
+                    <span className="px-1 text-[9px] bg-amber-400 text-slate-950 font-black rounded">1-Click</span>
+                  </button>
+                )}
+                {isFeatureAllowed('birthday') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('birthday')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'birthday'
+                        ? 'bg-pink-600 text-white shadow-xs font-black'
+                        : 'bg-pink-50 text-pink-900 hover:bg-pink-100 border border-pink-200/70'
+                    }`}
+                  >
+                    <Cake className="w-3.5 h-3.5 text-pink-500" />
+                    <span>Birthday Club</span>
+                    <span className="px-1 text-[9px] bg-pink-100 text-pink-900 font-black rounded">🎂 VIP</span>
+                  </button>
+                )}
               </>
             )}
 
             {mobileCategory === 'intelligence' && (
               <>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('analytics')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'analytics'
-                      ? 'bg-slate-950 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  <span>Live Traffic ({analytics.totalScans})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('feedback')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'feedback'
-                      ? 'bg-slate-950 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <MessageSquareText className="w-3.5 h-3.5" />
-                  <span>Private Shield</span>
-                  {feedbacks.length > 0 && (
-                    <span className="px-1.5 text-[9px] bg-rose-500 text-white rounded-full">
-                      {feedbacks.length}
-                    </span>
-                  )}
-                </button>
+                {isFeatureAllowed('analytics') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('analytics')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'analytics'
+                        ? 'bg-slate-950 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" />
+                    <span>Live Traffic ({analytics.totalScans})</span>
+                  </button>
+                )}
+                {isFeatureAllowed('feedback') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('feedback')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'feedback'
+                        ? 'bg-slate-950 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <MessageSquareText className="w-3.5 h-3.5" />
+                    <span>Private Shield</span>
+                    {feedbacks.length > 0 && (
+                      <span className="px-1.5 text-[9px] bg-rose-500 text-white rounded-full">
+                        {feedbacks.length}
+                      </span>
+                    )}
+                  </button>
+                )}
               </>
             )}
 
             {mobileCategory === 'store' && (
               <>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('business')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'business'
-                      ? 'bg-slate-950 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <Store className="w-3.5 h-3.5" />
-                  <span>Profile & GPS</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('settings')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'settings'
-                      ? 'bg-slate-950 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <Sliders className="w-3.5 h-3.5" />
-                  <span>Customizer</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('announcements')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'announcements'
-                      ? 'bg-slate-950 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  <span>Broadcasts</span>
-                  {unreadAnnouncementsCount > 0 && (
-                    <span className="px-1.5 text-[9px] bg-rose-500 text-white rounded-full">
-                      {unreadAnnouncementsCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('security')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'security'
-                      ? 'bg-slate-950 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Security</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSelectTab('support')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                    activeTab === 'support'
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/60'
-                  }`}
-                >
-                  <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Support</span>
-                </button>
+                {isFeatureAllowed('business') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('business')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'business'
+                        ? 'bg-slate-950 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5" />
+                    <span>Profile & GPS</span>
+                  </button>
+                )}
+                {isFeatureAllowed('settings') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('settings')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'settings'
+                        ? 'bg-slate-950 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>Customizer</span>
+                  </button>
+                )}
+                {isFeatureAllowed('announcements') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('announcements')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'announcements'
+                        ? 'bg-slate-950 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>Broadcasts</span>
+                    {unreadAnnouncementsCount > 0 && (
+                      <span className="px-1.5 text-[9px] bg-rose-500 text-white rounded-full">
+                        {unreadAnnouncementsCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+                {isFeatureAllowed('security') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('security')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'security'
+                        ? 'bg-slate-950 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Security</span>
+                  </button>
+                )}
+                {isFeatureAllowed('support') && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('support')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      activeTab === 'support'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/60'
+                    }`}
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Support</span>
+                  </button>
+                )}
               </>
             )}
           </div>
         </div>
 
-        {/* ALL 12 MODULES MODAL SHEET (Mobile/Tablet Quick Switcher) */}
+        {/* ALL MODULES MODAL SHEET (Mobile/Tablet Quick Switcher) */}
         {showAllModulesModal && (
           <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
             <div className="bg-white w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-2xl p-5 sm:p-6 max-h-[88vh] overflow-y-auto space-y-5">
@@ -2169,7 +2252,7 @@ Please generate:
                   </div>
                   <div>
                     <h3 className="font-black text-slate-900 text-sm">Workspace Directory</h3>
-                    <p className="text-[11px] text-slate-500">Jump to any of the 12 merchant tools</p>
+                    <p className="text-[11px] text-slate-500">Jump to any of your {totalAllowedModulesCount} active tools</p>
                   </div>
                 </div>
                 <button
@@ -2181,297 +2264,335 @@ Please generate:
                 </button>
               </div>
 
-              {/* 4 Categorized Sections in Grid */}
+              {/* Categorized Sections in Grid */}
               <div className="space-y-4">
                 {/* Core */}
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
-                    Core Operations
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('dashboard');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'dashboard' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
-                      }`}
-                    >
-                      <LayoutDashboard className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Overview & Metrics</div>
-                        <div className={`text-[10px] ${activeTab === 'dashboard' ? 'text-slate-300' : 'text-slate-500'}`}>Live scans & review counters</div>
-                      </div>
-                    </button>
+                {allowedCoreTabs.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                      Core Operations
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {isFeatureAllowed('dashboard') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('dashboard');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'dashboard' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                          }`}
+                        >
+                          <LayoutDashboard className="w-5 h-5 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Overview & Metrics</div>
+                            <div className={`text-[10px] ${activeTab === 'dashboard' ? 'text-slate-300' : 'text-slate-500'}`}>Live scans & review counters</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('qrcode');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'qrcode' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
-                      }`}
-                    >
-                      <QrCode className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">QR Code & Standees</div>
-                        <div className={`text-[10px] ${activeTab === 'qrcode' ? 'text-slate-300' : 'text-slate-500'}`}>Print-ready table tents & stickers</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('qrcode') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('qrcode');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'qrcode' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                          }`}
+                        >
+                          <QrCode className="w-5 h-5 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">QR Code & Standees</div>
+                            <div className={`text-[10px] ${activeTab === 'qrcode' ? 'text-slate-300' : 'text-slate-500'}`}>Print-ready table tents & stickers</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('ai_agent');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'ai_agent' ? 'bg-[#6C3BFF] text-white border-[#6C3BFF]' : 'bg-purple-50/70 hover:bg-purple-100 border-purple-200/70 text-purple-900'
-                      }`}
-                    >
-                      <Bot className="w-5 h-5 text-purple-500 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">AI Prompt Engine</div>
-                        <div className={`text-[10px] ${activeTab === 'ai_agent' ? 'text-purple-200' : 'text-purple-700'}`}>Keyword extraction & 12 custom drafts</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('ai_agent') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('ai_agent');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'ai_agent' ? 'bg-[#6C3BFF] text-white border-[#6C3BFF]' : 'bg-purple-50/70 hover:bg-purple-100 border-purple-200/70 text-purple-900'
+                          }`}
+                        >
+                          <Bot className="w-5 h-5 text-purple-500 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">AI Prompt Engine</div>
+                            <div className={`text-[10px] ${activeTab === 'ai_agent' ? 'text-purple-200' : 'text-purple-700'}`}>Keyword extraction & 12 custom drafts</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('ai_chat');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'ai_chat' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50/70 hover:bg-emerald-100 border-emerald-200/70 text-emerald-950'
-                      }`}
-                    >
-                      <MessageSquare className="w-5 h-5 text-emerald-600 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold flex items-center gap-1.5">
-                          <span>AI Business Chat</span>
-                          <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-bold">New</span>
-                        </div>
-                        <div className={`text-[10px] ${activeTab === 'ai_chat' ? 'text-emerald-100' : 'text-emerald-700'}`}>Rule-based customer Q&A chatbot & unique QR</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('ai_chat') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('ai_chat');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'ai_chat' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50/70 hover:bg-emerald-100 border-emerald-200/70 text-emerald-950'
+                          }`}
+                        >
+                          <MessageSquare className="w-5 h-5 text-emerald-600 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold flex items-center gap-1.5">
+                              <span>AI Business Chat</span>
+                              <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-md font-bold">New</span>
+                            </div>
+                            <div className={`text-[10px] ${activeTab === 'ai_chat' ? 'text-emerald-100' : 'text-emerald-700'}`}>Rule-based customer Q&A chatbot & unique QR</div>
+                          </div>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Rewards */}
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
-                    Growth & Retention
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('loyalty');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'loyalty' ? 'bg-amber-500 text-neutral-950 border-amber-600 font-bold' : 'bg-amber-50/70 hover:bg-amber-100 border-amber-200/70 text-amber-950'
-                      }`}
-                    >
-                      <Gift className="w-5 h-5 text-amber-600 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Loyalty & Stamp Cards</div>
-                        <div className="text-[10px] text-amber-800">Punch cards for repeat visits</div>
-                      </div>
-                    </button>
+                {allowedRewardsTabs.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                      Growth & Retention
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {isFeatureAllowed('loyalty') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('loyalty');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'loyalty' ? 'bg-amber-500 text-neutral-950 border-amber-600 font-bold' : 'bg-amber-50/70 hover:bg-amber-100 border-amber-200/70 text-amber-950'
+                          }`}
+                        >
+                          <Gift className="w-5 h-5 text-amber-600 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Loyalty & Stamp Cards</div>
+                            <div className="text-[10px] text-amber-800">Punch cards for repeat visits</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('scratch_offers');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'scratch_offers' ? 'bg-purple-700 text-white border-purple-800 font-bold' : 'bg-purple-50/70 hover:bg-purple-100 border-purple-200/70 text-purple-950'
-                      }`}
-                    >
-                      <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Scratch & Win Draw</div>
-                        <div className={`text-[10px] ${activeTab === 'scratch_offers' ? 'text-purple-200' : 'text-purple-800'}`}>Gamified reward vouchers</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('scratch_offers') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('scratch_offers');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'scratch_offers' ? 'bg-purple-700 text-white border-purple-800 font-bold' : 'bg-purple-50/70 hover:bg-purple-100 border-purple-200/70 text-purple-950'
+                          }`}
+                        >
+                          <Trophy className="w-5 h-5 text-amber-400 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Scratch & Win Draw</div>
+                            <div className={`text-[10px] ${activeTab === 'scratch_offers' ? 'text-purple-200' : 'text-purple-800'}`}>Gamified reward vouchers</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('whatsapp_marketing');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'whatsapp_marketing' ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-emerald-50/70 hover:bg-emerald-100 border-emerald-200/70 text-emerald-950'
-                      }`}
-                    >
-                      <Send className="w-5 h-5 text-emerald-500 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">WhatsApp Marketing Hub</div>
-                        <div className={`text-[10px] ${activeTab === 'whatsapp_marketing' ? 'text-emerald-100' : 'text-emerald-800'}`}>1-Click voucher images & passes</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('whatsapp_marketing') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('whatsapp_marketing');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'whatsapp_marketing' ? 'bg-emerald-600 text-white border-emerald-700 font-bold' : 'bg-emerald-50/70 hover:bg-emerald-100 border-emerald-200/70 text-emerald-950'
+                          }`}
+                        >
+                          <Send className="w-5 h-5 text-emerald-500 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">WhatsApp Marketing Hub</div>
+                            <div className={`text-[10px] ${activeTab === 'whatsapp_marketing' ? 'text-emerald-100' : 'text-emerald-800'}`}>1-Click voucher images & passes</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('birthday');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'birthday' ? 'bg-pink-600 text-white border-pink-700 font-bold' : 'bg-pink-50/70 hover:bg-pink-100 border-pink-200/70 text-pink-950'
-                      }`}
-                    >
-                      <Cake className="w-5 h-5 text-pink-500 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Birthday Club & Wishes</div>
-                        <div className={`text-[10px] ${activeTab === 'birthday' ? 'text-pink-100' : 'text-pink-800'}`}>Birthday rewards & automated WhatsApp greetings</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('birthday') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('birthday');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'birthday' ? 'bg-pink-600 text-white border-pink-700 font-bold' : 'bg-pink-50/70 hover:bg-pink-100 border-pink-200/70 text-pink-950'
+                          }`}
+                        >
+                          <Cake className="w-5 h-5 text-pink-500 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Birthday Club & Wishes</div>
+                            <div className={`text-[10px] ${activeTab === 'birthday' ? 'text-pink-100' : 'text-pink-800'}`}>Birthday rewards & automated WhatsApp greetings</div>
+                          </div>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Intelligence */}
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
-                    Intelligence & Reputation
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('analytics');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'analytics' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
-                      }`}
-                    >
-                      <BarChart3 className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Live Traffic & Scans</div>
-                        <div className={`text-[10px] ${activeTab === 'analytics' ? 'text-slate-300' : 'text-slate-500'}`}>Scan trends & customer insights</div>
-                      </div>
-                    </button>
+                {allowedIntelligenceTabs.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                      Intelligence & Reputation
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {isFeatureAllowed('analytics') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('analytics');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'analytics' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                          }`}
+                        >
+                          <BarChart3 className="w-5 h-5 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Live Traffic & Scans</div>
+                            <div className={`text-[10px] ${activeTab === 'analytics' ? 'text-slate-300' : 'text-slate-500'}`}>Scan trends & customer insights</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('feedback');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'feedback' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
-                      }`}
-                    >
-                      <MessageSquareText className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Private Feedback Shield</div>
-                        <div className={`text-[10px] ${activeTab === 'feedback' ? 'text-slate-300' : 'text-slate-500'}`}>Intercept negative reviews privately</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('feedback') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('feedback');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'feedback' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                          }`}
+                        >
+                          <MessageSquareText className="w-5 h-5 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Private Feedback Shield</div>
+                            <div className={`text-[10px] ${activeTab === 'feedback' ? 'text-slate-300' : 'text-slate-500'}`}>Intercept negative reviews privately</div>
+                          </div>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Store Settings */}
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
-                    Store Settings & Security
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('business');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'business' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
-                      }`}
-                    >
-                      <Store className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Store Profile & GPS</div>
-                        <div className={`text-[10px] ${activeTab === 'business' ? 'text-slate-300' : 'text-slate-500'}`}>Store address & location shield</div>
-                      </div>
-                    </button>
+                {allowedStoreTabs.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">
+                      Store Settings & Security
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {isFeatureAllowed('business') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('business');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'business' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                          }`}
+                        >
+                          <Store className="w-5 h-5 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Store Profile & GPS</div>
+                            <div className={`text-[10px] ${activeTab === 'business' ? 'text-slate-300' : 'text-slate-500'}`}>Store address & location shield</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('settings');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'settings' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
-                      }`}
-                    >
-                      <Sliders className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Review Customizer</div>
-                        <div className={`text-[10px] ${activeTab === 'settings' ? 'text-slate-300' : 'text-slate-500'}`}>Brand colors & welcome text</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('settings') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('settings');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'settings' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                          }`}
+                        >
+                          <Sliders className="w-5 h-5 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Review Customizer</div>
+                            <div className={`text-[10px] ${activeTab === 'settings' ? 'text-slate-300' : 'text-slate-500'}`}>Brand colors & welcome text</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('announcements');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'announcements' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
-                      }`}
-                    >
-                      <Bell className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Broadcasts</div>
-                        <div className={`text-[10px] ${activeTab === 'announcements' ? 'text-slate-300' : 'text-slate-500'}`}>System updates & notices</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('announcements') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('announcements');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'announcements' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                          }`}
+                        >
+                          <Bell className="w-5 h-5 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Broadcasts</div>
+                            <div className={`text-[10px] ${activeTab === 'announcements' ? 'text-slate-300' : 'text-slate-500'}`}>System updates & notices</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('security');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
-                        activeTab === 'security' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
-                      }`}
-                    >
-                      <Lock className="w-5 h-5 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">Password & Security</div>
-                        <div className={`text-[10px] ${activeTab === 'security' ? 'text-slate-300' : 'text-slate-500'}`}>Credential protection & login keys</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('security') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('security');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer ${
+                            activeTab === 'security' ? 'bg-slate-950 text-white border-slate-950' : 'bg-slate-50 hover:bg-slate-100 border-slate-200/80'
+                          }`}
+                        >
+                          <Lock className="w-5 h-5 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">Password & Security</div>
+                            <div className={`text-[10px] ${activeTab === 'security' ? 'text-slate-300' : 'text-slate-500'}`}>Credential protection & login keys</div>
+                          </div>
+                        </button>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSelectTab('support');
-                        setShowAllModulesModal(false);
-                      }}
-                      className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer sm:col-span-2 ${
-                        activeTab === 'support' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200/80 text-emerald-900'
-                      }`}
-                    >
-                      <HelpCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                      <div>
-                        <div className="text-xs font-bold">WhatsApp Support</div>
-                        <div className={`text-[10px] ${activeTab === 'support' ? 'text-emerald-100' : 'text-emerald-700'}`}>Direct super admin contact</div>
-                      </div>
-                    </button>
+                      {isFeatureAllowed('support') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectTab('support');
+                            setShowAllModulesModal(false);
+                          }}
+                          className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 cursor-pointer sm:col-span-2 ${
+                            activeTab === 'support' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200/80 text-emerald-900'
+                          }`}
+                        >
+                          <HelpCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                          <div>
+                            <div className="text-xs font-bold">WhatsApp Support</div>
+                            <div className={`text-[10px] ${activeTab === 'support' ? 'text-emerald-100' : 'text-emerald-700'}`}>Direct super admin contact</div>
+                          </div>
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -2496,282 +2617,320 @@ Please generate:
               </div>
             </div>
 
-            {/* Section 1: Growth Engine */}
-            <div className="space-y-1">
-              <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
-                Core Operations
-              </span>
-              <button
-                onClick={() => handleSelectTab('dashboard')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'dashboard'
-                    ? 'bg-slate-950 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <LayoutDashboard className="w-4 h-4" />
-                  <span>Overview & Metrics</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleSelectTab('qrcode')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'qrcode'
-                    ? 'bg-slate-950 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <QrCode className="w-4 h-4" />
-                  <span>QR Code & Standees</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleSelectTab('ai_agent')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'ai_agent'
-                    ? 'bg-[#6C3BFF] text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-purple-50 hover:text-[#6C3BFF]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Bot className="w-4 h-4 text-purple-500" />
-                  <span>AI Prompt Engine</span>
-                </div>
-                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
-                  activeTab === 'ai_agent' ? 'bg-white/20 text-white' : 'bg-purple-100 text-[#6C3BFF]'
-                }`}>
-                  Auto
+            {/* Section 1: Core Operations */}
+            {allowedCoreTabs.length > 0 && (
+              <div className="space-y-1">
+                <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
+                  Core Operations
                 </span>
-              </button>
+                {isFeatureAllowed('dashboard') && (
+                  <button
+                    onClick={() => handleSelectTab('dashboard')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'dashboard'
+                        ? 'bg-slate-950 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <LayoutDashboard className="w-4 h-4" />
+                      <span>Overview & Metrics</span>
+                    </div>
+                  </button>
+                )}
 
-              <button
-                onClick={() => handleSelectTab('ai_chat')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'ai_chat'
-                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <MessageSquare className="w-4 h-4 text-emerald-600" />
-                  <span>AI Business Chat</span>
-                </div>
-                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
-                  activeTab === 'ai_chat' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
-                }`}>
-                  Live
-                </span>
-              </button>
-            </div>
+                {isFeatureAllowed('qrcode') && (
+                  <button
+                    onClick={() => handleSelectTab('qrcode')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'qrcode'
+                        ? 'bg-slate-950 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <QrCode className="w-4 h-4" />
+                      <span>QR Code & Standees</span>
+                    </div>
+                  </button>
+                )}
+
+                {isFeatureAllowed('ai_agent') && (
+                  <button
+                    onClick={() => handleSelectTab('ai_agent')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'ai_agent'
+                        ? 'bg-[#6C3BFF] text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-purple-50 hover:text-[#6C3BFF]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Bot className="w-4 h-4 text-purple-500" />
+                      <span>AI Prompt Engine</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                      activeTab === 'ai_agent' ? 'bg-white/20 text-white' : 'bg-purple-100 text-[#6C3BFF]'
+                    }`}>
+                      Auto
+                    </span>
+                  </button>
+                )}
+
+                {isFeatureAllowed('ai_chat') && (
+                  <button
+                    onClick={() => handleSelectTab('ai_chat')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'ai_chat'
+                        ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <MessageSquare className="w-4 h-4 text-emerald-600" />
+                      <span>AI Business Chat</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                      activeTab === 'ai_chat' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      Live
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Section 2: Customer Retention */}
-            <div className="space-y-1 pt-2 border-t border-slate-100">
-              <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
-                Growth & Retention
-              </span>
-              <button
-                onClick={() => handleSelectTab('loyalty')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'loyalty'
-                    ? 'bg-amber-500 text-neutral-950 font-black shadow-xs'
-                    : 'text-slate-700 hover:bg-amber-50/80 hover:text-amber-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Gift className="w-4 h-4 text-amber-500" />
-                  <span>Loyalty & Stamp Cards</span>
-                </div>
-                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
-                  activeTab === 'loyalty' ? 'bg-neutral-950 text-white' : 'bg-amber-100 text-amber-900'
-                }`}>
-                  {loyaltyCards.length > 0 ? `${loyaltyCards.length}` : 'New'}
+            {allowedRewardsTabs.length > 0 && (
+              <div className="space-y-1 pt-2 border-t border-slate-100">
+                <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
+                  Growth & Retention
                 </span>
-              </button>
+                {isFeatureAllowed('loyalty') && (
+                  <button
+                    onClick={() => handleSelectTab('loyalty')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'loyalty'
+                        ? 'bg-amber-500 text-neutral-950 font-black shadow-xs'
+                        : 'text-slate-700 hover:bg-amber-50/80 hover:text-amber-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Gift className="w-4 h-4 text-amber-500" />
+                      <span>Loyalty & Stamp Cards</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                      activeTab === 'loyalty' ? 'bg-neutral-950 text-white' : 'bg-amber-100 text-amber-900'
+                    }`}>
+                      {loyaltyCards.length > 0 ? `${loyaltyCards.length}` : 'New'}
+                    </span>
+                  </button>
+                )}
 
-              <button
-                onClick={() => handleSelectTab('scratch_offers')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'scratch_offers'
-                    ? 'bg-purple-700 text-white font-bold shadow-xs'
-                    : 'text-slate-700 hover:bg-purple-50/80 hover:text-purple-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Trophy className="w-4 h-4 text-amber-400" />
-                  <span>Scratch & Win Draw</span>
-                </div>
-                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
-                  activeTab === 'scratch_offers' ? 'bg-white text-purple-900' : 'bg-purple-100 text-purple-800'
-                }`}>
-                  20% Win
-                </span>
-              </button>
+                {isFeatureAllowed('scratch_offers') && (
+                  <button
+                    onClick={() => handleSelectTab('scratch_offers')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'scratch_offers'
+                        ? 'bg-purple-700 text-white font-bold shadow-xs'
+                        : 'text-slate-700 hover:bg-purple-50/80 hover:text-purple-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Trophy className="w-4 h-4 text-amber-400" />
+                      <span>Scratch & Win Draw</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                      activeTab === 'scratch_offers' ? 'bg-white text-purple-900' : 'bg-purple-100 text-purple-800'
+                    }`}>
+                      20% Win
+                    </span>
+                  </button>
+                )}
 
-              <button
-                onClick={() => handleSelectTab('whatsapp_marketing')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'whatsapp_marketing'
-                    ? 'bg-emerald-600 text-white font-black shadow-xs'
-                    : 'text-slate-700 hover:bg-emerald-50/80 hover:text-emerald-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Send className="w-4 h-4 text-emerald-500" />
-                  <span>WhatsApp Marketing Hub</span>
-                </div>
-                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
-                  activeTab === 'whatsapp_marketing' ? 'bg-white text-emerald-900' : 'bg-emerald-100 text-emerald-900'
-                }`}>
-                  1-Click Direct
-                </span>
-              </button>
+                {isFeatureAllowed('whatsapp_marketing') && (
+                  <button
+                    onClick={() => handleSelectTab('whatsapp_marketing')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'whatsapp_marketing'
+                        ? 'bg-emerald-600 text-white font-black shadow-xs'
+                        : 'text-slate-700 hover:bg-emerald-50/80 hover:text-emerald-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Send className="w-4 h-4 text-emerald-500" />
+                      <span>WhatsApp Marketing Hub</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                      activeTab === 'whatsapp_marketing' ? 'bg-white text-emerald-900' : 'bg-emerald-100 text-emerald-900'
+                    }`}>
+                      1-Click Direct
+                    </span>
+                  </button>
+                )}
 
-              <button
-                onClick={() => handleSelectTab('birthday')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'birthday'
-                    ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white font-black shadow-xs'
-                    : 'text-slate-700 hover:bg-pink-50/80 hover:text-pink-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Cake className="w-4 h-4 text-pink-500" />
-                  <span>Birthday Club & Wishes</span>
-                </div>
-                <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
-                  activeTab === 'birthday' ? 'bg-white text-pink-900' : 'bg-pink-100 text-pink-800'
-                }`}>
-                  🎂 Auto
-                </span>
-              </button>
-            </div>
+                {isFeatureAllowed('birthday') && (
+                  <button
+                    onClick={() => handleSelectTab('birthday')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'birthday'
+                        ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white font-black shadow-xs'
+                        : 'text-slate-700 hover:bg-pink-50/80 hover:text-pink-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Cake className="w-4 h-4 text-pink-500" />
+                      <span>Birthday Club & Wishes</span>
+                    </div>
+                    <span className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md uppercase tracking-wider ${
+                      activeTab === 'birthday' ? 'bg-white text-pink-900' : 'bg-pink-100 text-pink-800'
+                    }`}>
+                      🎂 Auto
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Section 3: Intelligence & Reviews */}
-            <div className="space-y-1 pt-2 border-t border-slate-100">
-              <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
-                Intelligence & Reviews
-              </span>
-              <button
-                onClick={() => handleSelectTab('analytics')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'analytics'
-                    ? 'bg-slate-950 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <BarChart3 className="w-4 h-4" />
-                  <span>Live Traffic & Scans</span>
-                </div>
-                <span className="font-mono text-[11px] text-slate-400 font-bold">
-                  {analytics.totalScans}
+            {allowedIntelligenceTabs.length > 0 && (
+              <div className="space-y-1 pt-2 border-t border-slate-100">
+                <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
+                  Intelligence & Reviews
                 </span>
-              </button>
-
-              <button
-                onClick={() => handleSelectTab('feedback')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'feedback'
-                    ? 'bg-slate-950 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <MessageSquareText className="w-4 h-4" />
-                  <span>Private Feedback Shield</span>
-                </div>
-                {feedbacks.length > 0 && (
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 rounded-md">
-                    {feedbacks.length}
-                  </span>
+                {isFeatureAllowed('analytics') && (
+                  <button
+                    onClick={() => handleSelectTab('analytics')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'analytics'
+                        ? 'bg-slate-950 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <BarChart3 className="w-4 h-4" />
+                      <span>Live Traffic & Scans</span>
+                    </div>
+                    <span className="font-mono text-[11px] text-slate-400 font-bold">
+                      {analytics.totalScans}
+                    </span>
+                  </button>
                 )}
-              </button>
-            </div>
+
+                {isFeatureAllowed('feedback') && (
+                  <button
+                    onClick={() => handleSelectTab('feedback')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'feedback'
+                        ? 'bg-slate-950 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <MessageSquareText className="w-4 h-4" />
+                      <span>Private Feedback Shield</span>
+                    </div>
+                    {feedbacks.length > 0 && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-700 rounded-md">
+                        {feedbacks.length}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Section 4: Store & Settings */}
-            <div className="space-y-1 pt-2 border-t border-slate-100">
-              <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
-                Store Settings
-              </span>
-              <button
-                onClick={() => handleSelectTab('business')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'business'
-                    ? 'bg-slate-950 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Store className="w-4 h-4" />
-                  <span>Profile & GPS Shield</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleSelectTab('settings')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'settings'
-                    ? 'bg-slate-950 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Sliders className="w-4 h-4" />
-                  <span>Review Customizer</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => handleSelectTab('announcements')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'announcements'
-                    ? 'bg-slate-950 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Bell className="w-4 h-4" />
-                  <span>Broadcasts</span>
-                </div>
-                {unreadAnnouncementsCount > 0 && (
-                  <span className="px-1.5 py-0.5 text-[9px] rounded-full bg-rose-500 text-white font-bold">
-                    {unreadAnnouncementsCount}
-                  </span>
+            {allowedStoreTabs.length > 0 && (
+              <div className="space-y-1 pt-2 border-t border-slate-100">
+                <span className="px-3 text-[10px] font-black tracking-wider text-slate-400 uppercase block">
+                  Store Settings
+                </span>
+                {isFeatureAllowed('business') && (
+                  <button
+                    onClick={() => handleSelectTab('business')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'business'
+                        ? 'bg-slate-950 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Store className="w-4 h-4" />
+                      <span>Profile & GPS Shield</span>
+                    </div>
+                  </button>
                 )}
-              </button>
 
-              <button
-                onClick={() => handleSelectTab('security')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'security'
-                    ? 'bg-slate-950 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Lock className="w-4 h-4" />
-                  <span>Password & Security</span>
-                </div>
-              </button>
+                {isFeatureAllowed('settings') && (
+                  <button
+                    onClick={() => handleSelectTab('settings')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'settings'
+                        ? 'bg-slate-950 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Sliders className="w-4 h-4" />
+                      <span>Review Customizer</span>
+                    </div>
+                  </button>
+                )}
 
-              <button
-                onClick={() => handleSelectTab('support')}
-                className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'support'
-                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <HelpCircle className="w-4 h-4 text-emerald-500" />
-                  <span>WhatsApp Support</span>
-                </div>
-              </button>
-            </div>
+                {isFeatureAllowed('announcements') && (
+                  <button
+                    onClick={() => handleSelectTab('announcements')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'announcements'
+                        ? 'bg-slate-950 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Bell className="w-4 h-4" />
+                      <span>Broadcasts</span>
+                    </div>
+                    {unreadAnnouncementsCount > 0 && (
+                      <span className="px-1.5 py-0.5 text-[9px] rounded-full bg-rose-500 text-white font-bold">
+                        {unreadAnnouncementsCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {isFeatureAllowed('security') && (
+                  <button
+                    onClick={() => handleSelectTab('security')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'security'
+                        ? 'bg-slate-950 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Lock className="w-4 h-4" />
+                      <span>Password & Security</span>
+                    </div>
+                  </button>
+                )}
+
+                {isFeatureAllowed('support') && (
+                  <button
+                    onClick={() => handleSelectTab('support')}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                      activeTab === 'support'
+                        ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <HelpCircle className="w-4 h-4 text-emerald-500" />
+                      <span>WhatsApp Support</span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="pt-3 mt-2 border-t border-neutral-100">
               <button

@@ -52,6 +52,8 @@ import {
   ImpersonationAuditLog,
   UserStatus,
   AccessValidityType,
+  CUSTOMER_FEATURE_CATALOG,
+  ALL_CUSTOMER_FEATURE_KEYS,
 } from '../types/database';
 import {
   isSupabaseConfigured,
@@ -161,6 +163,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     d.setFullYear(d.getFullYear() + 1);
     return d.toISOString().split('T')[0];
   });
+  const [newCustAllowedFeatures, setNewCustAllowedFeatures] = useState<string[]>([...ALL_CUSTOMER_FEATURE_KEYS]);
   const [newCustResult, setNewCustResult] = useState<{
     user: Profile;
     business: Business;
@@ -236,6 +239,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     thankYouText: 'Thank you for helping our local business grow! ❤️',
     accentColor: '#6C3BFF',
     qrShowLogo: true,
+    allowedFeatures: [...ALL_CUSTOMER_FEATURE_KEYS] as string[],
   });
   const [savingCustSettings, setSavingCustSettings] = useState(false);
   const [custSettingsNotice, setCustSettingsNotice] = useState<string | null>(null);
@@ -567,24 +571,27 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (
         !newCustForm.fullName.trim() ||
         !newCustForm.email.trim() ||
-        !newCustForm.businessName.trim() ||
-        !newCustForm.googleReviewUrl.trim()
+        !newCustForm.businessName.trim()
       ) {
-        throw new Error('Please fill in all required fields.');
+        throw new Error('Please fill in Full Name, Email, and Business Name.');
       }
 
+      let cleanReviewUrl = newCustForm.googleReviewUrl.trim();
       if (
-        !newCustForm.googleReviewUrl.startsWith('https://') &&
-        !newCustForm.googleReviewUrl.startsWith('http://')
+        cleanReviewUrl &&
+        !cleanReviewUrl.startsWith('https://') &&
+        !cleanReviewUrl.startsWith('http://')
       ) {
-        throw new Error('Google Review URL must begin with https://');
+        cleanReviewUrl = `https://${cleanReviewUrl}`;
       }
 
       const res = await createCustomerByAdmin({
         ...newCustForm,
+        googleReviewUrl: cleanReviewUrl,
         accessValidityType: newCustValidityType,
         customDurationDays: newCustCustomDays,
         customExpiryDate: newCustCustomDate,
+        allowedFeatures: newCustAllowedFeatures.length > 0 ? newCustAllowedFeatures : ['ai_chat'],
       });
       setNewCustResult(res);
 
@@ -852,73 +859,83 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
     }
 
-    setCustSettingsForm({
-      fullName: customer.profile.full_name || '',
-      email: customer.profile.email || '',
-      businessName: customer.business?.business_name || '',
-      googleReviewUrl: customer.business?.google_review_url || '',
-      phone: customer.business?.phone || '',
-      address: customer.business?.address || '',
-      category: customer.business?.category || 'Restaurant & Hospitality',
-      reviewLanguage: reviewSettings?.language || 'en',
-      welcomeText: reviewSettings?.welcome_text || 'How was your experience today?',
-      thankYouText: reviewSettings?.thank_you_text || 'Thank you for helping our local business grow! ❤️',
-      accentColor: reviewSettings?.accent_color || '#6C3BFF',
-      qrShowLogo: reviewSettings?.qr_show_logo !== undefined ? reviewSettings.qr_show_logo : true,
-    });
-    setEditCustSettingsModalOpen(true);
-  };
-
-  const handleSaveCustomerSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!targetEditCustSettings) return;
-    setSavingCustSettings(true);
-    setCustSettingsError(null);
-
-    try {
-      await updateCustomerSettingsByAdmin({
-        profileId: targetEditCustSettings.profile.id,
-        fullName: custSettingsForm.fullName,
-        email: custSettingsForm.email,
-        businessId: targetEditCustSettings.business?.id,
-        businessName: custSettingsForm.businessName,
-        googleReviewUrl: custSettingsForm.googleReviewUrl,
-        phone: custSettingsForm.phone,
-        address: custSettingsForm.address,
-        category: custSettingsForm.category,
-        reviewLanguage: custSettingsForm.reviewLanguage,
-        welcomeText: custSettingsForm.welcomeText,
-        thankYouText: custSettingsForm.thankYouText,
-        accentColor: custSettingsForm.accentColor,
-        qrShowLogo: custSettingsForm.qrShowLogo,
+      const currentFeats = customer.business?.allowed_features || customer.profile.allowed_features;
+      setCustSettingsForm({
+        fullName: customer.profile.full_name || '',
+        email: customer.profile.email || '',
+        businessName: customer.business?.business_name || '',
+        googleReviewUrl: customer.business?.google_review_url || '',
+        phone: customer.business?.phone || '',
+        address: customer.business?.address || '',
+        category: customer.business?.category || 'Restaurant & Hospitality',
+        reviewLanguage: reviewSettings?.language || 'en',
+        welcomeText: reviewSettings?.welcome_text || 'How was your experience today?',
+        thankYouText: reviewSettings?.thank_you_text || 'Thank you for helping our local business grow! ❤️',
+        accentColor: reviewSettings?.accent_color || '#6C3BFF',
+        qrShowLogo: reviewSettings?.qr_show_logo !== undefined ? reviewSettings.qr_show_logo : true,
+        allowedFeatures:
+          Array.isArray(currentFeats) && currentFeats.length > 0
+            ? [...currentFeats]
+            : [...ALL_CUSTOMER_FEATURE_KEYS],
       });
+      setEditCustSettingsModalOpen(true);
+    };
 
-      // Update state locally
-      setCustomerRows((prev) =>
-        prev.map((c) => {
-          if (c.profile.id === targetEditCustSettings.profile.id) {
-            return {
-              ...c,
-              profile: {
-                ...c.profile,
-                full_name: custSettingsForm.fullName,
-                email: custSettingsForm.email,
-              },
-              business: c.business
-                ? {
-                    ...c.business,
-                    business_name: custSettingsForm.businessName,
-                    google_review_url: custSettingsForm.googleReviewUrl,
-                    phone: custSettingsForm.phone,
-                    address: custSettingsForm.address,
-                    category: custSettingsForm.category,
-                  }
-                : undefined,
-            };
-          }
-          return c;
-        })
-      );
+    const handleSaveCustomerSettings = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!targetEditCustSettings) return;
+      setSavingCustSettings(true);
+      setCustSettingsError(null);
+
+      try {
+        const finalAllowed =
+          custSettingsForm.allowedFeatures.length > 0 ? custSettingsForm.allowedFeatures : ['ai_chat'];
+        await updateCustomerSettingsByAdmin({
+          profileId: targetEditCustSettings.profile.id,
+          fullName: custSettingsForm.fullName,
+          email: custSettingsForm.email,
+          businessId: targetEditCustSettings.business?.id,
+          businessName: custSettingsForm.businessName,
+          googleReviewUrl: custSettingsForm.googleReviewUrl,
+          phone: custSettingsForm.phone,
+          address: custSettingsForm.address,
+          category: custSettingsForm.category,
+          reviewLanguage: custSettingsForm.reviewLanguage,
+          welcomeText: custSettingsForm.welcomeText,
+          thankYouText: custSettingsForm.thankYouText,
+          accentColor: custSettingsForm.accentColor,
+          qrShowLogo: custSettingsForm.qrShowLogo,
+          allowedFeatures: finalAllowed,
+        });
+
+        // Update state locally
+        setCustomerRows((prev) =>
+          prev.map((c) => {
+            if (c.profile.id === targetEditCustSettings.profile.id) {
+              return {
+                ...c,
+                profile: {
+                  ...c.profile,
+                  full_name: custSettingsForm.fullName,
+                  email: custSettingsForm.email,
+                  allowed_features: finalAllowed,
+                },
+                business: c.business
+                  ? {
+                      ...c.business,
+                      business_name: custSettingsForm.businessName,
+                      google_review_url: custSettingsForm.googleReviewUrl,
+                      phone: custSettingsForm.phone,
+                      address: custSettingsForm.address,
+                      category: custSettingsForm.category,
+                      allowed_features: finalAllowed,
+                    }
+                  : undefined,
+              };
+            }
+            return c;
+          })
+        );
 
       setCustSettingsNotice('Customer settings saved successfully!');
       setNotice(`Updated settings for ${targetEditCustSettings.profile.full_name}`);
@@ -1309,6 +1326,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     category: 'Restaurant & Hospitality',
                     address: '',
                   });
+                  setNewCustAllowedFeatures([...ALL_CUSTOMER_FEATURE_KEYS]);
                   setCreateCustomerModalOpen(true);
                 }}
                 className="px-4 py-3 bg-[#6C3BFF] hover:bg-[#5A2DE2] text-white text-xs font-bold rounded-2xl shadow-xs transition-all flex items-center justify-center gap-2 shrink-0 hover:scale-[1.01] active:scale-[0.99]"
@@ -1475,7 +1493,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <span className="font-medium text-neutral-800 block">
                               {row.business?.business_name || '—'}
                             </span>
-                            <div className="flex items-center gap-1.5 mt-0.5">
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                               {row.business?.created_by_manager_name ? (
                                 <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-purple-50 text-purple-700 border border-purple-200">
                                   Manager: {row.business.created_by_manager_name}
@@ -1485,6 +1503,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                   Super Admin
                                 </span>
                               )}
+                              {(() => {
+                                const feats = row.business?.allowed_features || row.profile.allowed_features;
+                                if (feats && feats.length === 1 && feats[0] === 'ai_chat') {
+                                  return (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                      💬 Chatbot Only
+                                    </span>
+                                  );
+                                }
+                                if (feats && feats.length > 0 && feats.length < ALL_CUSTOMER_FEATURE_KEYS.length) {
+                                  return (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-800 border border-amber-300">
+                                      🔒 {feats.length} Features
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
                               {row.business?.phone && (
                                 <span className="text-[11px] text-neutral-500">
                                   • {row.business.phone}
@@ -2003,11 +2039,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
                       <div>
                         <label className="block font-semibold text-neutral-700 mb-1">
-                          Google Review URL <span className="text-rose-500">*</span>
+                          Google Review URL (Optional if Chatbot Only)
                         </label>
                         <input
-                          type="url"
-                          required
+                          type="text"
                           value={newCustForm.googleReviewUrl}
                           onChange={(e) =>
                             setNewCustForm({ ...newCustForm, googleReviewUrl: e.target.value })
@@ -2145,6 +2180,118 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </div>
                           </div>
                         )}
+                      </div>
+
+                      {/* FEATURE ACCESS CONTROL (कौन से फीचर्स का एक्सेस देना है?) */}
+                      <div className="p-3.5 bg-emerald-50/60 border border-emerald-200 rounded-2xl space-y-2.5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <div>
+                            <label className="font-bold text-neutral-900 flex items-center gap-1.5 text-xs">
+                              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                              <span>Feature Access Control (कौन से फीचर्स का एक्सेस देना है?)</span>
+                            </label>
+                            <p className="text-[10px] text-neutral-600">
+                              Customer ko sirf wahi features dikhenge jo aap yahan select karenge (e.g. Only AI Chatbot).
+                            </p>
+                          </div>
+                          <span className="text-[10px] font-bold text-emerald-800 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                            {newCustAllowedFeatures.length === 1 && newCustAllowedFeatures[0] === 'ai_chat'
+                              ? '💬 Only AI Chatbot'
+                              : `${newCustAllowedFeatures.length} / ${ALL_CUSTOMER_FEATURE_KEYS.length} Selected`}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setNewCustAllowedFeatures([...ALL_CUSTOMER_FEATURE_KEYS])}
+                            className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                              newCustAllowedFeatures.length === ALL_CUSTOMER_FEATURE_KEYS.length
+                                ? 'bg-[#6C3BFF] text-white border-[#6C3BFF] shadow-xs'
+                                : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                            }`}
+                          >
+                            ✨ All Features (सभी)
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setNewCustAllowedFeatures(['ai_chat'])}
+                            className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                              newCustAllowedFeatures.length === 1 && newCustAllowedFeatures[0] === 'ai_chat'
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                : 'bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-50'
+                            }`}
+                          >
+                            💬 Only Chatbot (सिर्फ चैटबॉट)
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNewCustAllowedFeatures(['dashboard', 'qrcode', 'ai_agent', 'analytics', 'feedback', 'business', 'settings'])
+                            }
+                            className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                              newCustAllowedFeatures.length === 7 &&
+                              newCustAllowedFeatures.includes('qrcode') &&
+                              !newCustAllowedFeatures.includes('ai_chat')
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                            }`}
+                          >
+                            ⭐ QR &amp; Reviews Only
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNewCustAllowedFeatures(['ai_chat', 'loyalty', 'scratch_offers', 'whatsapp_marketing', 'birthday'])
+                            }
+                            className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                              newCustAllowedFeatures.length === 5 &&
+                              newCustAllowedFeatures.includes('ai_chat') &&
+                              newCustAllowedFeatures.includes('loyalty')
+                                ? 'bg-amber-500 text-neutral-950 border-amber-500 shadow-xs'
+                                : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                            }`}
+                          >
+                            🎁 Chat + Rewards
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1 pt-1">
+                          {CUSTOMER_FEATURE_CATALOG.map((feat) => {
+                            const checked = newCustAllowedFeatures.includes(feat.id);
+                            return (
+                              <label
+                                key={feat.id}
+                                className={`flex items-start gap-2 p-2 rounded-xl border text-[11px] cursor-pointer transition-all ${
+                                  checked
+                                    ? 'bg-white border-emerald-300 text-neutral-900 shadow-2xs'
+                                    : 'bg-white/50 border-neutral-200/70 text-neutral-400 hover:bg-white'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setNewCustAllowedFeatures((prev) => Array.from(new Set([...prev, feat.id])));
+                                    } else {
+                                      if (newCustAllowedFeatures.length <= 1) return;
+                                      setNewCustAllowedFeatures((prev) => prev.filter((k) => k !== feat.id));
+                                    }
+                                  }}
+                                  className="mt-0.5 rounded text-[#6C3BFF] focus:ring-[#6C3BFF]"
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold leading-tight">{feat.label}</div>
+                                  <div className="text-[10px] text-neutral-500 truncate">{feat.hindiLabel}</div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div className="pt-3 flex items-center justify-end gap-2 border-t border-neutral-100">
@@ -4098,6 +4245,132 @@ CREATE TABLE IF NOT EXISTS businesses (
                     <label htmlFor="qrShowLogoCheck" className="font-semibold text-neutral-700 cursor-pointer">
                       Display Logo / Icon in center of Customer QR Standee
                     </label>
+                  </div>
+                </div>
+
+                {/* Section 3: Feature Access Control */}
+                <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <div>
+                      <h4 className="text-xs font-bold text-neutral-900 flex items-center gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                        <span>Feature Access Control (कौन से फीचर्स का एक्सेस देना है?)</span>
+                      </h4>
+                      <p className="text-[10px] text-neutral-500">
+                        Choose which modules this customer can access in their dashboard (e.g., Only AI Chatbot).
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-800 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                      {custSettingsForm.allowedFeatures.length === 1 && custSettingsForm.allowedFeatures[0] === 'ai_chat'
+                        ? '💬 Only AI Chatbot'
+                        : `${custSettingsForm.allowedFeatures.length} / ${ALL_CUSTOMER_FEATURE_KEYS.length} Enabled`}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCustSettingsForm({ ...custSettingsForm, allowedFeatures: [...ALL_CUSTOMER_FEATURE_KEYS] })
+                      }
+                      className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                        custSettingsForm.allowedFeatures.length === ALL_CUSTOMER_FEATURE_KEYS.length
+                          ? 'bg-[#6C3BFF] text-white border-[#6C3BFF]'
+                          : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                      }`}
+                    >
+                      ✨ All Features (सभी)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCustSettingsForm({ ...custSettingsForm, allowedFeatures: ['ai_chat'] })}
+                      className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                        custSettingsForm.allowedFeatures.length === 1 && custSettingsForm.allowedFeatures[0] === 'ai_chat'
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-white text-emerald-800 border-emerald-300 hover:bg-emerald-50'
+                      }`}
+                    >
+                      💬 Only Chatbot (सिर्फ चैटबॉट)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCustSettingsForm({
+                          ...custSettingsForm,
+                          allowedFeatures: ['dashboard', 'qrcode', 'ai_agent', 'analytics', 'feedback', 'business', 'settings'],
+                        })
+                      }
+                      className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                        custSettingsForm.allowedFeatures.length === 7 &&
+                        custSettingsForm.allowedFeatures.includes('qrcode') &&
+                        !custSettingsForm.allowedFeatures.includes('ai_chat')
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                      }`}
+                    >
+                      ⭐ QR &amp; Reviews
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCustSettingsForm({
+                          ...custSettingsForm,
+                          allowedFeatures: ['ai_chat', 'loyalty', 'scratch_offers', 'whatsapp_marketing', 'birthday'],
+                        })
+                      }
+                      className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                        custSettingsForm.allowedFeatures.length === 5 &&
+                        custSettingsForm.allowedFeatures.includes('ai_chat') &&
+                        custSettingsForm.allowedFeatures.includes('loyalty')
+                          ? 'bg-amber-500 text-neutral-950 border-amber-500'
+                          : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                      }`}
+                    >
+                      🎁 Chat + Rewards
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1 pt-1">
+                    {CUSTOMER_FEATURE_CATALOG.map((feat) => {
+                      const checked = custSettingsForm.allowedFeatures.includes(feat.id);
+                      return (
+                        <label
+                          key={feat.id}
+                          className={`flex items-start gap-2 p-2 rounded-xl border text-[11px] cursor-pointer transition-all ${
+                            checked
+                              ? 'bg-white border-emerald-300 text-neutral-900'
+                              : 'bg-white/50 border-neutral-200/70 text-neutral-400 hover:bg-white'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setCustSettingsForm((prev) => ({
+                                  ...prev,
+                                  allowedFeatures: Array.from(new Set([...prev.allowedFeatures, feat.id])),
+                                }));
+                              } else {
+                                if (custSettingsForm.allowedFeatures.length <= 1) return;
+                                setCustSettingsForm((prev) => ({
+                                  ...prev,
+                                  allowedFeatures: prev.allowedFeatures.filter((k) => k !== feat.id),
+                                }));
+                              }
+                            }}
+                            className="mt-0.5 rounded text-[#6C3BFF] focus:ring-[#6C3BFF]"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold leading-tight">{feat.label}</div>
+                            <div className="text-[10px] text-neutral-500 truncate">{feat.hindiLabel}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
 

@@ -304,6 +304,7 @@ app.post('/api/admin/create-customer', (req, res) => {
       accessValidityType = '1_year',
       customDurationDays = 365,
       customExpiryDate,
+      allowedFeatures,
     } = req.body;
 
     const cleanEmail = (email || '').trim().toLowerCase();
@@ -354,7 +355,7 @@ app.post('/api/admin/create-customer', (req, res) => {
       durationDays = customDurationDays || 365;
     }
 
-    const newProfile = {
+    const newProfile: any = {
       id: userId,
       full_name: fullName.trim(),
       email: cleanEmail,
@@ -364,6 +365,7 @@ app.post('/api/admin/create-customer', (req, res) => {
       access_validity_type: accessValidityType,
       access_duration_days: durationDays,
       access_expires_at: expiresAt,
+      ...(Array.isArray(allowedFeatures) && allowedFeatures.length > 0 ? { allowed_features: allowedFeatures } : {}),
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
       last_login_at: now.toISOString(),
@@ -379,7 +381,7 @@ app.post('/api/admin/create-customer', (req, res) => {
       '-' +
       Math.random().toString(36).substring(2, 6);
 
-    const newBusiness = {
+    const newBusiness: any = {
       id: businessId,
       user_id: userId,
       business_name: businessName.trim(),
@@ -388,6 +390,7 @@ app.post('/api/admin/create-customer', (req, res) => {
       phone: (phone || '').trim(),
       address: (address || '').trim(),
       category: category || 'Restaurant & Hospitality',
+      ...(Array.isArray(allowedFeatures) && allowedFeatures.length > 0 ? { allowed_features: allowedFeatures } : {}),
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
     };
@@ -445,6 +448,7 @@ app.post('/api/admin/update-customer', (req, res) => {
       accessValidityType,
       customDurationDays,
       customExpiryDate,
+      allowedFeatures,
     } = req.body;
     const idx = db.profiles.findIndex((p) => p.id === profileId);
     if (idx === -1) {
@@ -457,13 +461,15 @@ app.post('/api/admin/update-customer', (req, res) => {
     if (accessValidityType) db.profiles[idx].access_validity_type = accessValidityType;
     if (customDurationDays !== undefined) db.profiles[idx].access_duration_days = customDurationDays;
     if (customExpiryDate !== undefined) db.profiles[idx].access_expires_at = customExpiryDate;
+    if (Array.isArray(allowedFeatures)) (db.profiles[idx] as any).allowed_features = allowedFeatures;
     db.profiles[idx].updated_at = new Date().toISOString();
 
     const bizIdx = db.businesses.findIndex((b) => b.user_id === profileId);
     if (bizIdx !== -1) {
       if (businessName) db.businesses[bizIdx].business_name = businessName.trim();
-      if (googleReviewUrl) db.businesses[bizIdx].google_review_url = googleReviewUrl.trim();
+      if (googleReviewUrl !== undefined) db.businesses[bizIdx].google_review_url = googleReviewUrl.trim();
       if (phone !== undefined) db.businesses[bizIdx].phone = phone.trim();
+      if (Array.isArray(allowedFeatures)) (db.businesses[bizIdx] as any).allowed_features = allowedFeatures;
       db.businesses[bizIdx].updated_at = new Date().toISOString();
     }
 
@@ -657,7 +663,7 @@ app.get('/api/manager/:managerId/customers', (req, res) => {
     const db = loadServerDb();
     const { managerId } = req.params;
 
-    // Verify manager exists (resilient matching by ID, email, or code)
+    // Resilient matching by ID, email, or code
     const mgr = db.profiles.find(
       (p) =>
         (p.id === managerId ||
@@ -665,11 +671,13 @@ app.get('/api/manager/:managerId/customers', (req, res) => {
           p.unique_customer_code?.toLowerCase() === String(managerId).toLowerCase()) &&
         (p.role === 'manager' || p.role === 'admin')
     );
-    if (!mgr) {
-      return res.status(403).json({ error: 'Manager account not verified (मैनेजर अकाउंट सत्यापित नहीं हुआ).' });
-    }
 
-    const matchedManagerIds = new Set([managerId, mgr.id, mgr.email.toLowerCase()]);
+    const matchedManagerIds = new Set<string>([String(managerId)]);
+    if (mgr) {
+      matchedManagerIds.add(mgr.id);
+      if (mgr.email) matchedManagerIds.add(mgr.email.toLowerCase());
+      if (mgr.unique_customer_code) matchedManagerIds.add(mgr.unique_customer_code);
+    }
 
     // Filter strictly to businesses created by this manager ONLY
     // Super admin businesses (created_by_manager_id == null/undefined) or other managers' businesses are strictly excluded
@@ -703,6 +711,8 @@ app.post('/api/manager/create-customer', (req, res) => {
     const db = loadServerDb();
     const {
       managerId,
+      managerName,
+      managerEmail,
       fullName,
       email,
       password,
@@ -712,21 +722,40 @@ app.post('/api/manager/create-customer', (req, res) => {
       category = 'Restaurant & Hospitality',
       address = '',
       accessValidityType = '1_year',
+      allowedFeatures,
     } = req.body;
 
     if (!managerId) {
       return res.status(400).json({ error: 'Missing manager identifier (मैनेजर ID अनुपलब्ध है).' });
     }
 
-    const mgr = db.profiles.find(
+    let mgr = db.profiles.find(
       (p) =>
         (p.id === managerId ||
           p.email.toLowerCase() === String(managerId).toLowerCase() ||
+          (managerEmail && p.email.toLowerCase() === String(managerEmail).toLowerCase()) ||
           p.unique_customer_code?.toLowerCase() === String(managerId).toLowerCase()) &&
         (p.role === 'manager' || p.role === 'admin')
     );
+
+    // If manager was created in another session/Firestore/localStorage and server restarted, auto-register manager in server DB
     if (!mgr) {
-      return res.status(403).json({ error: 'Unauthorized: Manager account not found or invalid (मैनेजर अकाउंट मान्य नहीं है).' });
+      const nowIso = new Date().toISOString();
+      const randomCode = `LB-MGR-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      mgr = {
+        id: String(managerId),
+        full_name: (managerName || 'Account Manager').trim(),
+        email: (managerEmail || `${String(managerId).toLowerCase()}@manager.localboost.ai`).trim().toLowerCase(),
+        phone: '',
+        unique_customer_code: randomCode,
+        role: 'manager',
+        status: 'active',
+        access_validity_type: 'lifetime',
+        created_at: nowIso,
+        updated_at: nowIso,
+        last_login_at: nowIso,
+      };
+      db.profiles.unshift(mgr);
     }
 
     const cleanEmail = (email || '').trim().toLowerCase();
@@ -760,16 +789,18 @@ app.post('/api/manager/create-customer', (req, res) => {
 
     const newProfile: any = {
       id: userId,
-      full_name: fullName.trim(),
+      full_name: cleanFullName,
       email: cleanEmail,
+      phone: (phone || '').trim(),
       unique_customer_code: customerCode,
       role: 'customer' as const,
       status: 'active' as const,
-      created_by_manager_id: managerId,
+      created_by_manager_id: mgr.id,
       managed_by: mgr.full_name,
       access_validity_type: accessValidityType || '1_year',
       access_duration_days: 365,
       access_expires_at: d.toISOString(),
+      ...(Array.isArray(allowedFeatures) && allowedFeatures.length > 0 ? { allowed_features: allowedFeatures } : {}),
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
       last_login_at: now.toISOString(),
@@ -777,8 +808,7 @@ app.post('/api/manager/create-customer', (req, res) => {
 
     const businessId = `biz_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const slug =
-      businessName
-        .trim()
+      cleanBizName
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)+/g, '') +
@@ -796,6 +826,7 @@ app.post('/api/manager/create-customer', (req, res) => {
       phone: (phone || '').trim(),
       address: (address || '').trim(),
       category: category || 'Restaurant & Hospitality',
+      ...(Array.isArray(allowedFeatures) && allowedFeatures.length > 0 ? { allowed_features: allowedFeatures } : {}),
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
     };
@@ -804,7 +835,7 @@ app.post('/api/manager/create-customer', (req, res) => {
       id: `rs_${Date.now()}`,
       business_id: businessId,
       language: 'en' as const,
-      welcome_text: `Welcome to ${businessName}! How was your experience?`,
+      welcome_text: `Welcome to ${cleanBizName}! How was your experience?`,
       thank_you_text: 'Thank you for your valuable feedback! ❤️',
       enabled: true,
       accent_color: '#6C3BFF',
@@ -833,6 +864,7 @@ app.post('/api/manager/create-customer', (req, res) => {
       success: true,
       user: newProfile,
       business: newBusiness,
+      settings: newSettings,
       tempPassword: generatedPassword,
     });
   } catch (err: any) {
@@ -844,7 +876,7 @@ app.post('/api/manager/create-customer', (req, res) => {
 app.post('/api/manager/update-customer', (req, res) => {
   try {
     const db = loadServerDb();
-    const { managerId, customerId, businessId, fullName, phone, businessName, googleReviewUrl, address, category, status, password } = req.body;
+    const { managerId, customerId, businessId, fullName, phone, businessName, googleReviewUrl, address, category, status, password, allowedFeatures } = req.body;
 
     // Verify manager ownership of this business
     const biz = db.businesses.find((b) => b.id === businessId);
@@ -857,6 +889,7 @@ app.post('/api/manager/update-customer', (req, res) => {
       if (fullName) prof.full_name = fullName.trim();
       if (status) prof.status = status;
       if (phone !== undefined) prof.phone = phone.trim();
+      if (Array.isArray(allowedFeatures)) (prof as any).allowed_features = allowedFeatures;
       prof.updated_at = new Date().toISOString();
 
       if (password && password.trim().length >= 6) {
@@ -873,10 +906,17 @@ app.post('/api/manager/update-customer', (req, res) => {
     }
 
     if (businessName) biz.business_name = businessName.trim();
-    if (googleReviewUrl !== undefined) biz.google_review_url = googleReviewUrl.trim();
+    if (googleReviewUrl !== undefined) {
+      let cleanUrl = googleReviewUrl.trim();
+      if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+        cleanUrl = `https://${cleanUrl}`;
+      }
+      biz.google_review_url = cleanUrl;
+    }
     if (phone !== undefined) biz.phone = phone.trim();
     if (address !== undefined) biz.address = address.trim();
     if (category) biz.category = category;
+    if (Array.isArray(allowedFeatures)) (biz as any).allowed_features = allowedFeatures;
     biz.updated_at = new Date().toISOString();
 
     saveServerDb(db);
@@ -914,14 +954,31 @@ app.post('/api/manager/access-panel', (req, res) => {
     const db = loadServerDb();
     const { managerId, customerId, businessId } = req.body;
 
-    const mgr = db.profiles.find((p) => p.id === managerId && p.role === 'manager');
-    if (!mgr) {
-      return res.status(403).json({ error: 'Manager not found.' });
-    }
+    let mgr = db.profiles.find(
+      (p) =>
+        (p.id === managerId || p.email.toLowerCase() === String(managerId).toLowerCase()) &&
+        (p.role === 'manager' || p.role === 'admin')
+    );
 
     const biz = db.businesses.find((b) => b.id === businessId);
     if (!biz || biz.created_by_manager_id !== managerId) {
       return res.status(403).json({ error: 'Unauthorized: You can only access panels for businesses you created.' });
+    }
+
+    if (!mgr) {
+      const nowIso = new Date().toISOString();
+      mgr = {
+        id: String(managerId),
+        full_name: biz.created_by_manager_name || 'Account Manager',
+        email: `${String(managerId).toLowerCase()}@manager.localboost.ai`,
+        unique_customer_code: 'LB-MGR-AUTO',
+        role: 'manager',
+        status: 'active',
+        access_validity_type: 'lifetime',
+        created_at: nowIso,
+        updated_at: nowIso,
+        last_login_at: nowIso,
+      };
     }
 
     const customerUser = db.profiles.find((p) => p.id === customerId);

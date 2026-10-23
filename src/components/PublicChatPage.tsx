@@ -42,6 +42,7 @@ import {
   getDefaultBusinessProfileInfo,
   filterPublicChatbotInfo,
   PublicBusinessChatProfile,
+  isRestaurantOrFoodCategory,
 } from '../lib/businessInfoService';
 import { answerCustomerQuestion } from '../lib/ruleBasedChatEngine';
 import { getBusinessBySlug } from '../lib/db';
@@ -51,40 +52,64 @@ interface PublicChatPageProps {
   onBackToApp?: () => void;
 }
 
-const DEFAULT_QUICK_PROMPTS: ChatQuickPrompt[] = [
-  {
-    id: 'qp_def_hours',
-    label: '🕒 Opening Hours',
-    question: 'What are your opening hours today?',
-    category: 'hours',
-    action_type: 'message',
-    is_active: true,
-  },
-  {
-    id: 'qp_def_location',
-    label: '📍 Location & Address',
-    question: 'Where is your shop located?',
-    category: 'location',
-    action_type: 'message',
-    is_active: true,
-  },
-  {
-    id: 'qp_def_products',
-    label: '📋 Products & Menu',
-    question: 'What products or services do you offer?',
-    category: 'product',
-    action_type: 'message',
-    is_active: true,
-  },
-  {
-    id: 'qp_def_payments',
-    label: '💳 Payment Methods',
-    question: 'Which payment methods do you accept?',
-    category: 'policy',
-    action_type: 'message',
-    is_active: true,
-  },
-];
+const getDefaultQuickPromptsForBusiness = (category?: string): ChatQuickPrompt[] => {
+  const isFood = isRestaurantOrFoodCategory(category);
+  return [
+    ...(isFood
+      ? [
+          {
+            id: 'qp_def_paneer',
+            label: '🧀 Paneer ki Sabjiyan',
+            question: 'paneer Mein कौन-कौन Si sabji hai',
+            category: 'product' as const,
+            action_type: 'message' as const,
+            is_active: true,
+          },
+          {
+            id: 'qp_def_menu',
+            label: '🍽️ Full Food Menu',
+            question: 'Menu mein kya kya hai?',
+            category: 'product' as const,
+            action_type: 'message' as const,
+            is_active: true,
+          },
+        ]
+      : [
+          {
+            id: 'qp_def_products',
+            label: '📋 Products & Menu',
+            question: 'What products or services do you offer?',
+            category: 'product' as const,
+            action_type: 'message' as const,
+            is_active: true,
+          },
+        ]),
+    {
+      id: 'qp_def_hours',
+      label: '🕒 Opening Hours',
+      question: 'What are your opening hours today?',
+      category: 'hours',
+      action_type: 'message',
+      is_active: true,
+    },
+    {
+      id: 'qp_def_location',
+      label: '📍 Location & Address',
+      question: 'Where is your shop located?',
+      category: 'location',
+      action_type: 'message',
+      is_active: true,
+    },
+    {
+      id: 'qp_def_payments',
+      label: '💳 Payment Methods',
+      question: 'Which payment methods do you accept?',
+      category: 'policy',
+      action_type: 'message',
+      is_active: true,
+    },
+  ];
+};
 
 export const PublicChatPage: React.FC<PublicChatPageProps> = ({
   businessSlug,
@@ -176,7 +201,7 @@ export const PublicChatPage: React.FC<PublicChatPageProps> = ({
 
           const availablePrompts = (fetchedConfig?.quick_prompts && fetchedConfig.quick_prompts.length > 0)
             ? fetchedConfig.quick_prompts.filter((p) => p.is_active)
-            : DEFAULT_QUICK_PROMPTS;
+            : getDefaultQuickPromptsForBusiness(biz.category);
 
           const initialMsg: ChatMessage = {
             id: `msg_init_${Date.now()}`,
@@ -213,7 +238,7 @@ export const PublicChatPage: React.FC<PublicChatPageProps> = ({
   const activeQuickPrompts: ChatQuickPrompt[] =
     chatConfig?.quick_prompts && chatConfig.quick_prompts.length > 0
       ? chatConfig.quick_prompts.filter((p) => p.is_active)
-      : DEFAULT_QUICK_PROMPTS;
+      : getDefaultQuickPromptsForBusiness(business?.category);
 
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();

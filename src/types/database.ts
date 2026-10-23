@@ -7,6 +7,136 @@ export type UserStatus = 'active' | 'disabled';
 
 export type AccessValidityType = '1_month' | '3_months' | '6_months' | '1_year' | 'lifetime' | 'custom';
 
+export type CustomerFeatureKey =
+  | 'dashboard'
+  | 'qrcode'
+  | 'ai_agent'
+  | 'ai_chat'
+  | 'loyalty'
+  | 'scratch_offers'
+  | 'whatsapp_marketing'
+  | 'birthday'
+  | 'analytics'
+  | 'feedback'
+  | 'business'
+  | 'settings'
+  | 'announcements'
+  | 'security'
+  | 'support';
+
+export interface CustomerFeatureDefinition {
+  id: CustomerFeatureKey;
+  label: string;
+  hindiLabel: string;
+  description: string;
+  category: 'core' | 'rewards' | 'intelligence' | 'store';
+  badge?: string;
+}
+
+export const CUSTOMER_FEATURE_CATALOG: CustomerFeatureDefinition[] = [
+  {
+    id: 'ai_chat',
+    label: 'AI Business Chatbot',
+    hindiLabel: 'AI चैटबॉट (Chatbot)',
+    description: '24/7 customer Q&A chatbot, knowledge base & dedicated Chat QR',
+    category: 'core',
+    badge: 'Popular',
+  },
+  {
+    id: 'qrcode',
+    label: 'QR Code & Standees',
+    hindiLabel: 'QR कोड और स्टैंडी',
+    description: 'Print-ready Google Review QR Standee & table tent templates',
+    category: 'core',
+  },
+  {
+    id: 'ai_agent',
+    label: 'AI Prompt Engine',
+    hindiLabel: 'AI रिव्यू इंजन',
+    description: 'Auto-generate 12 custom review drafts & SEO keywords',
+    category: 'core',
+  },
+  {
+    id: 'dashboard',
+    label: 'Overview & Metrics',
+    hindiLabel: 'ओवरव्यू डैशबोर्ड',
+    description: 'Main KPI summary, setup checklist & quick actions',
+    category: 'core',
+  },
+  {
+    id: 'loyalty',
+    label: 'Loyalty & Stamp Cards',
+    hindiLabel: 'लॉयल्टी और डिस्काउंट कार्ड',
+    description: 'Issue & redeem VIP discount vouchers and stamp cards',
+    category: 'rewards',
+  },
+  {
+    id: 'scratch_offers',
+    label: 'Scratch & Win Draw',
+    hindiLabel: 'स्क्रैच एंड विन गेम',
+    description: 'Gamified mystery scratch cards for customers',
+    category: 'rewards',
+  },
+  {
+    id: 'whatsapp_marketing',
+    label: 'WhatsApp Marketing Hub',
+    hindiLabel: 'व्हाट्सएप मार्केटिंग हब',
+    description: '1-Click WhatsApp voucher sharing & marketing',
+    category: 'rewards',
+  },
+  {
+    id: 'birthday',
+    label: 'Birthday Club & Wishes',
+    hindiLabel: 'बर्थडे क्लब और विशेज',
+    description: 'Automated birthday rewards & WhatsApp greetings',
+    category: 'rewards',
+  },
+  {
+    id: 'analytics',
+    label: 'Live Traffic & Scans',
+    hindiLabel: 'लाइव ट्रैफिक और स्कैन',
+    description: 'Daily QR scans, star ratings & Google click conversion',
+    category: 'intelligence',
+  },
+  {
+    id: 'feedback',
+    label: 'Private Feedback Shield',
+    hindiLabel: 'प्राइवेट फीडबैक शील्ड',
+    description: 'Intercept 1-3 star negative feedback privately',
+    category: 'intelligence',
+  },
+  {
+    id: 'business',
+    label: 'Store Profile & GPS',
+    hindiLabel: 'स्टोर प्रोफाइल और GPS',
+    description: 'Store details, Google review link & GPS verification',
+    category: 'store',
+  },
+  {
+    id: 'settings',
+    label: 'Review Customizer',
+    hindiLabel: 'रिव्यू कस्टमाइज़र',
+    description: 'Brand colors, welcome greeting & language settings',
+    category: 'store',
+  },
+  {
+    id: 'security',
+    label: 'Password & Security',
+    hindiLabel: 'पासवर्ड और सुरक्षा',
+    description: 'Change login password & security settings',
+    category: 'store',
+  },
+  {
+    id: 'support',
+    label: 'WhatsApp Support',
+    hindiLabel: 'व्हाट्सएप सपोर्ट',
+    description: 'Direct help & support contact',
+    category: 'store',
+  },
+];
+
+export const ALL_CUSTOMER_FEATURE_KEYS: CustomerFeatureKey[] = CUSTOMER_FEATURE_CATALOG.map((f) => f.id);
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -20,6 +150,7 @@ export interface Profile {
   access_validity_type?: AccessValidityType;
   access_duration_days?: number;
   access_expires_at?: string | null; // ISO timestamp string or null for lifetime
+  allowed_features?: string[];
   created_at: string;
   updated_at: string;
   last_login_at?: string;
@@ -38,6 +169,7 @@ export interface Business {
   whatsapp_number?: string;
   address?: string;
   category?: string;
+  allowed_features?: string[];
   ai_prompt?: string;
   ai_keywords?: string[];
   ai_suggestions_preview?: {

@@ -87,6 +87,20 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
+          {session?.user.role === 'manager' && (
+            <button
+              onClick={() => onNavigate('manager_dashboard')}
+              className={`px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                currentView === 'manager_dashboard'
+                  ? 'bg-[#6C3BFF] text-white shadow-xs font-bold'
+                  : 'hover:text-slate-950 hover:bg-white/60'
+              }`}
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>Manager Portal</span>
+            </button>
+          )}
+
           {session?.user.role === 'admin' && (
             <button
               onClick={() => onNavigate('admin')}
@@ -116,7 +130,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                     {session.user.full_name || 'Store Owner'}
                   </span>
                   <span className="text-[10px] text-slate-500 font-mono">
-                    {session.user.role === 'admin' ? 'Super Admin' : session.user.unique_customer_code || 'Merchant'}
+                    {session.user.role === 'admin'
+                      ? 'Super Admin'
+                      : session.user.role === 'manager'
+                      ? session.user.unique_customer_code || 'Manager'
+                      : session.user.unique_customer_code || 'Merchant'}
                   </span>
                 </div>
               </div>
@@ -126,6 +144,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={() => {
                   if (session.user.role === 'admin') {
                     onNavigate('admin');
+                  } else if (session.user.role === 'manager') {
+                    onNavigate('manager_dashboard');
                   } else {
                     onNavigate('dashboard');
                   }

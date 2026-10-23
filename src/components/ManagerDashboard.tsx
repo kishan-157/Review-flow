@@ -38,7 +38,14 @@ import {
   X,
   AlertTriangle,
 } from 'lucide-react';
-import { AuthSession, Business, Profile, UserStatus } from '../types/database';
+import {
+  AuthSession,
+  Business,
+  Profile,
+  UserStatus,
+  CUSTOMER_FEATURE_CATALOG,
+  ALL_CUSTOMER_FEATURE_KEYS,
+} from '../types/database';
 import {
   getManagerCustomersList,
   createCustomerByManager,
@@ -79,6 +86,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [newGoogleReviewUrl, setNewGoogleReviewUrl] = useState('');
   const [newAddress, setNewAddress] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [newAllowedFeatures, setNewAllowedFeatures] = useState<string[]>([...ALL_CUSTOMER_FEATURE_KEYS]);
   const [createModalError, setCreateModalError] = useState<string | null>(null);
 
   // Created Credentials Success Modal
@@ -98,6 +106,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const [editGoogleReviewUrl, setEditGoogleReviewUrl] = useState('');
   const [editStatus, setEditStatus] = useState<UserStatus>('active');
   const [editPassword, setEditPassword] = useState('');
+  const [editAllowedFeatures, setEditAllowedFeatures] = useState<string[]>([...ALL_CUSTOMER_FEATURE_KEYS]);
   const [updating, setUpdating] = useState<boolean>(false);
   const [editModalError, setEditModalError] = useState<string | null>(null);
 
@@ -145,6 +154,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     setNewGoogleReviewUrl('');
     setNewAddress('');
     setNewPassword('');
+    setNewAllowedFeatures([...ALL_CUSTOMER_FEATURE_KEYS]);
     setCreateModalOpen(true);
   };
 
@@ -178,6 +188,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     try {
       const result = await createCustomerByManager({
         managerId: manager.id,
+        managerName: manager.full_name,
+        managerEmail: manager.email,
         fullName: cleanOwner,
         email: cleanMail,
         password: newPassword.trim() || undefined,
@@ -186,7 +198,18 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         category: newCategory,
         googleReviewUrl: newGoogleReviewUrl.trim(),
         address: newAddress.trim(),
+        allowedFeatures: newAllowedFeatures.length > 0 ? newAllowedFeatures : ['ai_chat'],
       });
+
+      const newRow: ManagerCustomerRow = {
+        id: result.business.id,
+        user_id: result.user.id,
+        business: result.business,
+        profile: result.user,
+        settings: null,
+        password: result.tempPassword,
+      };
+      setCustomers((prev) => [newRow, ...prev.filter((r) => r.id !== newRow.id)]);
 
       setCreateModalOpen(false);
       setCreatedSuccessData(result);
@@ -242,6 +265,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         address: editAddress.trim(),
         category: editCategory,
         status: editStatus,
+        allowedFeatures: editAllowedFeatures.length > 0 ? editAllowedFeatures : ['ai_chat'],
       });
 
       showToast(`Business details updated successfully!`);
@@ -562,18 +586,44 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                           </div>
                         </td>
 
-                        {/* Status */}
+                        {/* Status & Allowed Features */}
                         <td className="py-3.5 px-3">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              isActive
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-rose-50 text-rose-700 border border-rose-200'
-                            }`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                            <span>{isActive ? 'Active' : 'Disabled'}</span>
-                          </span>
+                          <div className="space-y-1">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                isActive
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                              <span>{isActive ? 'Active' : 'Disabled'}</span>
+                            </span>
+                            <div>
+                              {(() => {
+                                const feats = biz.allowed_features || prof?.allowed_features;
+                                if (!feats || feats.length === 0 || feats.length >= ALL_CUSTOMER_FEATURE_KEYS.length) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-50 text-[#6C3BFF] border border-purple-200">
+                                      ✨ All Features
+                                    </span>
+                                  );
+                                }
+                                if (feats.length === 1 && feats[0] === 'ai_chat') {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                      💬 Only AI Chatbot
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                                    🔒 {feats.length} Features Active
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          </div>
                         </td>
 
                         {/* Action Buttons */}
@@ -603,9 +653,15 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                                 setEditGoogleReviewUrl(biz.google_review_url || '');
                                 setEditStatus(prof?.status || 'active');
                                 setEditPassword('');
+                                const currentFeats = biz.allowed_features || prof?.allowed_features;
+                                setEditAllowedFeatures(
+                                  Array.isArray(currentFeats) && currentFeats.length > 0
+                                    ? [...currentFeats]
+                                    : [...ALL_CUSTOMER_FEATURE_KEYS]
+                                );
                               }}
                               className="p-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 rounded-lg transition-colors cursor-pointer"
-                              title="Edit Business"
+                              title="Edit Business & Feature Access"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
@@ -789,6 +845,127 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   placeholder="e.g. Shop 4, Main Market Road, City"
                   className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
                 />
+              </div>
+
+              {/* FEATURE ACCESS CONTROL (फीचर एक्सेस कंट्रोल) */}
+              <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div>
+                    <label className="font-extrabold text-neutral-900 text-xs flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-[#6C3BFF]" />
+                      <span>Feature Access Control (कौन से फीचर्स का एक्सेस देना है?)</span>
+                    </label>
+                    <p className="text-[11px] text-neutral-500">
+                      Customer ko sirf wahi tabs aur features dikhenge jo aap yahan select karenge.
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold text-[#6C3BFF] bg-white px-2.5 py-0.5 rounded-full border border-purple-200 shrink-0">
+                    {newAllowedFeatures.length === 1 && newAllowedFeatures[0] === 'ai_chat'
+                      ? '💬 Only AI Chatbot'
+                      : `${newAllowedFeatures.length} / ${ALL_CUSTOMER_FEATURE_KEYS.length} Selected`}
+                  </span>
+                </div>
+
+                {/* Quick Presets */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setNewAllowedFeatures([...ALL_CUSTOMER_FEATURE_KEYS])}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer border text-center ${
+                      newAllowedFeatures.length === ALL_CUSTOMER_FEATURE_KEYS.length
+                        ? 'bg-[#6C3BFF] text-white border-[#6C3BFF] shadow-xs'
+                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                    }`}
+                  >
+                    ✨ All Features (सभी)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewAllowedFeatures(['ai_chat'])}
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer border text-center ${
+                      newAllowedFeatures.length === 1 && newAllowedFeatures[0] === 'ai_chat'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                    }`}
+                  >
+                    💬 Only Chatbot (सिर्फ चैटबॉट)
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNewAllowedFeatures(['dashboard', 'qrcode', 'ai_agent', 'analytics', 'feedback', 'business', 'settings'])
+                    }
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer border text-center ${
+                      newAllowedFeatures.length === 7 &&
+                      newAllowedFeatures.includes('qrcode') &&
+                      !newAllowedFeatures.includes('ai_chat')
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                    }`}
+                  >
+                    ⭐ QR &amp; Reviews Only
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNewAllowedFeatures(['ai_chat', 'loyalty', 'scratch_offers', 'whatsapp_marketing', 'birthday'])
+                    }
+                    className={`py-2 px-2.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer border text-center ${
+                      newAllowedFeatures.length === 5 &&
+                      newAllowedFeatures.includes('ai_chat') &&
+                      newAllowedFeatures.includes('loyalty')
+                        ? 'bg-amber-500 text-neutral-950 border-amber-500 shadow-xs'
+                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                    }`}
+                  >
+                    🎁 Chat + Rewards
+                  </button>
+                </div>
+
+                {/* Individual Feature Checkboxes */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1 pt-1">
+                  {CUSTOMER_FEATURE_CATALOG.map((feat) => {
+                    const checked = newAllowedFeatures.includes(feat.id);
+                    return (
+                      <label
+                        key={feat.id}
+                        className={`flex items-start gap-2 p-2 rounded-xl border text-[11px] cursor-pointer transition-all ${
+                          checked
+                            ? 'bg-white border-purple-300 text-neutral-900 shadow-2xs'
+                            : 'bg-white/50 border-neutral-200/70 text-neutral-400 hover:bg-white'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setNewAllowedFeatures((prev) => Array.from(new Set([...prev, feat.id])));
+                            } else {
+                              if (newAllowedFeatures.length <= 1) return; // keep at least 1 feature
+                              setNewAllowedFeatures((prev) => prev.filter((k) => k !== feat.id));
+                            }
+                          }}
+                          className="mt-0.5 rounded text-[#6C3BFF] focus:ring-[#6C3BFF]"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold leading-tight flex items-center gap-1">
+                            <span>{feat.label}</span>
+                            {feat.id === 'ai_chat' && (
+                              <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded text-[9px] font-extrabold">
+                                Chatbot
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-neutral-500 truncate">{feat.hindiLabel}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100">
@@ -1030,6 +1207,118 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   className="w-full px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-[#6C3BFF] focus:outline-hidden"
                 />
                 <p className="text-[10px] text-neutral-400">Manager can change any details or reset passwords for their created businesses anytime.</p>
+              </div>
+
+              {/* EDIT FEATURE ACCESS CONTROL */}
+              <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div>
+                    <label className="font-extrabold text-neutral-900 text-xs flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-[#6C3BFF]" />
+                      <span>Feature Access Control (फीचर एक्सेस बदलें)</span>
+                    </label>
+                    <p className="text-[10px] text-neutral-500">
+                      Select which modules this customer can see and use in their dashboard.
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#6C3BFF] bg-white px-2.5 py-0.5 rounded-full border border-purple-200 shrink-0">
+                    {editAllowedFeatures.length === 1 && editAllowedFeatures[0] === 'ai_chat'
+                      ? '💬 Only AI Chatbot'
+                      : `${editAllowedFeatures.length} / ${ALL_CUSTOMER_FEATURE_KEYS.length} Enabled`}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditAllowedFeatures([...ALL_CUSTOMER_FEATURE_KEYS])}
+                    className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                      editAllowedFeatures.length === ALL_CUSTOMER_FEATURE_KEYS.length
+                        ? 'bg-[#6C3BFF] text-white border-[#6C3BFF]'
+                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                    }`}
+                  >
+                    ✨ All Features
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditAllowedFeatures(['ai_chat'])}
+                    className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                      editAllowedFeatures.length === 1 && editAllowedFeatures[0] === 'ai_chat'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                    }`}
+                  >
+                    💬 Only Chatbot
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditAllowedFeatures(['dashboard', 'qrcode', 'ai_agent', 'analytics', 'feedback', 'business', 'settings'])
+                    }
+                    className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                      editAllowedFeatures.length === 7 &&
+                      editAllowedFeatures.includes('qrcode') &&
+                      !editAllowedFeatures.includes('ai_chat')
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                    }`}
+                  >
+                    ⭐ QR &amp; Reviews
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setEditAllowedFeatures(['ai_chat', 'loyalty', 'scratch_offers', 'whatsapp_marketing', 'birthday'])
+                    }
+                    className={`py-1.5 px-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer border text-center ${
+                      editAllowedFeatures.length === 5 &&
+                      editAllowedFeatures.includes('ai_chat') &&
+                      editAllowedFeatures.includes('loyalty')
+                        ? 'bg-amber-500 text-neutral-950 border-amber-500'
+                        : 'bg-white text-neutral-700 border-neutral-200 hover:bg-neutral-100'
+                    }`}
+                  >
+                    🎁 Chat + Rewards
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto pr-1 pt-1">
+                  {CUSTOMER_FEATURE_CATALOG.map((feat) => {
+                    const checked = editAllowedFeatures.includes(feat.id);
+                    return (
+                      <label
+                        key={feat.id}
+                        className={`flex items-start gap-2 p-2 rounded-xl border text-[11px] cursor-pointer transition-all ${
+                          checked
+                            ? 'bg-white border-purple-300 text-neutral-900'
+                            : 'bg-white/50 border-neutral-200/70 text-neutral-400 hover:bg-white'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEditAllowedFeatures((prev) => Array.from(new Set([...prev, feat.id])));
+                            } else {
+                              if (editAllowedFeatures.length <= 1) return;
+                              setEditAllowedFeatures((prev) => prev.filter((k) => k !== feat.id));
+                            }
+                          }}
+                          className="mt-0.5 rounded text-[#6C3BFF] focus:ring-[#6C3BFF]"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold leading-tight">{feat.label}</div>
+                          <div className="text-[10px] text-neutral-500 truncate">{feat.hindiLabel}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100">

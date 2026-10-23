@@ -202,42 +202,384 @@ function matchCustomFaqs(
   return null;
 }
 
+// Bilingual Food & Menu Keyword Dictionary (Devanagari, Gujarati, Hinglish -> Canonical English Token)
+const FOOD_TOKEN_MAP: Record<string, string> = {
+  // Paneer
+  'पनीर': 'paneer',
+  'પનીર': 'paneer',
+  panir: 'paneer',
+  pneer: 'paneer',
+  paneer: 'paneer',
+
+  // Sabji / Curry / Main Course
+  'सब्जी': 'sabji',
+  'सब्ज़ी': 'sabji',
+  'सबजी': 'sabji',
+  'सब्जियां': 'sabji',
+  'सब्जियाँ': 'sabji',
+  'शाक': 'sabji',
+  'શાક': 'sabji',
+  'सालन': 'sabji',
+  'ग्रेवी': 'sabji',
+  'करी': 'sabji',
+  sabji: 'sabji',
+  sabzi: 'sabji',
+  subji: 'sabji',
+  subzi: 'sabji',
+  shaak: 'sabji',
+  shak: 'sabji',
+  curry: 'sabji',
+  gravy: 'sabji',
+
+  // Specific Dish Styles
+  'बटर': 'butter',
+  butter: 'butter',
+  'मसाला': 'masala',
+  masala: 'masala',
+  'कढ़ाई': 'kadai',
+  'कड़ाई': 'kadai',
+  'कढाई': 'kadai',
+  kadai: 'kadai',
+  kadhai: 'kadai',
+  karahi: 'kadai',
+  'शाही': 'shahi',
+  shahi: 'shahi',
+  'पालक': 'palak',
+  palak: 'palak',
+  spinach: 'palak',
+  'टिक्का': 'tikka',
+  tikka: 'tikka',
+  'मटर': 'matar',
+  matar: 'matar',
+  muttor: 'matar',
+  mutter: 'matar',
+  'काजू': 'kaju',
+  kaju: 'kaju',
+  cashew: 'kaju',
+  'मिक्स': 'mix',
+  mix: 'mix',
+  'वेज': 'veg',
+  veg: 'veg',
+  'आलू': 'aloo',
+  aloo: 'aloo',
+  alu: 'aloo',
+  'गोभी': 'gobi',
+  gobi: 'gobi',
+  gobhi: 'gobi',
+  'मशरूम': 'mushroom',
+  mushroom: 'mushroom',
+  'कोफ्ता': 'kofta',
+  kofta: 'kofta',
+  'चिल्ली': 'chilli',
+  'चिली': 'chilli',
+  chilli: 'chilli',
+  chili: 'chilli',
+
+  // Dal
+  'दाल': 'dal',
+  'દાળ': 'dal',
+  dal: 'dal',
+  daal: 'dal',
+  'तड़का': 'tadka',
+  tadka: 'tadka',
+  'मखनी': 'makhani',
+  makhani: 'makhani',
+  makhni: 'makhani',
+
+  // Roti / Naan / Breads
+  'रोटी': 'roti',
+  'रोटियां': 'roti',
+  'રોટલી': 'roti',
+  roti: 'roti',
+  chapati: 'roti',
+  phulka: 'roti',
+  'नान': 'naan',
+  naan: 'naan',
+  nan: 'naan',
+  'पराठा': 'paratha',
+  'परांठा': 'paratha',
+  paratha: 'paratha',
+  parantha: 'paratha',
+  'कुलचा': 'kulcha',
+  kulcha: 'kulcha',
+  'तंदूरी': 'tandoori',
+  tandoori: 'tandoori',
+  bread: 'roti',
+  breads: 'roti',
+
+  // Rice & Biryani
+  'चावल': 'rice',
+  'राइस': 'rice',
+  'भात': 'rice',
+  'ભાત': 'rice',
+  rice: 'rice',
+  'बिरयानी': 'biryani',
+  'बिरियानी': 'biryani',
+  biryani: 'biryani',
+  biriyani: 'biryani',
+  'पुलाव': 'pulao',
+  pulao: 'pulao',
+  pulav: 'pulao',
+  'जीरा': 'jeera',
+  jeera: 'jeera',
+
+  // Starters & Chinese
+  'स्टार्टर': 'starter',
+  'स्नैक्स': 'starter',
+  'चाइनीज': 'chinese',
+  'मंचूरियन': 'manchurian',
+  starter: 'starter',
+  starters: 'starter',
+  snacks: 'starter',
+  chinese: 'chinese',
+  manchurian: 'manchurian',
+  noodles: 'noodles',
+  'नूडल्स': 'noodles',
+  'चाउमीन': 'noodles',
+  chowmein: 'noodles',
+
+  // Beverages & Desserts
+  'लस्सी': 'lassi',
+  lassi: 'lassi',
+  'छाछ': 'chaas',
+  'छास': 'chaas',
+  chaas: 'chaas',
+  chhach: 'chaas',
+  buttermilk: 'chaas',
+  'चाय': 'tea',
+  chai: 'tea',
+  tea: 'tea',
+  'कॉफी': 'coffee',
+  coffee: 'coffee',
+  'कोल्ड्रिंक': 'beverage',
+  'ड्रिंक': 'beverage',
+  drink: 'beverage',
+  drinks: 'beverage',
+  beverage: 'beverage',
+  beverages: 'beverage',
+  'मीठा': 'dessert',
+  'स्वीट': 'dessert',
+  'आइसक्रीम': 'dessert',
+  sweet: 'dessert',
+  sweets: 'dessert',
+  dessert: 'dessert',
+  desserts: 'dessert',
+};
+
+// Stopwords that appear in conversational food questions ("paneer Mein कौन-कौन Si sabji hai")
+const MENU_QUERY_STOPWORDS = new Set([
+  'mein', 'me', 'ma', 'mai', 'main', 'में', 'मे', 'मां', 'માં',
+  'kaun', 'kon', 'koun', 'konsi', 'kaunsi', 'konsa', 'kaunsa', 'konse', 'kaunse',
+  'कौन', 'कोन', 'कौंन', 'कौनसी', 'कोनसी', 'सी', 'सा', 'से', 'कया', 'क्या', 'શું', 'કઈ', 'કયા',
+  'si', 'sa', 'se', 'kya', 'hai', 'hain', 'he', 'ho', 'h', 'है', 'हैं', 'हे', 'हो', 'છે', 'છો',
+  'ki', 'ke', 'ka', 'ko', 'की', 'के', 'का', 'को', 'नी', 'ના', 'ની', 'નું',
+  'batao', 'bataiye', 'bataye', 'dikhao', 'dikhaiye', 'बताओ', 'बताइए', 'दिखाओ', 'दिखाइए', 'બતાવો',
+  'milega', 'milegi', 'milta', 'milti', 'milte', 'मिलेगा', 'मिलेगी', 'मिलता', 'मिलती', 'मिलते', 'મળે',
+  'available', 'option', 'options', 'variety', 'varieties', 'type', 'types',
+  'all', 'list', 'menu', 'item', 'items', 'dish', 'dishes', 'food', 'खाना', 'मेन्यू', 'मेनू',
+  'what', 'which', 'do', 'you', 'have', 'in', 'the', 'of', 'for', 'and', 'or', 'please', 'tell', 'show',
+  'aapke', 'apke', 'pass', 'paas', 'yahan', 'yaha', 'आपके', 'पास', 'यहाँ', 'यहां',
+  'kitna', 'kitne', 'price', 'rate', 'cost', 'bhav', 'kimat', 'कितना', 'कितने', 'रेट', 'प्राइस', 'कीमत', 'भाव',
+]);
+
 /**
- * Matches a query against Products and Services catalog.
+ * Converts a raw text or item string into canonical food tokens + normalized English words
  */
-function matchProductService(
+function extractCanonicalFoodTokens(text: string): string[] {
+  const cleaned = text
+    .toLowerCase()
+    .replace(/[?!,.:;'"(){}\[\]<>—–_\/\\|-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return [];
+
+  const rawWords = cleaned.split(' ');
+  const tokens: string[] = [];
+
+  for (const w of rawWords) {
+    if (!w) continue;
+    if (FOOD_TOKEN_MAP[w]) {
+      tokens.push(FOOD_TOKEN_MAP[w]);
+    } else if (!MENU_QUERY_STOPWORDS.has(w) && w.length >= 2) {
+      tokens.push(w);
+    }
+  }
+  return Array.from(new Set(tokens));
+}
+
+/**
+ * Smart Menu & Dish Search:
+ * Handles both multi-item category/ingredient queries (e.g. "paneer Mein कौन-कौन Si sabji hai", "roti me kya hai")
+ * and single specific dish queries (e.g. "Kadai Paneer price").
+ */
+function searchMenuCatalog(
+  rawText: string,
   normText: string,
   products: PublicBusinessChatProfile['products_services']
-): { item: PublicBusinessChatProfile['products_services'][0]; isPriceQuery: boolean } | null {
+): {
+  matchedItems: PublicBusinessChatProfile['products_services'];
+  searchLabel: string;
+  isListInquiry: boolean;
+} | null {
   if (!products || products.length === 0) return null;
 
-  const isPriceQuery =
-    normText.includes('price') ||
-    normText.includes('rate') ||
-    normText.includes('cost') ||
-    normText.includes('kitna') ||
-    normText.includes('bhav') ||
-    normText.includes('kimat') ||
-    normText.includes('ketla');
+  const queryTokens = extractCanonicalFoodTokens(rawText);
+  if (queryTokens.length === 0) return null;
+
+  // Detect if user is asking "कौन-कौन सी" / "kya kya" / "list" / "sabji" / multiple options
+  const rawLower = rawText.toLowerCase();
+  const isListInquiry =
+    rawLower.includes('कौन') ||
+    rawLower.includes('कोन') ||
+    rawLower.includes('क्या') ||
+    rawLower.includes('kon') ||
+    rawLower.includes('kaun') ||
+    rawLower.includes('konsi') ||
+    rawLower.includes('kaunsi') ||
+    rawLower.includes('kya') ||
+    rawLower.includes('list') ||
+    rawLower.includes('menu') ||
+    rawLower.includes('मेन्यू') ||
+    rawLower.includes('मेनू') ||
+    rawLower.includes('options') ||
+    rawLower.includes('variety') ||
+    rawLower.includes('dishes') ||
+    rawLower.includes('items') ||
+    rawLower.includes('all') ||
+    queryTokens.includes('sabji') ||
+    queryTokens.includes('roti') ||
+    queryTokens.includes('dal') ||
+    queryTokens.includes('rice') ||
+    queryTokens.includes('starter') ||
+    queryTokens.includes('beverage');
+
+  // Separate specific ingredient/dish tokens (e.g., 'paneer', 'kadai', 'butter', 'dal', 'roti', 'biryani')
+  // from generic 'sabji' token when both are present (like in "paneer Mein कौन-कौन Si sabji hai")
+  const specificTokens = queryTokens.filter((t) => t !== 'sabji');
+  const hasSabjiToken = queryTokens.includes('sabji');
+
+  // Score each menu item
+  const scoredItems: Array<{
+    item: PublicBusinessChatProfile['products_services'][0];
+    score: number;
+    matchedSpecificCount: number;
+  }> = [];
 
   for (const item of products) {
-    const itemNameNorm = normalizeText(item.name);
-    const itemWords = itemNameNorm.split(/\s+/).filter((w) => w.length > 2);
+    const itemText = `${item.name} ${item.category} ${item.description || ''} ${item.variants || ''}`;
+    const itemTokens = extractCanonicalFoodTokens(itemText);
+    const itemLower = itemText.toLowerCase();
 
-    // Exact or contains match
-    if (normText.includes(itemNameNorm) || itemWords.every((w) => normText.includes(w))) {
-      return { item, isPriceQuery };
+    let matchedSpecificCount = 0;
+    let score = 0;
+
+    const tokensToMatch = specificTokens.length > 0 ? specificTokens : queryTokens;
+
+    for (const qt of tokensToMatch) {
+      const exactMatch =
+        itemTokens.includes(qt) ||
+        itemLower.includes(qt) ||
+        itemTokens.some((it) => isFuzzyMatch(it, qt));
+
+      if (exactMatch) {
+        matchedSpecificCount++;
+        // Higher weight if matched in name or category
+        const nameAndCat = `${item.name} ${item.category}`.toLowerCase();
+        const nameCatTokens = extractCanonicalFoodTokens(nameAndCat);
+        if (nameCatTokens.includes(qt) || nameAndCat.includes(qt)) {
+          score += 10;
+        } else {
+          score += 5;
+        }
+      }
     }
 
-    // Partial fuzzy match
-    const textWords = normText.split(/\s+/);
-    const matches = itemWords.filter((iw) => textWords.some((tw) => iw === tw || isFuzzyMatch(iw, tw)));
-    if (matches.length >= Math.max(1, Math.floor(itemWords.length * 0.6))) {
-      return { item, isPriceQuery };
+    // Special handling if the query is ONLY about "sabji" ("कौन-कौन सी सब्जी है")
+    if (specificTokens.length === 0 && hasSabjiToken) {
+      const catLower = (item.category || '').toLowerCase();
+      const nameLower = item.name.toLowerCase();
+      if (
+        catLower.includes('sabji') ||
+        catLower.includes('sabzi') ||
+        catLower.includes('main course') ||
+        catLower.includes('paneer') ||
+        catLower.includes('veg') ||
+        catLower.includes('curry') ||
+        nameLower.includes('paneer') ||
+        nameLower.includes('masala') ||
+        nameLower.includes('sabji') ||
+        nameLower.includes('curry')
+      ) {
+        matchedSpecificCount = 1;
+        score += 10;
+      }
+    }
+
+    // Special handling if query is about "roti" / breads
+    if (tokensToMatch.includes('roti')) {
+      const catLower = (item.category || '').toLowerCase();
+      if (catLower.includes('roti') || catLower.includes('bread') || catLower.includes('naan') || catLower.includes('paratha')) {
+        matchedSpecificCount = Math.max(matchedSpecificCount, 1);
+        score += 8;
+      }
+    }
+
+    // If user asked "paneer Mein कौन-कौन Si sabji hai" (both 'paneer' and 'sabji'):
+    // Boost items that are in Sabji / Main Course category so Paneer Sabjis appear at the top
+    if (hasSabjiToken && matchedSpecificCount > 0) {
+      const catLower = (item.category || '').toLowerCase();
+      if (catLower.includes('sabji') || catLower.includes('main course') || catLower.includes('paneer') || catLower.includes('curry')) {
+        score += 5;
+      }
+    }
+
+    if (matchedSpecificCount > 0) {
+      scoredItems.push({ item, score, matchedSpecificCount });
     }
   }
 
-  return null;
+  if (scoredItems.length === 0) return null;
+
+  // If user specified multiple specific words (e.g., "kadai paneer") and isn't asking a general list,
+  // check if any item matched ALL specific words
+  const maxSpecificMatched = Math.max(...scoredItems.map((s) => s.matchedSpecificCount));
+  let filtered = scoredItems;
+  if (specificTokens.length >= 2 && maxSpecificMatched >= 2) {
+    filtered = scoredItems.filter((s) => s.matchedSpecificCount === maxSpecificMatched);
+  } else if (hasSabjiToken && specificTokens.includes('paneer')) {
+    // When asking specifically for "paneer sabji", if there are items in Paneer Sabji / Main Course, prefer them over starters if > 1
+    const sabjiOnly = scoredItems.filter((s) => {
+      const c = (s.item.category || '').toLowerCase();
+      return !c.includes('starter') && !c.includes('beverage') && !c.includes('drink');
+    });
+    if (sabjiOnly.length > 0) {
+      filtered = sabjiOnly;
+    }
+  }
+
+  filtered.sort((a, b) => b.score - a.score);
+
+  // Build human-friendly label for what was searched
+  let searchLabel = specificTokens.join(' ').toUpperCase();
+  if (specificTokens.includes('paneer') && hasSabjiToken) {
+    searchLabel = 'Paneer Sabji (पनीर की सब्ज़ी)';
+  } else if (specificTokens.includes('paneer')) {
+    searchLabel = 'Paneer (पनीर)';
+  } else if (specificTokens.length === 0 && hasSabjiToken) {
+    searchLabel = 'Sabji & Main Course (सब्ज़ी मेन्यू)';
+  } else if (specificTokens.includes('dal')) {
+    searchLabel = 'Dal (दाल)';
+  } else if (specificTokens.includes('roti') || specificTokens.includes('naan')) {
+    searchLabel = 'Roti & Naan (रोटी और नान)';
+  } else if (specificTokens.includes('rice') || specificTokens.includes('biryani')) {
+    searchLabel = 'Rice & Biryani (राइस और बिरयानी)';
+  }
+
+  return {
+    matchedItems: filtered.map((f) => f.item),
+    searchLabel,
+    isListInquiry: isListInquiry || filtered.length > 1,
+  };
 }
 
 /**
@@ -378,21 +720,21 @@ export function answerCustomerQuestion(
   // 1. GREETING INTENT
   const greetingKeywords = ['hi', 'hello', 'hey', 'namaste', 'kem cho', 'kemcho', 'pranam', 'good morning', 'good afternoon', 'good evening', 'namaskar'];
   if (greetingKeywords.some((g) => norm === g || norm.startsWith(`${g} `))) {
-    let reply = `Hello! Welcome to ${profile.business_name}. How can we assist you today? You can ask about our timings, products, prices, location, or tap any option below.`;
+    let reply = `Hello! Welcome to ${profile.business_name}. How can we assist you today? You can ask about our menu, dishes (e.g. "Paneer mein kon kon si sabji hai?"), timings, prices, or location!`;
     if (lang === 'hi') {
-      reply = `नमस्ते! ${profile.business_name} में आपका स्वागत है। आज हम आपकी क्या सहायता कर सकते हैं? आप हमारी टाइमिंग, प्रोडक्ट्स, कीमतें या पते के बारे में पूछ सकते हैं।`;
+      reply = `नमस्ते! ${profile.business_name} में आपका स्वागत है। आज हम आपकी क्या सहायता कर सकते हैं? आप हमारे मेन्यू, किसी भी डिश (जैसे: "पनीर में कौन-कौन सी सब्जी है?"), टाइमिंग या पते के बारे में पूछ सकते हैं।`;
     } else if (lang === 'gu') {
-      reply = `નમસ્તે! ${profile.business_name} માં આપનું સ્વાગત છે. આજે અમે આપને કઈ રીતે મદદ કરી શકીએ? આપ અમારા સમય, પ્રોડક્ટ્સ, કિંમત કે સરનામા વિશે પૂછી શકો છો.`;
+      reply = `નમસ્તે! ${profile.business_name} માં આપનું સ્વાગત છે. આજે અમે આપને કઈ રીતે મદદ કરી શકીએ? આપ અમારા મેનુ, સમય, કિંમત કે સરનામા વિશે પૂછી શકો છો.`;
     }
     return {
       replyText: reply,
       intent: 'greeting',
       confidence: 'high',
       suggestedActions: [
+        { type: 'question', label: '🍽️ Full Food Menu', value: 'Show full menu' },
+        { type: 'question', label: '🧀 Paneer Sabji Menu', value: 'Paneer mein kaun kaun si sabji hai?' },
         { type: 'question', label: '🕒 Opening Hours', value: 'What are your opening hours?' },
         { type: 'question', label: '📍 Location', value: 'Where is your shop located?' },
-        { type: 'question', label: '📋 Products & Services', value: 'What products or services do you offer?' },
-        { type: 'question', label: '💳 Payment Methods', value: 'Which payment methods do you accept?' },
       ],
       detectedLanguage: lang,
     };
@@ -595,48 +937,109 @@ export function answerCustomerQuestion(
     };
   }
 
-  // 11. CHECK SPECIFIC PRODUCT / SERVICE OR CATALOG
-  const prodMatch = matchProductService(norm, profile.products_services);
-  if (prodMatch) {
-    const item = prodMatch.item;
-    let reply = `📋 ${item.name}:\n• Category: ${item.category}\n• Price: ${item.price} (${item.price_type.replace('_', ' ')})\n• Details: ${item.description}\n• Availability: ${item.available ? '✅ In Stock' : '❌ Currently Out of Stock'}`;
+  // 11. SMART INGREDIENT / CATEGORY / SPECIFIC DISH MENU SEARCH
+  // Handles queries like "paneer Mein कौन-कौन Si sabji hai", "पनीर में कौन कौन सी सब्जी है", "roti me kya hai", "Kadai Paneer price"
+  const menuSearch = searchMenuCatalog(rawText, norm, profile.products_services);
+  if (menuSearch && menuSearch.matchedItems.length > 0) {
+    const { matchedItems, searchLabel, isListInquiry } = menuSearch;
+
+    // If multiple items matched OR customer asked a list question ("कौन-कौन सी", "kya kya", etc.)
+    if (matchedItems.length > 1 || isListInquiry) {
+      const formattedLines = matchedItems
+        .map((item, idx) => {
+          const variantText = item.variants ? ` (${item.variants})` : '';
+          const descText = item.description ? `\n   _${item.description}_` : '';
+          return `${idx + 1}. *${item.name}* — ${item.price}${variantText}${descText}`;
+        })
+        .join('\n\n');
+
+      let reply = `🍽️ Here are the *${searchLabel}* options on the menu at ${profile.business_name} (${matchedItems.length} items):\n\n${formattedLines}\n\nTap any option below or message us on WhatsApp to order!`;
+      if (lang === 'hi') {
+        reply = `🍽️ ${profile.business_name} के मेन्यू में *${searchLabel}* के उपलब्ध विकल्प (${matchedItems.length} आइटम):\n\n${formattedLines}\n\nकिसी भी अन्य डिश का नाम लिखें या ऑर्डर करने के लिए नीचे WhatsApp पर टैप करें!`;
+      } else if (lang === 'gu') {
+        reply = `🍽️ ${profile.business_name} ના મેનુમાં *${searchLabel}* ના ઉપલબ્ધ વિકલ્પો (${matchedItems.length} આઈટમ):\n\n${formattedLines}\n\nઓર્ડર કરવા માટે નીચે WhatsApp બટન પર ક્લિક કરો!`;
+      }
+
+      const followUpActions: ChatActionOption[] = [
+        { type: 'question', label: '🍽️ पूरा मेन्यू देखें (Full Menu)', value: 'Show full menu' },
+        { type: 'question', label: '🫓 Roti & Naan', value: 'Roti aur Naan mein kya hai?' },
+        { type: 'question', label: '🍚 Rice & Biryani', value: 'Rice aur Biryani mein kya hai?' },
+        ...buildActionButtons(profile, ['whatsapp', 'call']),
+      ];
+
+      return {
+        replyText: reply,
+        intent: 'menu_category_search',
+        confidence: 'high',
+        suggestedActions: followUpActions.slice(0, 4),
+        detectedLanguage: lang,
+      };
+    }
+
+    // Single specific dish match
+    const item = matchedItems[0];
+    let reply = `📋 *${item.name}*:\n• Category: ${item.category}\n• Price: ${item.price} (${item.price_type.replace('_', ' ')})\n• Details: ${item.description}\n• Availability: ${item.available ? '✅ Available' : '❌ Currently Out of Stock'}`;
     if (item.variants) {
       reply += `\n• Options: ${item.variants}`;
     }
 
     if (lang === 'hi') {
-      reply = `📋 ${item.name}:\n• श्रेणी: ${item.category}\n• कीमत: ${item.price}\n• विवरण: ${item.description}\n• उपलब्धता: ${item.available ? '✅ उपलब्ध है' : '❌ अभी उपलब्ध नहीं'}`;
+      reply = `📋 *${item.name}*:\n• श्रेणी: ${item.category}\n• कीमत: ${item.price}${item.variants ? ` (${item.variants})` : ''}\n• विवरण: ${item.description}\n• उपलब्धता: ${item.available ? '✅ उपलब्ध है' : '❌ अभी उपलब्ध नहीं'}`;
     } else if (lang === 'gu') {
-      reply = `📋 ${item.name}:\n• કેટેગરી: ${item.category}\n• કિંમત: ${item.price}\n• વિગતો: ${item.description}\n• ઉપલબ્ધતા: ${item.available ? '✅ ઉપલબ્ધ છે' : '❌ હાલમાં ઉપલબ્ધ નથી'}`;
+      reply = `📋 *${item.name}*:\n• કેટેગરી: ${item.category}\n• કિંમત: ${item.price}${item.variants ? ` (${item.variants})` : ''}\n• વિગતો: ${item.description}\n• ઉપલબ્ધતા: ${item.available ? '✅ ઉપલબ્ધ છે' : '❌ હાલમાં ઉપલબ્ધ નથી'}`;
     }
 
     return {
       replyText: reply,
       intent: 'product_service_detail',
       confidence: 'high',
-      suggestedActions: buildActionButtons(profile, ['whatsapp', 'call']),
+      suggestedActions: [
+        { type: 'question', label: '🍽️ Full Menu', value: 'Show full menu' },
+        ...buildActionButtons(profile, ['whatsapp', 'call']),
+      ],
       detectedLanguage: lang,
     };
   }
 
-  // 12. GENERAL PRODUCTS / MENU LIST INQUIRY
-  const catalogKeywords = ['products', 'services', 'items', 'menu', 'list', 'kya milta hai', 'kya bechte ho', 'variety', 'offerings'];
-  if (catalogKeywords.some((k) => norm.includes(k))) {
+  // 12. GENERAL PRODUCTS / FULL MENU LIST INQUIRY
+  const catalogKeywords = [
+    'products', 'services', 'items', 'menu', 'list', 'kya milta hai', 'kya bechte ho', 'variety', 'offerings',
+    'मेन्यू', 'मेनू', 'पूरा मेन्यू', 'खाना', 'क्या मिलता है', 'क्या क्या है', 'मेनु', 'મેનુ',
+  ];
+  if (catalogKeywords.some((k) => norm.includes(k) || rawText.toLowerCase().includes(k))) {
     if (profile.products_services && profile.products_services.length > 0) {
-      const itemsList = profile.products_services
-        .map((p) => `• ${p.name} - ${p.price} (${p.category})`)
-        .join('\n');
-      let reply = `📋 Offerings at ${profile.business_name}:\n${itemsList}\n\nContact us on WhatsApp for orders, custom requests, or availability!`;
+      // Group items by category for a clean Restaurant Menu Card experience
+      const grouped: Record<string, typeof profile.products_services> = {};
+      for (const p of profile.products_services) {
+        const cat = p.category || 'General Menu';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(p);
+      }
+
+      const sectionsText = Object.entries(grouped)
+        .map(([catName, items]) => {
+          const rows = items
+            .map((p) => `  • *${p.name}* — ${p.price}${p.variants ? ` (${p.variants})` : ''}`)
+            .join('\n');
+          return `📌 *${catName}*:\n${rows}`;
+        })
+        .join('\n\n');
+
+      let reply = `🍽️ *Complete Menu & Offerings at ${profile.business_name}*:\n\n${sectionsText}\n\n💡 You can also ask about any specific dish or category (e.g., "Paneer mein kaun kaun si sabji hai?")!`;
       if (lang === 'hi') {
-        reply = `📋 ${profile.business_name} की प्रमुख वस्तुएं व सेवाएं:\n${itemsList}\n\nऑर्डर या किसी विशेष वस्तु की जानकारी के लिए WhatsApp पर पूछें।`;
+        reply = `🍽️ *${profile.business_name} का पूरा मेन्यू (Full Menu)*:\n\n${sectionsText}\n\n💡 आप किसी भी खास कैटेगरी के बारे में पूछ सकते हैं (जैसे: "पनीर में कौन-कौन सी सब्जी है?" या "रोटी में क्या है?")!`;
       } else if (lang === 'gu') {
-        reply = `📋 ${profile.business_name} ની મુખ્ય પ્રોડક્ટ્સ અને સેવાઓ:\n${itemsList}\n\nઓર્ડર અથવા વધુ વિગતો માટે WhatsApp પર સંપર્ક કરો.`;
+        reply = `🍽️ *${profile.business_name} નું સંપૂર્ણ મેનુ*:\n\n${sectionsText}\n\n💡 ઓર્ડર અથવા વધુ વિગતો માટે નીચે ક્લિક કરો!`;
       }
       return {
         replyText: reply,
         intent: 'products_services_catalog',
         confidence: 'high',
-        suggestedActions: buildActionButtons(profile, ['whatsapp', 'call']),
+        suggestedActions: [
+          { type: 'question', label: '🧀 Paneer Sabji Menu', value: 'Paneer mein kaun kaun si sabji hai?' },
+          { type: 'question', label: '🫓 Roti & Naan', value: 'Roti aur Naan mein kya hai?' },
+          ...buildActionButtons(profile, ['whatsapp', 'call']),
+        ],
         detectedLanguage: lang,
       };
     }

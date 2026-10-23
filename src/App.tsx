@@ -277,7 +277,15 @@ export default function App() {
             if (window.location.search.includes('chat')) {
               window.history.replaceState(null, '', window.location.pathname || '/');
             }
-            setCurrentView(session ? (session.user.role === 'admin' ? 'admin' : 'dashboard') : 'landing');
+            setCurrentView(
+              session
+                ? session.user.role === 'admin'
+                  ? 'admin'
+                  : session.user.role === 'manager'
+                  ? 'manager_dashboard'
+                  : 'dashboard'
+                : 'landing'
+            );
           }}
         />
       )}
@@ -304,7 +312,15 @@ export default function App() {
             if (window.location.search.includes('review') || window.location.search.includes('slug')) {
               window.history.replaceState(null, '', window.location.pathname || '/');
             }
-            setCurrentView(session ? (session.user.role === 'admin' ? 'admin' : 'dashboard') : 'landing');
+            setCurrentView(
+              session
+                ? session.user.role === 'admin'
+                  ? 'admin'
+                  : session.user.role === 'manager'
+                  ? 'manager_dashboard'
+                  : 'dashboard'
+                : 'landing'
+            );
           }}
         />
       )}
@@ -315,7 +331,15 @@ export default function App() {
           previewBusiness={previewBusiness}
           previewSettings={previewSettings || undefined}
           onBackToApp={() => {
-            setCurrentView(session ? (session.user.role === 'admin' ? 'admin' : 'dashboard') : 'landing');
+            setCurrentView(
+              session
+                ? session.user.role === 'admin'
+                  ? 'admin'
+                  : session.user.role === 'manager'
+                  ? 'manager_dashboard'
+                  : 'dashboard'
+                : 'landing'
+            );
           }}
         />
       )}
@@ -344,17 +368,20 @@ export default function App() {
       )}
 
       {/* VIEW: Manager Control Dashboard */}
-      {currentView === 'manager_dashboard' && session && session.user.role === 'manager' && (
-        <ManagerDashboard
-          session={session}
-          onOpenCustomerPanel={(customerSession) => {
-            setSession(customerSession);
-            setCurrentView('dashboard');
-          }}
-          onSignOut={handleSignOut}
-          onOpenLiveReview={handleOpenLiveReview}
-        />
-      )}
+      {(currentView === 'manager_dashboard' || (currentView === 'dashboard' && session?.user.role === 'manager')) &&
+        session &&
+        session.user.role === 'manager' && (
+          <ManagerDashboard
+            session={session}
+            onOpenCustomerPanel={(customerSession) => {
+              setSession(customerSession);
+              updateCurrentSession(customerSession);
+              setCurrentView('dashboard');
+            }}
+            onSignOut={handleSignOut}
+            onOpenLiveReview={handleOpenLiveReview}
+          />
+        )}
 
       {/* VIEW: Super Admin Control Center */}
       {currentView === 'admin' && session && session.user.role === 'admin' && (
@@ -362,6 +389,7 @@ export default function App() {
           session={session}
           onImpersonate={(impersonated) => {
             setSession(impersonated);
+            updateCurrentSession(impersonated);
             setCurrentView('dashboard');
           }}
           onSignOut={handleSignOut}
@@ -403,6 +431,8 @@ export default function App() {
           onGoToDashboard={() => {
             if (session?.user?.role === 'customer') {
               setCurrentView('dashboard');
+            } else if (session?.user?.role === 'manager') {
+              setCurrentView('manager_dashboard');
             } else if (session?.user?.role === 'admin') {
               setCurrentView('admin');
             }

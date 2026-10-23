@@ -51,6 +51,7 @@ import {
   CheckSquare,
   Globe,
   Sliders,
+  UtensilsCrossed,
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import {
@@ -69,7 +70,11 @@ import {
   getDefaultBusinessProfileInfo,
   computeChecklistStatus,
   synthesizePromptFromChecklist,
+  getSampleRestaurantMenu,
+  isRestaurantOrFoodCategory,
+  filterPublicChatbotInfo,
 } from '../lib/businessInfoService';
+import { answerCustomerQuestion } from '../lib/ruleBasedChatEngine';
 import { BusinessInfoChecklist } from './BusinessInfoChecklist';
 
 interface AiBusinessChatTabProps {
@@ -78,49 +83,75 @@ interface AiBusinessChatTabProps {
   onOpenLiveChat?: (slug: string) => void;
 }
 
-const getDefaultQuickPrompts = (biz: Business): ChatQuickPrompt[] => [
-  {
-    id: 'qp_hours',
-    label: '🕒 Opening Hours',
-    question: 'What are your opening hours today?',
-    category: 'hours',
-    action_type: 'message',
-    is_active: true,
-  },
-  {
-    id: 'qp_location',
-    label: '📍 Location & Address',
-    question: 'Where is your shop located?',
-    category: 'location',
-    action_type: 'message',
-    is_active: true,
-  },
-  {
-    id: 'qp_products',
-    label: '📋 Products & Services',
-    question: 'What products or services do you offer?',
-    category: 'product',
-    action_type: 'message',
-    is_active: true,
-  },
-  {
-    id: 'qp_payments',
-    label: '💳 Payment Methods',
-    question: 'Which payment methods do you accept?',
-    category: 'policy',
-    action_type: 'message',
-    is_active: true,
-  },
-  {
-    id: 'qp_whatsapp',
-    label: '💬 Chat on WhatsApp',
-    question: 'I would like to contact on WhatsApp',
-    category: 'contact',
-    action_type: 'whatsapp',
-    action_value: biz.whatsapp_number ? `https://wa.me/${biz.whatsapp_number.replace(/[^\d]/g, '')}` : '',
-    is_active: true,
-  },
-];
+const getDefaultQuickPrompts = (biz: Business): ChatQuickPrompt[] => {
+  const isFood = isRestaurantOrFoodCategory(biz.category);
+  const base: ChatQuickPrompt[] = isFood
+    ? [
+        {
+          id: 'qp_paneer_sabji',
+          label: '🧀 Paneer ki Sabjiyan',
+          question: 'paneer Mein कौन-कौन Si sabji hai',
+          category: 'product',
+          action_type: 'message',
+          is_active: true,
+        },
+        {
+          id: 'qp_full_menu',
+          label: '🍽️ Full Food Menu',
+          question: 'Menu mein kya kya hai?',
+          category: 'product',
+          action_type: 'message',
+          is_active: true,
+        },
+      ]
+    : [
+        {
+          id: 'qp_products',
+          label: '📋 Products & Services',
+          question: 'What products or services do you offer?',
+          category: 'product',
+          action_type: 'message',
+          is_active: true,
+        },
+      ];
+
+  return [
+    ...base,
+    {
+      id: 'qp_hours',
+      label: '🕒 Opening Hours',
+      question: 'What are your opening hours today?',
+      category: 'hours',
+      action_type: 'message',
+      is_active: true,
+    },
+    {
+      id: 'qp_location',
+      label: '📍 Location & Address',
+      question: 'Where is your shop located?',
+      category: 'location',
+      action_type: 'message',
+      is_active: true,
+    },
+    {
+      id: 'qp_payments',
+      label: '💳 Payment Methods',
+      question: 'Which payment methods do you accept?',
+      category: 'policy',
+      action_type: 'message',
+      is_active: true,
+    },
+    {
+      id: 'qp_whatsapp',
+      label: '💬 Chat on WhatsApp',
+      question: 'I would like to contact on WhatsApp',
+      category: 'contact',
+      action_type: 'whatsapp',
+      action_value: biz.whatsapp_number ? `https://wa.me/${biz.whatsapp_number.replace(/[^\d]/g, '')}` : '',
+      is_active: true,
+    },
+  ];
+};
 
 export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
   business,
@@ -128,12 +159,12 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
   onOpenLiveChat,
 }) => {
   const [subTab, setSubTab] = useState<
-    'overview' | 'quick_prompts' | 'checklist' | 'settings' | 'history' | 'share' | 'analytics' | 'sources' | 'personality' | 'test_bot' | 'embed'
-  >('overview');
+    'overview' | 'menu' | 'quick_prompts' | 'checklist' | 'settings' | 'history' | 'share' | 'analytics' | 'sources' | 'personality' | 'test_bot' | 'embed'
+  >(() => (isRestaurantOrFoodCategory(business.category) ? 'menu' : 'overview'));
   const [websiteUrlInput, setWebsiteUrlInput] = useState('');
   const [mapsUrlInput, setMapsUrlInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
-  const [testMessages, setTestMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string; source?: string }>>([
+  const [testMessages, setTestMessages] = useState<Array<{ sender: 'user' | 'bot'; text: string }>>([
     { sender: 'bot', text: `Hello! I am the verified AI assistant for ${business.business_name}. Ask me anything about hours, services, or location!` }
   ]);
   const [testInput, setTestInput] = useState('');
@@ -232,6 +263,18 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
     Array<{ sender: 'user' | 'bot'; text: string; id: string; actions?: any[] }>
   >([]);
   const [simulatedTyping, setSimulatedTyping] = useState<boolean>(false);
+
+  // Food Menu Manager State (for Restaurant / Cafe / Food businesses & general item catalogs)
+  const [menuCategoryFilter, setMenuCategoryFilter] = useState<string>('ALL');
+  const [menuSearchQuery, setMenuSearchQuery] = useState<string>('');
+  const [editingDishId, setEditingDishId] = useState<string | null>(null);
+  const [dishName, setDishName] = useState<string>('');
+  const [dishCategory, setDishCategory] = useState<string>('Paneer Sabji');
+  const [dishPrice, setDishPrice] = useState<string>('');
+  const [dishVariants, setDishVariants] = useState<string>('');
+  const [dishDesc, setDishDesc] = useState<string>('');
+  const [showBulkMenuModal, setShowBulkMenuModal] = useState<boolean>(false);
+  const [bulkMenuText, setBulkMenuText] = useState<string>('');
 
   // Synchronize businessInfo whenever business changes
   useEffect(() => {
@@ -589,36 +632,240 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
     }
   };
 
+  const runTestBotQuery = (userText: string) => {
+    const cleanText = userText.trim();
+    if (!cleanText) return;
+    const newMsgs = [...testMessages, { sender: 'user' as const, text: cleanText }];
+    setTestMessages(newMsgs);
+
+    setTimeout(() => {
+      const publicInfo = filterPublicChatbotInfo(businessInfo);
+      const response = answerCustomerQuestion(
+        cleanText,
+        publicInfo,
+        'en',
+        activePrompts,
+        chatConfig
+      );
+      setTestMessages([
+        ...newMsgs,
+        { sender: 'bot', text: response.replyText },
+      ]);
+    }, 220);
+  };
+
   const handleTestChatSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!testInput.trim()) return;
     const userText = testInput.trim();
     setTestInput('');
-    const newMsgs = [...testMessages, { sender: 'user' as const, text: userText }];
-    setTestMessages(newMsgs);
+    runTestBotQuery(userText);
+  };
 
-    setTimeout(() => {
-      const lower = userText.toLowerCase();
-      let botAnswer = chatConfig.fallback_message?.en || "I couldn't confirm that information from the business details available. Please contact us directly.";
-      let matchedSource = 'Direct Business Knowledge Base';
+  // Save or Update Dish in Menu
+  const handleSaveMenuDish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dishName.trim() || !dishPrice.trim()) return;
 
-      if (lower.includes('hour') || lower.includes('time') || lower.includes('open') || lower.includes('samay')) {
-        const h = (business.business_info as any)?.hours_text || 'Monday to Sunday: 9:00 AM - 10:00 PM';
-        botAnswer = `Our operating hours are: ${h}`;
-        matchedSource = 'Operating Hours & Schedule Record';
-      } else if (lower.includes('locat') || lower.includes('address') || lower.includes('where') || lower.includes('pata')) {
-        botAnswer = `We are located at: ${business.address || (business.business_info as any)?.address || 'Main Street, City'}.`;
-        matchedSource = 'Google Maps & Store Address Record';
-      } else if (lower.includes('service') || lower.includes('product') || lower.includes('menu') || lower.includes('offer')) {
-        botAnswer = `We offer premium services and products at ${business.business_name}. ${(business.business_info as any)?.services || ''}`;
-        matchedSource = 'Website Products & Services Index';
-      } else if (lower.includes('contact') || lower.includes('phone') || lower.includes('call') || lower.includes('whatsapp')) {
-        botAnswer = `You can reach us at phone: ${business.phone || 'Available'} or WhatsApp: ${business.whatsapp_number || 'Available'}.`;
-        matchedSource = 'Verified Contact Directory';
+    const updatedInfo: BusinessProfileInfo = JSON.parse(JSON.stringify(businessInfo));
+    if (!updatedInfo.products_services) updatedInfo.products_services = [];
+
+    const variantsStr = dishVariants.trim() || undefined;
+
+    if (editingDishId) {
+      updatedInfo.products_services = updatedInfo.products_services.map((item) =>
+        item.id === editingDishId
+          ? {
+              ...item,
+              name: dishName.trim(),
+              category: dishCategory.trim() || 'Paneer Sabji',
+              price: dishPrice.trim(),
+              description: dishDesc.trim(),
+              variants: variantsStr,
+              last_updated: new Date().toISOString(),
+            }
+          : item
+      );
+      setStatusNotice(`Updated "${dishName.trim()}" in your chatbot menu!`);
+    } else {
+      const newDish: ProductServiceItem = {
+        id: `menu_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: dishName.trim(),
+        category: dishCategory.trim() || 'Paneer Sabji',
+        price: dishPrice.trim(),
+        price_type: 'fixed',
+        description: dishDesc.trim(),
+        variants: variantsStr,
+        available: true,
+        last_updated: new Date().toISOString(),
+      };
+      updatedInfo.products_services.unshift(newDish);
+      setStatusNotice(`Added "${dishName.trim()}" to your chatbot menu!`);
+    }
+
+    await handleSaveInfo(updatedInfo);
+    setEditingDishId(null);
+    setDishName('');
+    setDishPrice('');
+    setDishVariants('');
+    setDishDesc('');
+    setTimeout(() => setStatusNotice(null), 3500);
+  };
+
+  const handleEditMenuDish = (item: ProductServiceItem) => {
+    setEditingDishId(item.id);
+    setDishName(item.name);
+    setDishCategory(item.category || 'Paneer Sabji');
+    setDishPrice(item.price || '');
+    setDishVariants(item.variants || '');
+    setDishDesc(item.description || '');
+  };
+
+  const handleToggleMenuDishStock = async (dishId: string) => {
+    const updatedInfo: BusinessProfileInfo = JSON.parse(JSON.stringify(businessInfo));
+    updatedInfo.products_services = (updatedInfo.products_services || []).map((item) =>
+      item.id === dishId ? { ...item, available: !item.available } : item
+    );
+    await handleSaveInfo(updatedInfo);
+  };
+
+  const handleDeleteMenuDish = async (dishId: string) => {
+    const updatedInfo: BusinessProfileInfo = JSON.parse(JSON.stringify(businessInfo));
+    updatedInfo.products_services = (updatedInfo.products_services || []).filter(
+      (item) => item.id !== dishId
+    );
+    await handleSaveInfo(updatedInfo);
+    setStatusNotice('Menu item removed.');
+    setTimeout(() => setStatusNotice(null), 2500);
+  };
+
+  const handleLoadSampleRestaurantMenu = async () => {
+    const sampleItems = getSampleRestaurantMenu();
+    const updatedInfo: BusinessProfileInfo = JSON.parse(JSON.stringify(businessInfo));
+    const existingNames = new Set(
+      (updatedInfo.products_services || []).map((p) => p.name.toLowerCase().trim())
+    );
+    const merged = [...(updatedInfo.products_services || [])];
+    for (const item of sampleItems) {
+      if (!existingNames.has(item.name.toLowerCase().trim())) {
+        merged.push(item);
+      }
+    }
+    updatedInfo.products_services = merged;
+
+    // Also add a quick prompt button for Paneer Sabji & Full Menu if not already present
+    const currentPrompts = [...(chatConfig.quick_prompts || getDefaultQuickPrompts(business))];
+    if (!currentPrompts.some((p) => p.question.toLowerCase().includes('paneer'))) {
+      currentPrompts.unshift({
+        id: `qp_paneer_${Date.now()}`,
+        label: '🧀 Paneer ki Sabjiyan',
+        question: 'paneer Mein कौन-कौन Si sabji hai',
+        category: 'product',
+        action_type: 'message',
+        is_active: true,
+      });
+    }
+    if (!currentPrompts.some((p) => p.label.toLowerCase().includes('menu'))) {
+      currentPrompts.unshift({
+        id: `qp_menu_${Date.now()}`,
+        label: '🍽️ Full Food Menu',
+        question: 'Menu mein kya kya hai?',
+        category: 'product',
+        action_type: 'message',
+        is_active: true,
+      });
+    }
+
+    await handleSaveInfo(updatedInfo);
+    await handleSaveChatConfig({
+      ...chatConfig,
+      quick_prompts: currentPrompts,
+      updated_at: new Date().toISOString(),
+    });
+    setStatusNotice('Full Sample Restaurant Menu (with 6 Paneer Sabjis, Dal, Roti, Biryani) loaded!');
+    setTimeout(() => setStatusNotice(null), 4000);
+  };
+
+  // Bulk Paste Menu Parser (e.g. "Paneer Lababdar - ₹260 - Rich creamy gravy")
+  const handleBulkMenuImport = async () => {
+    if (!bulkMenuText.trim()) return;
+    const lines = bulkMenuText
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    const updatedInfo: BusinessProfileInfo = JSON.parse(JSON.stringify(businessInfo));
+    if (!updatedInfo.products_services) updatedInfo.products_services = [];
+
+    let currentHeaderCategory = dishCategory || 'Main Course';
+    let addedCount = 0;
+
+    for (const line of lines) {
+      // Check if line is a category header like "# Paneer Sabji" or "[Roti & Naan]"
+      if ((line.startsWith('#') || (line.startsWith('[') && line.endsWith(']'))) && !line.includes('₹')) {
+        currentHeaderCategory = line.replace(/^[#\[\]\s]+|[#\[\]\s]+$/g, '').trim() || currentHeaderCategory;
+        continue;
       }
 
-      setTestMessages([...newMsgs, { sender: 'bot', text: botAnswer, source: matchedSource }]);
-    }, 400);
+      const parts = line.split(/\s*[-–|:]\s*/).filter(Boolean);
+      const rawName = parts[0]?.replace(/^[\d.\-*•]+\s*/, '').trim();
+      if (!rawName) continue;
+
+      let price = '₹180';
+      let desc = '';
+      if (parts.length >= 2) {
+        if (/\d/.test(parts[1])) {
+          price = parts[1].includes('₹') || parts[1].toLowerCase().includes('rs') ? parts[1].trim() : `₹${parts[1].trim()}`;
+          desc = parts.slice(2).join(' - ').trim();
+        } else {
+          desc = parts.slice(1).join(' - ').trim();
+        }
+      }
+
+      // Auto-detect dish category from dish name if not explicitly set
+      const lowerName = rawName.toLowerCase();
+      let detectedCat = currentHeaderCategory;
+      if (
+        lowerName.includes('paneer') ||
+        lowerName.includes(' पनीर') ||
+        lowerName.startsWith('पनीर') ||
+        lowerName.includes('palak paneer') ||
+        lowerName.includes('kadai paneer') ||
+        lowerName.includes('shahi paneer')
+      ) {
+        detectedCat = lowerName.includes('chilli') || lowerName.includes('tikka dry') || lowerName.includes('65')
+          ? 'Starters & Chinese'
+          : 'Paneer Sabji';
+      } else if (lowerName.includes('dal') || lowerName.includes('दाल') || lowerName.includes('tadka') || lowerName.includes('makhani')) {
+        detectedCat = 'Dal Special';
+      } else if (lowerName.includes('roti') || lowerName.includes('naan') || lowerName.includes('paratha') || lowerName.includes('kulcha') || lowerName.includes('रोटी') || lowerName.includes('नान')) {
+        detectedCat = 'Roti & Breads';
+      } else if (lowerName.includes('rice') || lowerName.includes('biryani') || lowerName.includes('pulao') || lowerName.includes('khichdi') || lowerName.includes('बिरयानी')) {
+        detectedCat = 'Rice & Biryani';
+      } else if (lowerName.includes('lassi') || lowerName.includes('chaas') || lowerName.includes('coffee') || lowerName.includes('tea') || lowerName.includes('shake') || lowerName.includes('cold')) {
+        detectedCat = 'Beverages & Drinks';
+      }
+
+      updatedInfo.products_services.push({
+        id: `menu_bulk_${Date.now()}_${addedCount}_${Math.random().toString(36).substring(2, 5)}`,
+        name: rawName,
+        category: detectedCat,
+        price,
+        price_type: 'fixed',
+        description: desc || `Freshly prepared ${rawName}`,
+        available: true,
+        last_updated: new Date().toISOString(),
+      });
+      addedCount++;
+    }
+
+    if (addedCount > 0) {
+      await handleSaveInfo(updatedInfo);
+      setBulkMenuText('');
+      setShowBulkMenuModal(false);
+      setStatusNotice(`Successfully imported ${addedCount} dishes into your Chatbot Menu!`);
+      setTimeout(() => setStatusNotice(null), 4000);
+    }
   };
 
   const handleDownloadQr = () => {
@@ -720,9 +967,13 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
     if (packType === 'restaurant') {
       packPrompts = [
         {
-          label: '🍕 Food Menu & Rates',
-          question: 'What is on your food menu and what are the prices?',
-          direct_answer: `${business.business_name} offers delicious snacks, meals, and beverages. Check our verified list or ask for any dish price!`,
+          label: '🧀 Paneer ki Sabjiyan',
+          question: 'paneer Mein कौन-कौन Si sabji hai',
+          category: 'product',
+        },
+        {
+          label: '🍽️ Full Food Menu & Rates',
+          question: 'Menu mein kya kya hai?',
           category: 'product',
         },
         {
@@ -843,27 +1094,33 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
 
   // Simulate Clicking a Button in the Dashboard Live Simulator
   const handleSimulatedPromptClick = (p: ChatQuickPrompt) => {
+    const queryText = p.question || p.label;
     const userMsg = {
       id: `sim_u_${Date.now()}`,
       sender: 'user' as const,
-      text: p.question || p.label,
+      text: queryText,
     };
     setSimulatedMessages((prev) => [...prev, userMsg]);
     setSimulatedTyping(true);
 
     setTimeout(() => {
-      const botText =
-        p.direct_answer ||
-        (p.action_type === 'whatsapp'
-          ? `💬 Connecting you to ${business.business_name} on WhatsApp at ${business.whatsapp_number || business.phone}.`
-          : p.action_type === 'call'
-          ? `📞 Direct call button: ${business.phone || 'Available on request'}.`
-          : `Verified details for ${business.business_name} are recorded. We look forward to welcoming you!`);
+      let botText = p.direct_answer;
+      if (!botText) {
+        if (p.action_type === 'whatsapp') {
+          botText = `💬 Connecting you to ${business.business_name} on WhatsApp at ${business.whatsapp_number || business.phone}.`;
+        } else if (p.action_type === 'call') {
+          botText = `📞 Direct call button: ${business.phone || 'Available on request'}.`;
+        } else {
+          const publicInfo = filterPublicChatbotInfo(businessInfo);
+          const ans = answerCustomerQuestion(queryText, publicInfo, 'en', activePrompts, chatConfig);
+          botText = ans.replyText;
+        }
+      }
 
       const botMsg = {
         id: `sim_b_${Date.now()}`,
         sender: 'bot' as const,
-        text: botText,
+        text: botText || '',
       };
       setSimulatedMessages((prev) => [...prev, botMsg]);
       setSimulatedTyping(false);
@@ -960,6 +1217,12 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none border-b border-neutral-200">
         {[
           { id: 'overview', label: 'Overview', icon: <Layers className="w-3.5 h-3.5" /> },
+          {
+            id: 'menu',
+            label: '🍽️ Food Menu (मेन्यू)',
+            icon: <UtensilsCrossed className="w-3.5 h-3.5 text-orange-500" />,
+            badge: `${(businessInfo.products_services || []).length}`,
+          },
           {
             id: 'quick_prompts',
             label: '⚡ Quick Messages',
@@ -1133,6 +1396,445 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
               ))}
             </div>
           </div>
+
+          {/* Restaurant & Food Menu Spotlight Card */}
+          <div className="bg-gradient-to-br from-orange-50 via-amber-50 to-rose-50 rounded-2xl border border-orange-200/80 p-5 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <UtensilsCrossed className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-neutral-900 flex items-center gap-2">
+                    <span>🍽️ Restaurant &amp; Food Menu (चैटबॉट मेन्यू सेक्शन)</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-800 border border-orange-200">
+                      {(businessInfo.products_services || []).length} Dishes Added
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-neutral-600">
+                    Add your full menu (Paneer Sabji, Dal, Roti, Biryani, Starters). When a customer asks{' '}
+                    <strong className="text-orange-900">&ldquo;paneer Mein कौन-कौन Si sabji hai&rdquo;</strong>, the chatbot checks your menu and replies with all Paneer dishes &amp; prices!
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubTab('test_bot');
+                    runTestBotQuery('paneer Mein कौन-कौन Si sabji hai');
+                  }}
+                  className="px-3 py-2 bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 font-bold text-xs rounded-xl shadow-2xs transition-colors cursor-pointer"
+                >
+                  🧪 Test &ldquo;Paneer Sabji&rdquo;
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubTab('menu')}
+                  className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Open Menu Manager</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUBTAB: RESTAURANT & FOOD MENU MANAGER */}
+      {subTab === 'menu' && (
+        <div className="space-y-6">
+          {/* Top Header & Quick Actions */}
+          <div className="bg-white rounded-2xl border border-neutral-200 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-neutral-100 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                    <UtensilsCrossed className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-base font-bold text-neutral-900">
+                    🍽️ Restaurant Food Menu (पूरा मेन्यू जोड़ें)
+                  </h3>
+                  <span className="px-2.5 py-0.5 bg-orange-100 text-orange-800 rounded-full text-xs font-extrabold">
+                    {(businessInfo.products_services || []).length} Dishes
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-500">
+                  Yahan apna pura restaurant menu add karein. Jab customer chatbot mein puchega{' '}
+                  <span className="font-bold text-neutral-800">&ldquo;paneer Mein कौन-कौन Si sabji hai&rdquo;</span>, to chatbot menu check karke Paneer ki sabhi sabjiyon ki list aur rate dikhayega!
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleLoadSampleRestaurantMenu}
+                  className="px-3.5 py-2 bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+                  <span>1-Click Load Full Sample Menu</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowBulkMenuModal(true)}
+                  className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-[#6C3BFF] border border-purple-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>📋 Bulk Paste Full Menu</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubTab('test_bot');
+                    runTestBotQuery('paneer Mein कौन-कौन Si sabji hai');
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>Test: &ldquo;paneer Mein कौन-कौन Si sabji hai&rdquo;</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Add / Edit Single Dish Form */}
+            <form
+              onSubmit={handleSaveMenuDish}
+              className="bg-orange-50/60 border border-orange-200/80 rounded-2xl p-4 space-y-3.5"
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-orange-950 flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-orange-600" />
+                  <span>
+                    {editingDishId ? '✏️ Edit Dish in Menu' : '➕ Add New Dish / Sabji to Menu (नया आइटम जोड़ें)'}
+                  </span>
+                </h4>
+                {editingDishId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingDishId(null);
+                      setDishName('');
+                      setDishPrice('');
+                      setDishVariants('');
+                      setDishDesc('');
+                    }}
+                    className="text-[11px] font-bold text-rose-600 hover:underline cursor-pointer"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-neutral-700 block">
+                    Dish Name (सब्जी / डिश का नाम) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={dishName}
+                    onChange={(e) => setDishName(e.target.value)}
+                    placeholder="e.g. Paneer Butter Masala, Kadai Paneer"
+                    className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:outline-hidden focus:border-orange-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-neutral-700 block">
+                    Category (कैटेगरी चुनें या लिखें) *
+                  </label>
+                  <input
+                    type="text"
+                    list="restaurant-menu-categories"
+                    value={dishCategory}
+                    onChange={(e) => setDishCategory(e.target.value)}
+                    placeholder="e.g. Paneer Sabji"
+                    className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:outline-hidden focus:border-orange-500"
+                  />
+                  <datalist id="restaurant-menu-categories">
+                    <option value="Paneer Sabji" />
+                    <option value="Veg Sabji & Main Course" />
+                    <option value="Dal Special" />
+                    <option value="Roti & Breads" />
+                    <option value="Rice & Biryani" />
+                    <option value="Starters & Chinese" />
+                    <option value="Beverages & Drinks" />
+                    <option value="Desserts & Sweets" />
+                    <option value="Thali & Combos" />
+                  </datalist>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-neutral-700 block">
+                    Price (रेट / कीमत) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={dishPrice}
+                    onChange={(e) => setDishPrice(e.target.value)}
+                    placeholder="e.g. ₹220"
+                    className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:outline-hidden focus:border-orange-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-neutral-700 block">
+                    Half / Full or Variants (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={dishVariants}
+                    onChange={(e) => setDishVariants(e.target.value)}
+                    placeholder="e.g. Half: ₹140, Full: ₹220"
+                    className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:outline-hidden focus:border-orange-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+                <div className="flex-1 space-y-1">
+                  <label className="text-[11px] font-bold text-neutral-700 block">
+                    Description / Ingredients (ग्रेवी, स्वाद या विवरण — Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={dishDesc}
+                    onChange={(e) => setDishDesc(e.target.value)}
+                    placeholder="e.g. Rich & creamy tomato cashew gravy with soft malai paneer cubes (पनीर बटर मसाला)"
+                    className="w-full px-3 py-2 text-xs bg-white border border-neutral-300 rounded-xl focus:outline-hidden focus:border-orange-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{editingDishId ? 'Update Dish' : 'Add Dish to Menu'}</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Category Filter Pills & Search Bar */}
+            {(() => {
+              const allItems = businessInfo.products_services || [];
+              const categories = Array.from(
+                new Set(allItems.map((i) => i.category || 'Other'))
+              );
+              const filteredItems = allItems.filter((item) => {
+                const matchesCat =
+                  menuCategoryFilter === 'ALL' || (item.category || 'Other') === menuCategoryFilter;
+                const q = menuSearchQuery.toLowerCase().trim();
+                const matchesSearch =
+                  !q ||
+                  item.name.toLowerCase().includes(q) ||
+                  (item.category || '').toLowerCase().includes(q) ||
+                  (item.description || '').toLowerCase().includes(q);
+                return matchesCat && matchesSearch;
+              });
+
+              return (
+                <div className="space-y-4 pt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                      <button
+                        type="button"
+                        onClick={() => setMenuCategoryFilter('ALL')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                          menuCategoryFilter === 'ALL'
+                            ? 'bg-neutral-900 text-white'
+                            : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                        }`}
+                      >
+                        All Categories ({allItems.length})
+                      </button>
+                      {categories.map((cat) => {
+                        const count = allItems.filter((i) => (i.category || 'Other') === cat).length;
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => setMenuCategoryFilter(cat)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                              menuCategoryFilter === cat
+                                ? 'bg-orange-600 text-white shadow-2xs'
+                                : 'bg-orange-50 text-orange-900 hover:bg-orange-100 border border-orange-200/60'
+                            }`}
+                          >
+                            {cat} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <input
+                      type="text"
+                      value={menuSearchQuery}
+                      onChange={(e) => setMenuSearchQuery(e.target.value)}
+                      placeholder="🔍 Search dish (e.g. paneer, roti, dal)..."
+                      className="px-3 py-1.5 text-xs bg-neutral-50 border border-neutral-300 rounded-xl focus:bg-white focus:outline-hidden focus:border-orange-500 sm:w-64"
+                    />
+                  </div>
+
+                  {filteredItems.length === 0 ? (
+                    <div className="p-8 bg-neutral-50 rounded-2xl border border-dashed border-neutral-300 text-center space-y-3">
+                      <UtensilsCrossed className="w-8 h-8 text-neutral-400 mx-auto" />
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-bold text-neutral-800">
+                          No dishes found in this view
+                        </h4>
+                        <p className="text-xs text-neutral-500 max-w-md mx-auto">
+                          Add dishes above or click &ldquo;1-Click Load Full Sample Menu&rdquo; to populate Paneer Sabjis, Dal, Roti, Rice &amp; Starters immediately.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleLoadSampleRestaurantMenu}
+                        className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Load Sample Indian Restaurant Menu</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {filteredItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`p-4 rounded-2xl border transition-all flex items-start justify-between gap-3 ${
+                            item.available
+                              ? 'bg-white border-neutral-200 hover:border-orange-300 shadow-2xs'
+                              : 'bg-neutral-50 border-neutral-200 opacity-65'
+                          }`}
+                        >
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-neutral-900">{item.name}</span>
+                              <span className="px-2 py-0.5 bg-orange-50 text-orange-800 border border-orange-200/70 rounded-full text-[10px] font-bold">
+                                {item.category || 'Menu'}
+                              </span>
+                              {item.price && (
+                                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-xs font-extrabold">
+                                  {item.price}
+                                </span>
+                              )}
+                            </div>
+                            {item.variants && (
+                              <div className="text-[11px] font-semibold text-amber-800">
+                                📏 {item.variants}
+                              </div>
+                            )}
+                            {item.description && (
+                              <p className="text-[11px] text-neutral-500 leading-relaxed">
+                                {item.description}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleMenuDishStock(item.id)}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer border ${
+                                item.available
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                              }`}
+                              title="Toggle In-Stock / Out-of-Stock"
+                            >
+                              {item.available ? 'In Stock' : 'Out'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEditMenuDish(item)}
+                              className="p-1.5 text-neutral-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg cursor-pointer"
+                              title="Edit dish"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMenuDish(item.id)}
+                              className="p-1.5 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                              title="Remove dish"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Modal: Bulk Paste Full Menu */}
+          {showBulkMenuModal && (
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <UtensilsCrossed className="w-5 h-5 text-orange-600" />
+                    <h4 className="text-base font-bold text-neutral-900">
+                      📋 Bulk Paste Full Restaurant Menu
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkMenuModal(false)}
+                    className="p-1 text-neutral-400 hover:text-neutral-700 rounded-lg hover:bg-neutral-100 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 text-xs text-neutral-600">
+                  <p>
+                    Paste multiple dishes at once (one dish per line). Any dish containing{' '}
+                    <strong>Paneer / पनीर</strong> is automatically categorized under{' '}
+                    <strong>Paneer Sabji</strong>!
+                  </p>
+                  <div className="p-2.5 bg-orange-50 border border-orange-200 rounded-xl font-mono text-[11px] text-orange-950">
+                    # Paneer Sabji<br />
+                    Paneer Lababdar - ₹250 - Rich tomato &amp; grated paneer gravy<br />
+                    Paneer Handi - ₹230 - Claypot spiced gravy<br />
+                    Paneer Bhurji - ₹240 - Spiced scrambled malai paneer<br />
+                    # Roti &amp; Breads<br />
+                    Garlic Naan - ₹60 - Tandoori naan with fresh garlic
+                  </div>
+                  <textarea
+                    rows={7}
+                    value={bulkMenuText}
+                    onChange={(e) => setBulkMenuText(e.target.value)}
+                    placeholder={`Paneer Lababdar - ₹250 - Rich creamy gravy\nPaneer Handi - ₹230 - Spicy handi masala\nGarlic Naan - ₹60`}
+                    className="w-full p-3 bg-neutral-50 border border-neutral-300 rounded-xl focus:bg-white focus:outline-hidden focus:border-orange-500 font-mono text-xs"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkMenuModal(false)}
+                    className="px-3.5 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!bulkMenuText.trim()}
+                    onClick={handleBulkMenuImport}
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer disabled:opacity-40"
+                  >
+                    Import Dishes to Menu
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2200,30 +2902,51 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
       {subTab === 'test_bot' && (
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-neutral-200 p-6 shadow-xs space-y-4">
-            <div className="border-b border-neutral-100 pb-3 flex items-center justify-between">
+            <div className="border-b border-neutral-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-bold text-neutral-900">Test Your AI Chatbot</h3>
-                <p className="text-xs text-neutral-500">Ask questions as a customer before publishing your widget.</p>
+                <h3 className="text-base font-bold text-neutral-900">Test Your AI Chatbot (लाइव मेन्यू व सवाल टेस्ट करें)</h3>
+                <p className="text-xs text-neutral-500">
+                  Ask customer questions in Hindi, Hinglish, or English (e.g. &ldquo;paneer Mein कौन-कौन Si sabji hai&rdquo;).
+                </p>
               </div>
               <button
                 type="button"
-                onClick={() => setTestMessages([{ sender: 'bot', text: `Hello! I am the verified AI assistant for ${business.business_name}. Ask me anything!` }])}
-                className="px-3 py-1.5 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl cursor-pointer"
+                onClick={() => setTestMessages([{ sender: 'bot', text: `Hello! I am the verified AI assistant for ${business.business_name}. Ask me anything about our menu, Paneer dishes, prices, or timings!` }])}
+                className="px-3 py-1.5 text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl cursor-pointer self-start sm:self-auto"
               >
                 Reset Chat
               </button>
+            </div>
+
+            {/* 1-Click Sample Customer Questions */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-bold text-neutral-500 mr-1">Try asking:</span>
+              {[
+                'paneer Mein कौन-कौन Si sabji hai',
+                'पनीर में कौन कौन सी सब्जी है?',
+                'Paneer Butter Masala ka rate kya hai?',
+                'Roti aur Naan mein kya hai?',
+                'Dal mein kya option hai?',
+                'Full Menu dikhao',
+              ].map((sampleQ) => (
+                <button
+                  key={sampleQ}
+                  type="button"
+                  onClick={() => runTestBotQuery(sampleQ)}
+                  className="px-2.5 py-1 bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200/80 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
+                >
+                  {sampleQ}
+                </button>
+              ))}
             </div>
 
             <div className="bg-neutral-950 rounded-2xl border border-neutral-800 p-4 h-[420px] flex flex-col justify-between">
               <div className="overflow-y-auto space-y-3 pr-2 flex-1 text-xs">
                 {testMessages.map((m, idx) => (
                   <div key={idx} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'} space-y-1`}>
-                    <div className={`p-3.5 rounded-2xl max-w-[85%] ${m.sender === 'user' ? 'bg-[#6C3BFF] text-white rounded-br-xs' : 'bg-neutral-900 text-neutral-100 border border-neutral-800 rounded-bl-xs'}`}>
+                    <div className={`p-3.5 rounded-2xl max-w-[85%] whitespace-pre-wrap leading-relaxed ${m.sender === 'user' ? 'bg-[#6C3BFF] text-white rounded-br-xs' : 'bg-neutral-900 text-neutral-100 border border-neutral-800 rounded-bl-xs'}`}>
                       {m.text}
                     </div>
-                    {m.source && (
-                      <span className="text-[9px] text-emerald-400 font-mono px-1">Source: {m.source}</span>
-                    )}
                   </div>
                 ))}
               </div>
@@ -2233,7 +2956,7 @@ export const AiBusinessChatTab: React.FC<AiBusinessChatTabProps> = ({
                   type="text"
                   value={testInput}
                   onChange={(e) => setTestInput(e.target.value)}
-                  placeholder="Ask about hours, location, services..."
+                  placeholder="e.g. paneer Mein कौन-कौन Si sabji hai..."
                   className="flex-1 px-4 py-2.5 text-xs bg-neutral-900 border border-neutral-800 rounded-xl text-white placeholder-neutral-500 focus:border-[#6C3BFF] focus:outline-hidden"
                 />
                 <button

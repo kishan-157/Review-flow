@@ -787,6 +787,7 @@ export async function createCustomerByAdmin(params: {
   accessValidityType?: AccessValidityType;
   customDurationDays?: number;
   customExpiryDate?: string;
+  allowedFeatures?: string[];
 }): Promise<{ user: Profile; business: Business; tempPassword: string }> {
   initDefaultData();
   const email = params.email.trim().toLowerCase();
@@ -813,6 +814,9 @@ export async function createCustomerByAdmin(params: {
     access_validity_type: validityType,
     access_duration_days: durationDays,
     access_expires_at: expiresAt,
+    ...(Array.isArray(params.allowedFeatures) && params.allowedFeatures.length > 0
+      ? { allowed_features: params.allowedFeatures }
+      : {}),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     last_login_at: new Date().toISOString(),
@@ -830,6 +834,9 @@ export async function createCustomerByAdmin(params: {
     phone: params.phone?.trim() || '',
     address: params.address?.trim() || '',
     category: params.category || 'Restaurant & Hospitality',
+    ...(Array.isArray(params.allowedFeatures) && params.allowedFeatures.length > 0
+      ? { allowed_features: params.allowedFeatures }
+      : {}),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -882,6 +889,7 @@ export async function createCustomerByAdmin(params: {
         accessValidityType: validityType,
         customDurationDays: durationDays,
         customExpiryDate: expiresAt,
+        allowedFeatures: params.allowedFeatures,
       }),
     });
     if (res.ok) {
@@ -907,26 +915,25 @@ export async function createCustomerByAdmin(params: {
     }
   }
 
-  // If Firestore is connected, insert record into Firestore safely
-  try {
-    const { doc, setDoc } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    await setDoc(doc(db, 'users', userId), newProfile);
-    await setDoc(doc(db, 'businesses', businessId), newBusiness);
-    await setDoc(doc(db, 'reviewSettings', newSettings.id), newSettings);
-    await setDoc(doc(db, 'userPasswords', email), {
-      credential: email,
-      customerCode: customerCode.toLowerCase(),
-      password: generatedPassword,
+  // If Firestore is connected, insert record into Firestore in background without blocking UI
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'users', userId), newProfile);
+      await setDoc(doc(db, 'businesses', businessId), newBusiness);
+      await setDoc(doc(db, 'reviewSettings', newSettings.id), newSettings);
+      await setDoc(doc(db, 'userPasswords', email), {
+        credential: email,
+        customerCode: customerCode.toLowerCase(),
+        password: generatedPassword,
+      });
+      await setDoc(doc(db, 'userPasswords', customerCode.toLowerCase()), {
+        credential: email,
+        customerCode: customerCode.toLowerCase(),
+        password: generatedPassword,
+      });
     });
-    await setDoc(doc(db, 'userPasswords', customerCode.toLowerCase()), {
-      credential: email,
-      customerCode: customerCode.toLowerCase(),
-      password: generatedPassword,
-    });
-  } catch {
-    // Ignore Firestore offline or permission
-  }
+  }).catch(() => {});
 
   // Super Admin session is maintained, no session overwrite
   return { user: newProfile, business: newBusiness, tempPassword: generatedPassword };
@@ -1032,6 +1039,7 @@ export async function signInUser(credentialInput: string, passwordInput: string)
               latitude: data.session.business.latitude ?? local.latitude,
               longitude: data.session.business.longitude ?? local.longitude,
               gps_radius_meters: data.session.business.gps_radius_meters ?? local.gps_radius_meters,
+              allowed_features: data.session.business.allowed_features || local.allowed_features,
               ai_prompt: data.session.business.ai_prompt || local.ai_prompt,
               ai_keywords: data.session.business.ai_keywords || local.ai_keywords,
               ai_suggestions_preview: data.session.business.ai_suggestions_preview || local.ai_suggestions_preview,
@@ -1063,12 +1071,12 @@ export async function signInUser(credentialInput: string, passwordInput: string)
     // Network glitch or server down, smoothly fallback to Firestore & local store
   }
 
-  // 2. Try Direct Cloud Firestore authentication (100% universal across all mobile & desktop browsers)
+  // 2. Try Direct Cloud Firestore authentication (with strict timeout so it never hangs login)
   try {
     const { getDocs, collection, doc, getDoc } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
+    const { db, withFirestoreTimeout } = await import('./firebase');
 
-    const usersSnap = await getDocs(collection(db, 'users'));
+    const usersSnap = await withFirestoreTimeout(getDocs(collection(db, 'users')), 800);
     let matchedProfile: Profile | null = null;
     const cleanNumeric = cleanEmail.replace(/[^0-9]/g, '');
     const cleanAlpha = cleanEmail.replace(/[^a-z0-9]/g, '');
@@ -1094,10 +1102,10 @@ export async function signInUser(credentialInput: string, passwordInput: string)
       }
 
       // Check password in Firestore
-      const passDoc = await getDoc(doc(db, 'userPasswords', p.email.toLowerCase()));
+      const passDoc = await withFirestoreTimeout(getDoc(doc(db, 'userPasswords', p.email.toLowerCase())), 700);
       const firestorePass = passDoc.data()?.password;
 
-      const codePassDoc = await getDoc(doc(db, 'userPasswords', p.unique_customer_code.toLowerCase()));
+      const codePassDoc = await withFirestoreTimeout(getDoc(doc(db, 'userPasswords', p.unique_customer_code.toLowerCase())), 700);
       const codePass = codePassDoc.data()?.password;
 
       const validPass =
@@ -1119,7 +1127,7 @@ export async function signInUser(credentialInput: string, passwordInput: string)
 
         // Fetch connected business from Firestore
         let matchedBiz: Business | null = null;
-        const bizSnap = await getDocs(collection(db, 'businesses'));
+        const bizSnap = await withFirestoreTimeout(getDocs(collection(db, 'businesses')), 700);
         bizSnap.forEach((bd) => {
           const b = bd.data() as Business;
           if (b.user_id === p.id) matchedBiz = b;
@@ -1307,12 +1315,13 @@ export async function changeUserPassword(
     console.warn('Server password sync failed:', e);
   }
 
-  // Sync to Cloud Firestore
-  try {
-    const { doc, setDoc } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    await setDoc(doc(db, 'userPasswords', cleanEmail), { credential: cleanEmail, password: newPassword }, { merge: true });
-  } catch {}
+  // Sync to Cloud Firestore in background
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'userPasswords', cleanEmail), { credential: cleanEmail, password: newPassword }, { merge: true });
+    });
+  }).catch(() => {});
 
   const supabase = getSupabaseClient();
   if (supabase) {
@@ -1351,12 +1360,13 @@ export async function adminResetCustomerPassword(
     console.warn('Server password reset sync failed:', e);
   }
 
-  // Sync to Cloud Firestore
-  try {
-    const { doc, setDoc } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    await setDoc(doc(db, 'userPasswords', cleanEmail), { credential: cleanEmail, password: newPassword }, { merge: true });
-  } catch {}
+  // Sync to Cloud Firestore in background
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'userPasswords', cleanEmail), { credential: cleanEmail, password: newPassword }, { merge: true });
+    });
+  }).catch(() => {});
 }
 
 export function getCurrentSession(): AuthSession | null {
@@ -1435,12 +1445,12 @@ export async function getBusinessByUserId(userId: string): Promise<Business | nu
     }
   }
 
-  // 3. Check Cloud Firestore
+  // 3. Check Cloud Firestore (with fast timeout)
   try {
     const { getDocs, collection, query, where } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
+    const { db, withFirestoreTimeout } = await import('./firebase');
     const q = query(collection(db, 'businesses'), where('user_id', '==', userId));
-    const snap = await getDocs(q);
+    const snap = await withFirestoreTimeout(getDocs(q), 700);
     if (!snap.empty) {
       const biz = snap.docs[0].data() as Business;
       businesses.unshift(biz);
@@ -1571,12 +1581,12 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
     console.warn('Backend by-slug fetch notice:', err);
   }
 
-  // 3. Try Direct Cloud Firestore Query (100% universal across all mobile & desktop browsers)
+  // 3. Try Direct Cloud Firestore Query (with fast timeout)
   try {
     const { getDocs, collection, query, where, doc, getDoc } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
+    const { db, withFirestoreTimeout } = await import('./firebase');
     const q = query(collection(db, 'businesses'), where('unique_slug', '==', cleanSlug));
-    const snap = await getDocs(q);
+    const snap = await withFirestoreTimeout(getDocs(q), 700);
     if (!snap.empty) {
       const biz = snap.docs[0].data() as Business;
       const currentBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
@@ -1588,7 +1598,7 @@ export async function getBusinessBySlug(slug: string): Promise<Business | null> 
     }
 
     // Try direct document ID match
-    const docSnap = await getDoc(doc(db, 'businesses', cleanSlug));
+    const docSnap = await withFirestoreTimeout(getDoc(doc(db, 'businesses', cleanSlug)), 700);
     if (docSnap.exists()) {
       const biz = docSnap.data() as Business;
       return biz;
@@ -1776,12 +1786,13 @@ export async function updateBusiness(
     }).catch(() => {});
   } catch {}
 
-  // Also update cloud Firestore if available
-  try {
-    const { doc, setDoc } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    await setDoc(doc(db, 'businesses', businessId), updates, { merge: true });
-  } catch {}
+  // Also update cloud Firestore in background
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'businesses', businessId), updates, { merge: true });
+    });
+  }).catch(() => {});
 
   return businesses[index];
 }
@@ -2142,23 +2153,13 @@ export async function getGlobalAnalytics() {
     }
   }
 
-  // Also merge Firestore if available
-  try {
-    const { getDocs, collection } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    const uSnap = await getDocs(collection(db, 'users'));
-    uSnap.forEach((d) => {
-      const u = d.data() as Profile;
-      if (u) profilesMap.set(u.id || d.id, { ...u, id: u.id || d.id });
+  // Sync Firestore in background without blocking dashboard load
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { getDocs, collection } = await import('firebase/firestore');
+      await Promise.all([getDocs(collection(db, 'users')), getDocs(collection(db, 'businesses'))]);
     });
-    const bSnap = await getDocs(collection(db, 'businesses'));
-    bSnap.forEach((d) => {
-      const b = d.data() as Business;
-      if (b) businessesMap.set(b.id || d.id, { ...b, id: b.id || d.id });
-    });
-  } catch {
-    // Ignore Firestore offline or permission errors
-  }
+  }).catch(() => {});
 
   const profiles = Array.from(profilesMap.values());
   const businesses = Array.from(businessesMap.values());
@@ -2560,39 +2561,14 @@ export async function getAdminCustomersList(): Promise<AdminCustomerRow[]> {
     }
   }
 
-  // 3. Fetch from Firestore if configured and merge
+  // 3. Sync from server bootstrap instead of blocking on Firestore
   try {
-    const { getDocs, collection } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    const userSnap = await getDocs(collection(db, 'users'));
-    userSnap.forEach((docSnap) => {
-      const data = docSnap.data() as Profile;
-      if (data && (data.role === 'customer' || !data.role)) {
-        const id = data.id || docSnap.id;
-        profilesMap.set(id, {
-          ...data,
-          id,
-          role: 'customer',
-          unique_customer_code: data.unique_customer_code || generateCustomerCode(),
-          full_name: data.full_name || 'Customer',
-          email: data.email || '',
-        });
-      }
-    });
-
-    const bizSnap = await getDocs(collection(db, 'businesses'));
-    bizSnap.forEach((docSnap) => {
-      const bData = docSnap.data() as Business;
-      if (bData) {
-        businessesMap.set(bData.id || docSnap.id, {
-          ...bData,
-          id: bData.id || docSnap.id,
-        });
-      }
-    });
-  } catch {
-    // Firestore query fallback
-  }
+    await syncWithServer();
+    const refreshedProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []).filter((p) => p.role === 'customer');
+    const refreshedBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+    refreshedProfiles.forEach((p) => profilesMap.set(p.id, p));
+    refreshedBiz.forEach((b) => businessesMap.set(b.id, b));
+  } catch {}
 
   const profiles = Array.from(profilesMap.values());
   const businesses = Array.from(businessesMap.values());
@@ -2649,6 +2625,7 @@ export async function updateCustomerSettingsByAdmin(params: {
   thankYouText?: string;
   accentColor?: string;
   qrShowLogo?: boolean;
+  allowedFeatures?: string[];
 }): Promise<void> {
   // 1. Update Profile in Local Storage
   const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
@@ -2658,6 +2635,7 @@ export async function updateCustomerSettingsByAdmin(params: {
       ...profiles[pIdx],
       full_name: params.fullName.trim(),
       email: params.email.trim().toLowerCase(),
+      ...(Array.isArray(params.allowedFeatures) ? { allowed_features: params.allowedFeatures } : {}),
       updated_at: new Date().toISOString(),
     };
     setStorage(STORAGE_KEYS.PROFILES, profiles);
@@ -2672,6 +2650,9 @@ export async function updateCustomerSettingsByAdmin(params: {
     biz.phone = params.phone?.trim() || '';
     biz.address = params.address?.trim() || '';
     biz.category = params.category || 'Restaurant & Hospitality';
+    if (Array.isArray(params.allowedFeatures)) {
+      biz.allowed_features = params.allowedFeatures;
+    }
     biz.updated_at = new Date().toISOString();
   } else {
     biz = {
@@ -2683,6 +2664,7 @@ export async function updateCustomerSettingsByAdmin(params: {
       phone: params.phone?.trim() || '',
       address: params.address?.trim() || '',
       category: params.category || 'Restaurant & Hospitality',
+      ...(Array.isArray(params.allowedFeatures) ? { allowed_features: params.allowedFeatures } : {}),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -2744,23 +2726,31 @@ export async function updateCustomerSettingsByAdmin(params: {
         businessName: params.businessName,
         googleReviewUrl: params.googleReviewUrl,
         phone: params.phone,
+        allowedFeatures: params.allowedFeatures,
       }),
     });
   } catch (e) {
     console.warn('Server sync updateCustomerSettings error:', e);
   }
 
-  // 6. Firestore Sync (if connected)
-  try {
-    const { doc, setDoc } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    await setDoc(doc(db, 'users', params.profileId), { full_name: params.fullName.trim(), email: params.email.trim() }, { merge: true });
-    if (biz) {
-      await setDoc(doc(db, 'businesses', biz.id), biz, { merge: true });
-    }
-  } catch {
-    // Firestore error ignored
-  }
+  // 6. Firestore Sync in background
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(
+        doc(db, 'users', params.profileId),
+        {
+          full_name: params.fullName.trim(),
+          email: params.email.trim(),
+          ...(Array.isArray(params.allowedFeatures) ? { allowed_features: params.allowedFeatures } : {}),
+        },
+        { merge: true }
+      );
+      if (biz) {
+        await setDoc(doc(db, 'businesses', biz.id), biz, { merge: true });
+      }
+    });
+  }).catch(() => {});
 }
 
 export async function toggleCustomerStatus(profileId: string, currentStatus: UserStatus): Promise<UserStatus> {
@@ -2793,13 +2783,12 @@ export async function toggleCustomerStatus(profileId: string, currentStatus: Use
     }
   }
 
-  try {
-    const { doc, setDoc } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    await setDoc(doc(db, 'users', profileId), { status: nextStatus, updated_at: new Date().toISOString() }, { merge: true });
-  } catch {
-    // Firestore update fallback
-  }
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'users', profileId), { status: nextStatus, updated_at: new Date().toISOString() }, { merge: true });
+    });
+  }).catch(() => {});
 
   return nextStatus;
 }
@@ -2842,13 +2831,12 @@ export async function deleteCustomerAccount(profileId: string): Promise<void> {
     }
   }
 
-  try {
-    const { doc, deleteDoc } = await import('firebase/firestore');
-    const { db } = await import('./firebase');
-    await deleteDoc(doc(db, 'users', profileId));
-  } catch {
-    // Firestore delete fallback
-  }
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(doc(db, 'users', profileId));
+    });
+  }).catch(() => {});
 }
 
 // ==============================================================================
@@ -3660,6 +3648,7 @@ export interface ManagerRow {
   role: 'manager';
   status: 'active' | 'disabled';
   current_password?: string;
+  password?: string;
   created_at: string;
   last_login_at?: string;
   businesses_count: number;
@@ -3674,40 +3663,97 @@ export interface ManagerRow {
 }
 
 export async function getAdminManagersList(): Promise<ManagerRow[]> {
+  const managersMap = new Map<string, ManagerRow>();
+
+  // 1. Fetch from Server API
   try {
     const res = await fetch('/api/admin/managers');
     if (res.ok) {
       const data = await res.json();
-      if (data.managers) return data.managers;
+      if (Array.isArray(data.managers)) {
+        for (const m of data.managers) {
+          managersMap.set(m.id, m);
+        }
+      }
     }
   } catch {}
 
+  // 2. Non-blocking background sync with Cloud Firestore
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { collection, getDocs } = await import('firebase/firestore');
+      const [usersSnap, bizSnap] = await Promise.all([
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'businesses')),
+      ]);
+      const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+      const pMap = new Map<string, Profile>();
+      localProfiles.forEach((p) => pMap.set(p.id, p));
+      usersSnap.forEach((d) => {
+        const p = d.data() as Profile;
+        if (p?.id) pMap.set(p.id, p);
+      });
+      setStorage(STORAGE_KEYS.PROFILES, Array.from(pMap.values()));
+
+      const localBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+      const bMap = new Map<string, Business>();
+      localBiz.forEach((b) => bMap.set(b.id, b));
+      bizSnap.forEach((d) => {
+        const b = d.data() as Business;
+        if (b?.id) bMap.set(b.id, b);
+      });
+      setStorage(STORAGE_KEYS.BUSINESSES, Array.from(bMap.values()));
+    });
+  }).catch(() => {});
+
+  // 3. Merge with localStorage profiles & businesses
   const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []).filter((p) => p.role === 'manager');
   const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+  const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
 
-  return profiles.map((m) => {
+  for (const m of profiles) {
     const managed = businesses.filter((b) => b.created_by_manager_id === m.id);
-    return {
-      id: m.id,
-      full_name: m.full_name,
-      email: m.email,
-      phone: m.phone || '',
-      unique_customer_code: m.unique_customer_code,
-      role: 'manager',
-      status: m.status,
-      created_at: m.created_at,
-      last_login_at: m.last_login_at,
-      businesses_count: managed.length,
-      businesses: managed.map((b) => ({
+    const existing = managersMap.get(m.id);
+    const mergedBizMap = new Map<string, ManagerRow['businesses'][number]>();
+    if (existing?.businesses) {
+      existing.businesses.forEach((b) => mergedBizMap.set(b.id, b));
+    }
+    managed.forEach((b) => {
+      mergedBizMap.set(b.id, {
         id: b.id,
         business_name: b.business_name,
         unique_slug: b.unique_slug,
         category: b.category,
         phone: b.phone,
         created_at: b.created_at,
-      })),
-    };
-  });
+      });
+    });
+    const mergedBizList = Array.from(mergedBizMap.values());
+    const cleanEmail = (m.email || '').toLowerCase().trim();
+    const resolvedPass =
+      (existing?.current_password && existing.current_password !== '••••••••' ? existing.current_password : undefined) ||
+      (existing?.password && existing.password !== '••••••••' ? existing.password : undefined) ||
+      passwords[cleanEmail] ||
+      '••••••••';
+
+    managersMap.set(m.id, {
+      id: m.id,
+      full_name: existing?.full_name || m.full_name,
+      email: existing?.email || m.email,
+      phone: existing?.phone || m.phone || '',
+      unique_customer_code: existing?.unique_customer_code || m.unique_customer_code,
+      role: 'manager',
+      status: existing?.status || m.status,
+      current_password: resolvedPass,
+      password: resolvedPass,
+      created_at: existing?.created_at || m.created_at,
+      last_login_at: existing?.last_login_at || m.last_login_at,
+      businesses_count: mergedBizList.length,
+      businesses: mergedBizList,
+    });
+  }
+
+  return Array.from(managersMap.values());
 }
 
 export async function createManagerByAdmin(data: {
@@ -3724,12 +3770,8 @@ export async function createManagerByAdmin(data: {
     throw new Error('Manager Full Name aur Email address bharna anivarya hai.');
   }
 
-  // Pre-check duplicate in local cache
-  const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
-  const localExisting = localProfiles.find((p) => p.email && p.email.toLowerCase().trim() === cleanEmail);
-  if (localExisting) {
-    throw new Error(`Is email address (${cleanEmail}) se already account (${localExisting.role || 'user'}) exist karta hai. Kripya doosra email address use karein.`);
-  }
+  let createdManager: Profile | null = null;
+  let finalPassword = (data.password || '').trim() || `MgrPass${Math.floor(100000 + Math.random() * 900000)}!`;
 
   try {
     const res = await fetch('/api/admin/create-manager', {
@@ -3738,7 +3780,7 @@ export async function createManagerByAdmin(data: {
       body: JSON.stringify({
         fullName: cleanName,
         email: cleanEmail,
-        password: data.password?.trim() || undefined,
+        password: finalPassword,
         phone: data.phone?.trim() || undefined,
         status: data.status || 'active',
       }),
@@ -3750,50 +3792,33 @@ export async function createManagerByAdmin(data: {
     }
 
     const result = await res.json();
-    if (!result?.manager) {
-      throw new Error('Server did not return manager details.');
+    if (result?.manager) {
+      createdManager = result.manager;
+      if (result.tempPassword) finalPassword = result.tempPassword;
     }
-
-    // Save profile to local storage cache
-    const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
-    const pIdx = profiles.findIndex((p) => p.id === result.manager.id);
-    if (pIdx !== -1) {
-      profiles[pIdx] = result.manager;
-    } else {
-      profiles.unshift(result.manager);
-    }
-    setStorage(STORAGE_KEYS.PROFILES, profiles);
-
-    // Save password to local passwords cache for instant offline & online login
-    if (result.tempPassword) {
-      const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
-      passwords[cleanEmail] = result.tempPassword;
-      if (result.manager.unique_customer_code) {
-        passwords[result.manager.unique_customer_code.toLowerCase()] = result.tempPassword;
-      }
-      if (data.phone) {
-        const cleanPhone = data.phone.replace(/[^0-9]/g, '');
-        if (cleanPhone) passwords[cleanPhone] = result.tempPassword;
-      }
-      setStorage(STORAGE_KEYS.PASSWORDS, passwords);
-    }
-
-    return result;
   } catch (err: any) {
-    // If it's a validation error or duplicate error, rethrow immediately
+    // If duplicate email or validation error from server, rethrow immediately
     if (err.message && (err.message.includes('already') || err.message.includes('exist') || err.message.includes('anivarya'))) {
       throw err;
     }
 
-    // Fallback if server is unreachable
-    console.warn('Backend create-manager request failed, falling back to local creation:', err);
-    const generatedPassword = (data.password || '').trim() || `MgrPass${Math.floor(100000 + Math.random() * 900000)}!`;
+    // Check local duplicate before fallback creation
+    const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+    const localExisting = localProfiles.find((p) => p.email && p.email.toLowerCase().trim() === cleanEmail);
+    if (localExisting) {
+      throw new Error(`Is email address (${cleanEmail}) se already account (${localExisting.role || 'user'}) exist karta hai. Kripya doosra email address use karein.`);
+    }
+
+    console.warn('Backend create-manager request failed, using local+Firestore creation:', err);
+  }
+
+  if (!createdManager) {
     const managerId = `mgr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
     const managerCode = `LB-MGR-${randomSuffix}`;
     const now = new Date().toISOString();
 
-    const fallbackManager: Profile = {
+    createdManager = {
       id: managerId,
       full_name: cleanName,
       email: cleanEmail,
@@ -3806,22 +3831,53 @@ export async function createManagerByAdmin(data: {
       updated_at: now,
       last_login_at: now,
     };
-
-    const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
-    profiles.unshift(fallbackManager);
-    setStorage(STORAGE_KEYS.PROFILES, profiles);
-
-    const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
-    passwords[cleanEmail] = generatedPassword;
-    passwords[managerCode.toLowerCase()] = generatedPassword;
-    if (data.phone) {
-      const cleanPhone = data.phone.replace(/[^0-9]/g, '');
-      if (cleanPhone) passwords[cleanPhone] = generatedPassword;
-    }
-    setStorage(STORAGE_KEYS.PASSWORDS, passwords);
-
-    return { manager: fallbackManager, tempPassword: generatedPassword };
   }
+
+  // Save profile to local storage cache
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const pIdx = profiles.findIndex((p) => p.id === createdManager!.id || p.email.toLowerCase() === cleanEmail);
+  if (pIdx !== -1) {
+    profiles[pIdx] = createdManager;
+  } else {
+    profiles.unshift(createdManager);
+  }
+  setStorage(STORAGE_KEYS.PROFILES, profiles);
+
+  // Save password to local passwords cache
+  const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+  passwords[cleanEmail] = finalPassword;
+  if (createdManager.unique_customer_code) {
+    passwords[createdManager.unique_customer_code.toLowerCase()] = finalPassword;
+  }
+  if (data.phone) {
+    const cleanPhone = data.phone.replace(/[^0-9]/g, '');
+    if (cleanPhone) passwords[cleanPhone] = finalPassword;
+  }
+  setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+
+  // Sync to Cloud Firestore in background (non-blocking)
+  const mgrToSync = createdManager;
+  const passToSync = finalPassword;
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'users', mgrToSync.id), mgrToSync);
+      await setDoc(doc(db, 'userPasswords', cleanEmail), {
+        credential: cleanEmail,
+        customerCode: (mgrToSync.unique_customer_code || '').toLowerCase(),
+        password: passToSync,
+      });
+      if (mgrToSync.unique_customer_code) {
+        await setDoc(doc(db, 'userPasswords', mgrToSync.unique_customer_code.toLowerCase()), {
+          credential: cleanEmail,
+          customerCode: mgrToSync.unique_customer_code.toLowerCase(),
+          password: passToSync,
+        });
+      }
+    });
+  }).catch(() => {});
+
+  return { manager: createdManager, tempPassword: finalPassword };
 }
 
 export async function updateManagerByAdmin(data: {
@@ -3832,41 +3888,89 @@ export async function updateManagerByAdmin(data: {
   status?: 'active' | 'disabled';
   password?: string;
 }): Promise<Profile> {
-  const res = await fetch('/api/admin/update-manager', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  let updatedManager: Profile | null = null;
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to update manager.');
-  }
+  try {
+    const res = await fetch('/api/admin/update-manager', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
 
-  const result = await res.json();
+    if (res.ok) {
+      const result = await res.json();
+      if (result?.manager) {
+        updatedManager = result.manager;
+      }
+    }
+  } catch {}
+
   const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
   const idx = profiles.findIndex((p) => p.id === data.managerId);
   if (idx !== -1) {
-    profiles[idx] = result.manager;
+    const existing = profiles[idx];
+    const merged: Profile = updatedManager || {
+      ...existing,
+      full_name: data.fullName ? data.fullName.trim() : existing.full_name,
+      email: data.email ? data.email.trim().toLowerCase() : existing.email,
+      phone: data.phone !== undefined ? data.phone.trim() : existing.phone,
+      status: data.status || existing.status,
+      updated_at: new Date().toISOString(),
+    };
+    profiles[idx] = merged;
     setStorage(STORAGE_KEYS.PROFILES, profiles);
+    updatedManager = merged;
   }
-  return result.manager;
+
+  if (data.password && data.password.trim().length >= 6 && updatedManager) {
+    const cleanPass = data.password.trim();
+    const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+    passwords[updatedManager.email.toLowerCase()] = cleanPass;
+    if (updatedManager.unique_customer_code) {
+      passwords[updatedManager.unique_customer_code.toLowerCase()] = cleanPass;
+    }
+    setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+  }
+
+  if (updatedManager) {
+    const mgrToSync = updatedManager;
+    import('./firebase').then(({ db, runFirestoreInBackground }) => {
+      runFirestoreInBackground(async () => {
+        const { doc, setDoc } = await import('firebase/firestore');
+        await setDoc(doc(db, 'users', mgrToSync.id), mgrToSync, { merge: true });
+        if (data.password && data.password.trim().length >= 6) {
+          await setDoc(doc(db, 'userPasswords', mgrToSync.email.toLowerCase()), {
+            credential: mgrToSync.email.toLowerCase(),
+            customerCode: (mgrToSync.unique_customer_code || '').toLowerCase(),
+            password: data.password.trim(),
+          });
+        }
+      });
+    }).catch(() => {});
+    return updatedManager;
+  }
+
+  throw new Error('Failed to update manager.');
 }
 
 export async function deleteManagerByAdmin(managerId: string): Promise<void> {
-  const res = await fetch('/api/admin/delete-manager', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ managerId }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to delete manager.');
-  }
+  try {
+    await fetch('/api/admin/delete-manager', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ managerId }),
+    });
+  } catch {}
 
   const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
   setStorage(STORAGE_KEYS.PROFILES, profiles.filter((p) => p.id !== managerId));
+
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(doc(db, 'users', managerId));
+    });
+  }).catch(() => {});
 }
 
 export interface ManagerCustomerRow {
@@ -3879,31 +3983,81 @@ export interface ManagerCustomerRow {
 }
 
 export async function getManagerCustomersList(managerId: string): Promise<ManagerCustomerRow[]> {
+  const rowsMap = new Map<string, ManagerCustomerRow>();
+  const currentSession = getCurrentSession();
+  const managerEmail = currentSession?.user?.id === managerId ? currentSession.user.email?.toLowerCase() : undefined;
+  const matchedManagerIds = new Set<string>([managerId]);
+  if (managerEmail) matchedManagerIds.add(managerEmail);
+
+  // 1. Fetch from Server API (instant ~5ms response)
   try {
-    const res = await fetch(`/api/manager/${managerId}/customers`);
+    const res = await fetch(`/api/manager/${encodeURIComponent(managerId)}/customers`);
     if (res.ok) {
       const data = await res.json();
-      if (data.customers) return data.customers;
+      if (Array.isArray(data.customers)) {
+        for (const row of data.customers) {
+          if (row?.business?.id && row.business.created_by_manager_id && matchedManagerIds.has(row.business.created_by_manager_id)) {
+            rowsMap.set(row.business.id, row);
+          }
+        }
+      }
     }
   } catch {}
 
-  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []).filter(
-    (b) => b.created_by_manager_id === managerId
-  );
-  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
-  const reviewSettings = getStorage<ReviewSettings[]>(STORAGE_KEYS.REVIEW_SETTINGS, []);
+  // 2. Non-blocking background sync from Cloud Firestore for this manager's businesses
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { collection, getDocs, query, where } = await import('firebase/firestore');
+      const bizQuery = query(collection(db, 'businesses'), where('created_by_manager_id', '==', managerId));
+      const bizSnap = await getDocs(bizQuery);
+      if (!bizSnap.empty) {
+        const localBiz = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+        bizSnap.forEach((docSnap) => {
+          const b = docSnap.data() as Business;
+          if (b?.id && !localBiz.some((lb) => lb.id === b.id)) {
+            localBiz.unshift(b);
+          }
+        });
+        setStorage(STORAGE_KEYS.BUSINESSES, localBiz);
+      }
+    });
+  }).catch(() => {});
 
-  return businesses.map((b) => ({
-    id: b.id,
-    user_id: b.user_id,
-    business: b,
-    profile: profiles.find((p) => p.id === b.user_id) || null,
-    settings: reviewSettings.find((s) => s.business_id === b.id) || null,
-  }));
+  // 3. Merge with localStorage (strictly isolated to created_by_manager_id === managerId)
+  const localBusinesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []).filter(
+    (b) => b.created_by_manager_id && matchedManagerIds.has(b.created_by_manager_id)
+  );
+  const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const localSettings = getStorage<ReviewSettings[]>(STORAGE_KEYS.REVIEW_SETTINGS, []);
+  const localPasswords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+
+  for (const b of localBusinesses) {
+    const existing = rowsMap.get(b.id);
+    const prof = existing?.profile || localProfiles.find((p) => p.id === b.user_id) || null;
+    const sett = existing?.settings || localSettings.find((s) => s.business_id === b.id) || null;
+    const cleanEmail = (prof?.email || '').toLowerCase().trim();
+    const pass =
+      (existing?.password && existing.password !== '••••••••' ? existing.password : undefined) ||
+      localPasswords[cleanEmail] ||
+      '••••••••';
+
+    rowsMap.set(b.id, {
+      id: b.id,
+      user_id: b.user_id,
+      business: existing?.business || b,
+      profile: prof,
+      settings: sett,
+      password: pass,
+    });
+  }
+
+  return Array.from(rowsMap.values());
 }
 
 export async function createCustomerByManager(data: {
   managerId: string;
+  managerName?: string;
+  managerEmail?: string;
   fullName: string;
   email: string;
   password?: string;
@@ -3912,6 +4066,7 @@ export async function createCustomerByManager(data: {
   phone?: string;
   category?: string;
   address?: string;
+  allowedFeatures?: string[];
 }): Promise<{ user: Profile; business: Business; tempPassword?: string }> {
   const cleanEmail = (data.email || '').trim().toLowerCase();
   const cleanFullName = (data.fullName || '').trim();
@@ -3921,17 +4076,25 @@ export async function createCustomerByManager(data: {
     throw new Error('Business Name, Owner Name aur Login Email bharna zaroori hai.');
   }
 
-  // Pre-check duplicate in local cache
-  const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
-  const localExisting = localProfiles.find((p) => p.email && p.email.toLowerCase().trim() === cleanEmail);
-  if (localExisting) {
-    throw new Error(`Is email address (${cleanEmail}) se already account (${localExisting.role || 'user'}) exist karta hai. Kripya alag email address use karein.`);
-  }
-
   let cleanUrl = (data.googleReviewUrl || '').trim();
   if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
     cleanUrl = `https://${cleanUrl}`;
   }
+
+  const currentSession = getCurrentSession();
+  const resolvedManagerName =
+    data.managerName ||
+    (currentSession?.user?.id === data.managerId ? currentSession.user.full_name : undefined) ||
+    'Account Manager';
+  const resolvedManagerEmail =
+    data.managerEmail ||
+    (currentSession?.user?.id === data.managerId ? currentSession.user.email : undefined) ||
+    undefined;
+
+  let finalPassword = (data.password || '').trim() || `LBPass${Math.floor(100000 + Math.random() * 900000)}!`;
+  let createdUser: Profile | null = null;
+  let createdBusiness: Business | null = null;
+  let createdSettings: ReviewSettings | null = null;
 
   try {
     const res = await fetch('/api/manager/create-customer', {
@@ -3939,14 +4102,17 @@ export async function createCustomerByManager(data: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         managerId: data.managerId,
+        managerName: resolvedManagerName,
+        managerEmail: resolvedManagerEmail,
         fullName: cleanFullName,
         email: cleanEmail,
-        password: data.password?.trim() || undefined,
+        password: finalPassword,
         businessName: cleanBizName,
         googleReviewUrl: cleanUrl,
         phone: (data.phone || '').trim(),
         category: data.category || 'Restaurant & Hospitality',
         address: (data.address || '').trim(),
+        allowedFeatures: data.allowedFeatures,
       }),
     });
 
@@ -3956,47 +4122,30 @@ export async function createCustomerByManager(data: {
     }
 
     const result = await res.json();
-    if (!result?.user || !result?.business) {
-      throw new Error('Server did not return full customer details.');
+    if (result?.user && result?.business) {
+      createdUser = result.user;
+      createdBusiness = result.business;
+      createdSettings = result.settings || null;
+      if (result.tempPassword) finalPassword = result.tempPassword;
     }
-
-    // Save profile to local storage cache
-    const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
-    const pIdx = profiles.findIndex((p) => p.id === result.user.id);
-    if (pIdx !== -1) profiles[pIdx] = result.user;
-    else profiles.unshift(result.user);
-    setStorage(STORAGE_KEYS.PROFILES, profiles);
-
-    // Save business to local storage cache
-    const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
-    const bIdx = businesses.findIndex((b) => b.id === result.business.id);
-    if (bIdx !== -1) businesses[bIdx] = result.business;
-    else businesses.unshift(result.business);
-    setStorage(STORAGE_KEYS.BUSINESSES, businesses);
-
-    // Save password to local passwords cache for instant offline & online login
-    if (result.tempPassword) {
-      const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
-      passwords[cleanEmail] = result.tempPassword;
-      if (result.user.unique_customer_code) {
-        passwords[result.user.unique_customer_code.toLowerCase()] = result.tempPassword;
-      }
-      if (data.phone) {
-        const cleanPhone = data.phone.replace(/[^0-9]/g, '');
-        if (cleanPhone) passwords[cleanPhone] = result.tempPassword;
-      }
-      setStorage(STORAGE_KEYS.PASSWORDS, passwords);
-    }
-
-    return result;
   } catch (err: any) {
-    if (err.message && (err.message.includes('already') || err.message.includes('exist') || err.message.includes('zaroori'))) {
+    // If duplicate email or required fields error from server, rethrow so user sees it in modal
+    if (err.message && (err.message.includes('already') || err.message.includes('exist') || err.message.includes('आवश्यक'))) {
       throw err;
     }
 
-    // Offline / LocalStorage fallback
-    console.warn('Backend create-customer by manager failed, falling back to local storage:', err);
-    const generatedPassword = (data.password || '').trim() || `LBPass${Math.floor(100000 + Math.random() * 900000)}!`;
+    // Check local duplicate before fallback creation
+    const localProfiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+    const localExisting = localProfiles.find((p) => p.email && p.email.toLowerCase().trim() === cleanEmail);
+    if (localExisting) {
+      throw new Error(`Is email address (${cleanEmail}) se already account (${localExisting.role || 'user'}) exist karta hai. Kripya alag email address use karein.`);
+    }
+
+    console.warn('Backend create-customer by manager failed, using local+Firestore creation:', err);
+  }
+
+  // Fallback local creation if server was unreachable
+  if (!createdUser || !createdBusiness) {
     const userId = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
     const customerCode = `LB-CUS-${randomSuffix}`;
@@ -4004,17 +4153,22 @@ export async function createCustomerByManager(data: {
     const exp = new Date(now);
     exp.setDate(exp.getDate() + 365);
 
-    const localUser: Profile = {
+    createdUser = {
       id: userId,
       full_name: cleanFullName,
       email: cleanEmail,
+      phone: (data.phone || '').trim(),
       unique_customer_code: customerCode,
       role: 'customer',
       status: 'active',
       created_by_manager_id: data.managerId,
+      managed_by: resolvedManagerName,
       access_validity_type: '1_year',
       access_duration_days: 365,
       access_expires_at: exp.toISOString(),
+      ...(Array.isArray(data.allowedFeatures) && data.allowedFeatures.length > 0
+        ? { allowed_features: data.allowedFeatures }
+        : {}),
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
       last_login_at: now.toISOString(),
@@ -4029,39 +4183,103 @@ export async function createCustomerByManager(data: {
       '-' +
       Math.random().toString(36).substring(2, 6);
 
-    const localBiz: Business = {
+    createdBusiness = {
       id: businessId,
       user_id: userId,
       created_by_manager_id: data.managerId,
+      created_by_manager_name: resolvedManagerName,
       business_name: cleanBizName,
       unique_slug: slug,
       google_review_url: cleanUrl,
       phone: (data.phone || '').trim(),
       address: (data.address || '').trim(),
       category: data.category || 'Restaurant & Hospitality',
+      ...(Array.isArray(data.allowedFeatures) && data.allowedFeatures.length > 0
+        ? { allowed_features: data.allowedFeatures }
+        : {}),
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
     };
-
-    const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
-    profiles.unshift(localUser);
-    setStorage(STORAGE_KEYS.PROFILES, profiles);
-
-    const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
-    businesses.unshift(localBiz);
-    setStorage(STORAGE_KEYS.BUSINESSES, businesses);
-
-    const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
-    passwords[cleanEmail] = generatedPassword;
-    passwords[customerCode.toLowerCase()] = generatedPassword;
-    if (data.phone) {
-      const cleanPhone = data.phone.replace(/[^0-9]/g, '');
-      if (cleanPhone) passwords[cleanPhone] = generatedPassword;
-    }
-    setStorage(STORAGE_KEYS.PASSWORDS, passwords);
-
-    return { user: localUser, business: localBiz, tempPassword: generatedPassword };
   }
+
+  if (!createdSettings) {
+    const nowIso = new Date().toISOString();
+    createdSettings = {
+      id: `rs_${Date.now()}`,
+      business_id: createdBusiness.id,
+      language: 'en',
+      welcome_text: `Welcome to ${cleanBizName}! How was your experience?`,
+      thank_you_text: 'Thank you for your valuable feedback! ❤️',
+      enabled: true,
+      accent_color: '#6C3BFF',
+      qr_show_logo: true,
+      qr_logo_border_style: 'circular',
+      qr_color: '#1F1735',
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+  }
+
+  // Save profile to local storage cache
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const pIdx = profiles.findIndex((p) => p.id === createdUser!.id || p.email.toLowerCase() === cleanEmail);
+  if (pIdx !== -1) profiles[pIdx] = createdUser;
+  else profiles.unshift(createdUser);
+  setStorage(STORAGE_KEYS.PROFILES, profiles);
+
+  // Save business to local storage cache
+  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+  const bIdx = businesses.findIndex((b) => b.id === createdBusiness!.id);
+  if (bIdx !== -1) businesses[bIdx] = createdBusiness;
+  else businesses.unshift(createdBusiness);
+  setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+
+  // Save review settings to local storage cache
+  const reviewSettings = getStorage<ReviewSettings[]>(STORAGE_KEYS.REVIEW_SETTINGS, []);
+  const sIdx = reviewSettings.findIndex((s) => s.business_id === createdBusiness!.id);
+  if (sIdx !== -1) reviewSettings[sIdx] = createdSettings;
+  else reviewSettings.unshift(createdSettings);
+  setStorage(STORAGE_KEYS.REVIEW_SETTINGS, reviewSettings);
+
+  // Save password to local passwords cache for instant offline & online login
+  const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+  passwords[cleanEmail] = finalPassword;
+  if (createdUser.unique_customer_code) {
+    passwords[createdUser.unique_customer_code.toLowerCase()] = finalPassword;
+  }
+  if (data.phone) {
+    const cleanPhone = data.phone.replace(/[^0-9]/g, '');
+    if (cleanPhone) passwords[cleanPhone] = finalPassword;
+  }
+  setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+
+  // Persist to Cloud Firestore in background (non-blocking)
+  const uToSync = createdUser;
+  const bToSync = createdBusiness;
+  const sToSync = createdSettings;
+  const pToSync = finalPassword;
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, setDoc } = await import('firebase/firestore');
+      await setDoc(doc(db, 'users', uToSync.id), uToSync);
+      await setDoc(doc(db, 'businesses', bToSync.id), bToSync);
+      await setDoc(doc(db, 'reviewSettings', sToSync.id), sToSync);
+      await setDoc(doc(db, 'userPasswords', cleanEmail), {
+        credential: cleanEmail,
+        customerCode: (uToSync.unique_customer_code || '').toLowerCase(),
+        password: pToSync,
+      });
+      if (uToSync.unique_customer_code) {
+        await setDoc(doc(db, 'userPasswords', uToSync.unique_customer_code.toLowerCase()), {
+          credential: cleanEmail,
+          customerCode: uToSync.unique_customer_code.toLowerCase(),
+          password: pToSync,
+        });
+      }
+    });
+  }).catch(() => {});
+
+  return { user: createdUser, business: createdBusiness, tempPassword: finalPassword };
 }
 
 export async function updateCustomerByManager(data: {
@@ -4076,17 +4294,82 @@ export async function updateCustomerByManager(data: {
   address?: string;
   category?: string;
   status?: UserStatus;
+  allowedFeatures?: string[];
 }): Promise<void> {
-  const res = await fetch('/api/manager/update-customer', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to update customer.');
+  let cleanUrl = data.googleReviewUrl !== undefined ? data.googleReviewUrl.trim() : undefined;
+  if (cleanUrl && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    cleanUrl = `https://${cleanUrl}`;
   }
+
+  try {
+    await fetch('/api/manager/update-customer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, googleReviewUrl: cleanUrl }),
+    });
+  } catch {}
+
+  // Update local storage cache
+  const nowIso = new Date().toISOString();
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const pIdx = profiles.findIndex((p) => p.id === data.customerId);
+  let updatedProfile: Profile | null = null;
+  if (pIdx !== -1) {
+    if (data.fullName) profiles[pIdx].full_name = data.fullName.trim();
+    if (data.status) profiles[pIdx].status = data.status;
+    if (data.phone !== undefined) profiles[pIdx].phone = data.phone.trim();
+    if (Array.isArray(data.allowedFeatures)) profiles[pIdx].allowed_features = data.allowedFeatures;
+    profiles[pIdx].updated_at = nowIso;
+    updatedProfile = profiles[pIdx];
+    setStorage(STORAGE_KEYS.PROFILES, profiles);
+  }
+
+  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+  const bIdx = businesses.findIndex((b) => b.id === data.businessId);
+  let updatedBusiness: Business | null = null;
+  if (bIdx !== -1) {
+    if (data.businessName) businesses[bIdx].business_name = data.businessName.trim();
+    if (cleanUrl !== undefined) businesses[bIdx].google_review_url = cleanUrl;
+    if (data.phone !== undefined) businesses[bIdx].phone = data.phone.trim();
+    if (data.address !== undefined) businesses[bIdx].address = data.address.trim();
+    if (data.category) businesses[bIdx].category = data.category;
+    if (Array.isArray(data.allowedFeatures)) businesses[bIdx].allowed_features = data.allowedFeatures;
+    businesses[bIdx].updated_at = nowIso;
+    updatedBusiness = businesses[bIdx];
+    setStorage(STORAGE_KEYS.BUSINESSES, businesses);
+  }
+
+  if (data.password && data.password.trim().length >= 6 && updatedProfile) {
+    const cleanPass = data.password.trim();
+    const passwords = getStorage<Record<string, string>>(STORAGE_KEYS.PASSWORDS, {});
+    passwords[updatedProfile.email.toLowerCase()] = cleanPass;
+    if (updatedProfile.unique_customer_code) {
+      passwords[updatedProfile.unique_customer_code.toLowerCase()] = cleanPass;
+    }
+    setStorage(STORAGE_KEYS.PASSWORDS, passwords);
+  }
+
+  // Sync to Cloud Firestore in background
+  const uProf = updatedProfile;
+  const uBiz = updatedBusiness;
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, setDoc } = await import('firebase/firestore');
+      if (uProf) {
+        await setDoc(doc(db, 'users', uProf.id), uProf, { merge: true });
+      }
+      if (uBiz) {
+        await setDoc(doc(db, 'businesses', uBiz.id), uBiz, { merge: true });
+      }
+      if (data.password && data.password.trim().length >= 6 && uProf) {
+        await setDoc(doc(db, 'userPasswords', uProf.email.toLowerCase()), {
+          credential: uProf.email.toLowerCase(),
+          customerCode: (uProf.unique_customer_code || '').toLowerCase(),
+          password: data.password.trim(),
+        });
+      }
+    });
+  }).catch(() => {});
 }
 
 export async function deleteCustomerByManager(data: {
@@ -4094,16 +4377,30 @@ export async function deleteCustomerByManager(data: {
   customerId: string;
   businessId: string;
 }): Promise<void> {
-  const res = await fetch('/api/manager/delete-customer', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  try {
+    await fetch('/api/manager/delete-customer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch {}
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to delete customer.');
-  }
+  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+  setStorage(
+    STORAGE_KEYS.BUSINESSES,
+    businesses.filter((b) => !(b.id === data.businessId && b.created_by_manager_id === data.managerId))
+  );
+
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  setStorage(STORAGE_KEYS.PROFILES, profiles.filter((p) => p.id !== data.customerId));
+
+  import('./firebase').then(({ db, runFirestoreInBackground }) => {
+    runFirestoreInBackground(async () => {
+      const { doc, deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(doc(db, 'businesses', data.businessId));
+      await deleteDoc(doc(db, 'users', data.customerId));
+    });
+  }).catch(() => {});
 }
 
 export async function accessCustomerPanelByManager(data: {
@@ -4111,19 +4408,66 @@ export async function accessCustomerPanelByManager(data: {
   customerId: string;
   businessId: string;
 }): Promise<AuthSession> {
-  const res = await fetch('/api/manager/access-panel', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  try {
+    const res = await fetch('/api/manager/access-panel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || 'Failed to access customer dashboard.');
+    if (res.ok) {
+      const result = await res.json();
+      if (result?.session) {
+        return result.session;
+      }
+    }
+  } catch {}
+
+  // Fallback to localStorage / current session if server restarted or offline
+  const currentSession = getCurrentSession();
+  const profiles = getStorage<Profile[]>(STORAGE_KEYS.PROFILES, []);
+  const businesses = getStorage<Business[]>(STORAGE_KEYS.BUSINESSES, []);
+
+  const mgr =
+    (currentSession?.user?.id === data.managerId ? currentSession.user : null) ||
+    profiles.find((p) => p.id === data.managerId && p.role === 'manager') ||
+    null;
+
+  const biz = businesses.find((b) => b.id === data.businessId && b.created_by_manager_id === data.managerId);
+  if (!biz) {
+    throw new Error('Unauthorized: You can only access panels for businesses you created.');
   }
 
-  const result = await res.json();
-  return result.session;
+  const customerUser =
+    profiles.find((p) => p.id === data.customerId) || {
+      id: data.customerId,
+      full_name: biz.business_name,
+      email: `${biz.unique_slug}@merchant.localboost.ai`,
+      unique_customer_code: 'LB-CUS-MGR',
+      role: 'customer' as const,
+      status: 'active' as const,
+      created_by_manager_id: data.managerId,
+      access_validity_type: '1_year' as const,
+      created_at: biz.created_at,
+      updated_at: biz.updated_at,
+    };
+
+  const fallbackManager: Profile = mgr || {
+    id: data.managerId,
+    full_name: biz.created_by_manager_name || 'Account Manager',
+    email: 'manager@localboost.ai',
+    unique_customer_code: 'LB-MGR-ACTIVE',
+    role: 'manager',
+    status: 'active',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  return {
+    user: customerUser,
+    business: biz,
+    impersonatingFromManager: fallbackManager,
+  };
 }
 
 

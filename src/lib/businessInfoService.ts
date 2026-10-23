@@ -94,34 +94,200 @@ export function createDefaultSchedule(): WeekSchedule {
   };
 }
 
+export function getSampleRestaurantMenu(): ProductServiceItem[] {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: 'menu_paneer_1',
+      name: 'Paneer Butter Masala (पनीर बटर मसाला)',
+      category: 'Paneer Sabji',
+      description: 'Rich & creamy tomato-cashew butter gravy with soft malai paneer cubes.',
+      price: '₹240',
+      price_type: 'fixed',
+      variants: 'Half ₹140 / Full ₹240',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_paneer_2',
+      name: 'Kadai Paneer (कढ़ाई पनीर)',
+      category: 'Paneer Sabji',
+      description: 'Spicy paneer tossed with capsicum, onions, and freshly roasted kadai spices.',
+      price: '₹230',
+      price_type: 'fixed',
+      variants: 'Half ₹130 / Full ₹230',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_paneer_3',
+      name: 'Shahi Paneer (शाही पनीर)',
+      category: 'Paneer Sabji',
+      description: 'Royal Mughlai style rich, mildly sweet cashew & cream gravy with paneer.',
+      price: '₹250',
+      price_type: 'fixed',
+      variants: 'Half ₹150 / Full ₹250',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_paneer_4',
+      name: 'Palak Paneer (पालक पनीर)',
+      category: 'Paneer Sabji',
+      description: 'Freshly pureed spinach cooked with garlic, cumin, and soft paneer cubes.',
+      price: '₹210',
+      price_type: 'fixed',
+      variants: 'Half ₹120 / Full ₹210',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_paneer_5',
+      name: 'Paneer Tikka Masala (पनीर टिक्का मसाला)',
+      category: 'Paneer Sabji',
+      description: 'Tandoor-roasted smoky paneer tikka pieces simmered in spicy masala gravy.',
+      price: '₹260',
+      price_type: 'fixed',
+      variants: 'Full',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_paneer_6',
+      name: 'Matar Paneer (मटर पनीर)',
+      category: 'Paneer Sabji',
+      description: 'Homestyle green peas and paneer curry in flavorful onion-tomato masala.',
+      price: '₹200',
+      price_type: 'fixed',
+      variants: 'Half ₹115 / Full ₹200',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_veg_1',
+      name: 'Mix Veg Sabji (मिक्स वेज सब्जी)',
+      category: 'Veg Sabji & Main Course',
+      description: 'Seasonal fresh vegetables cooked in mildly spiced restaurant gravy.',
+      price: '₹180',
+      price_type: 'fixed',
+      variants: 'Half ₹100 / Full ₹180',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_veg_2',
+      name: 'Kaju Curry (काजू करी)',
+      category: 'Veg Sabji & Main Course',
+      description: 'Roasted whole cashews in a rich, creamy golden masala gravy.',
+      price: '₹280',
+      price_type: 'fixed',
+      variants: 'Full',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_dal_1',
+      name: 'Dal Tadka (दाल तड़का)',
+      category: 'Dal Special',
+      description: 'Yellow lentils tempered with pure desi ghee, jeera, garlic & red chilli.',
+      price: '₹150',
+      price_type: 'fixed',
+      variants: 'Half ₹90 / Full ₹150',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_dal_2',
+      name: 'Dal Makhani (दाल मखनी)',
+      category: 'Dal Special',
+      description: 'Slow-cooked black lentils finished with fresh cream and white butter.',
+      price: '₹190',
+      price_type: 'fixed',
+      variants: 'Full',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_roti_1',
+      name: 'Butter Naan (बटर नान)',
+      category: 'Roti & Breads',
+      description: 'Soft clay-oven tandoori naan brushed with melted butter.',
+      price: '₹45',
+      price_type: 'fixed',
+      variants: 'Plain ₹35 / Butter ₹45 / Garlic ₹60',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_roti_2',
+      name: 'Tandoori Butter Roti (तंदूरी रोटी)',
+      category: 'Roti & Breads',
+      description: 'Crisp whole wheat tandoori roti with butter.',
+      price: '₹25',
+      price_type: 'fixed',
+      variants: 'Plain ₹20 / Butter ₹25',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_rice_1',
+      name: 'Veg Dum Biryani (वेज दम बिरयानी)',
+      category: 'Rice & Biryani',
+      description: 'Aromatic basmati rice cooked on dum with vegetables, paneer & raita.',
+      price: '₹210',
+      price_type: 'fixed',
+      variants: 'Half ₹130 / Full ₹210',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_starter_1',
+      name: 'Paneer Chilli Dry (पनीर चिल्ली)',
+      category: 'Starters & Chinese',
+      description: 'Crispy fried paneer tossed in spicy Indo-Chinese soy garlic sauce.',
+      price: '₹220',
+      price_type: 'fixed',
+      variants: 'Dry / Gravy',
+      available: true,
+      last_updated: now,
+    },
+    {
+      id: 'menu_bev_1',
+      name: 'Special Sweet Punjabi Lassi & Chaas (लस्सी / छाछ)',
+      category: 'Beverages & Drinks',
+      description: 'Thick chilled sweet malai lassi and spiced masala buttermilk.',
+      price: '₹70',
+      price_type: 'starting_from',
+      variants: 'Masala Chaas ₹40 / Sweet Lassi ₹70',
+      available: true,
+      last_updated: now,
+    },
+  ];
+}
+
+export function isRestaurantOrFoodCategory(category?: string): boolean {
+  if (!category) return false;
+  const c = category.toLowerCase();
+  return (
+    c.includes('restaurant') ||
+    c.includes('hospitality') ||
+    c.includes('food') ||
+    c.includes('cafe') ||
+    c.includes('dhaba') ||
+    c.includes('hotel') ||
+    c.includes('bakery') ||
+    c.includes('sweet') ||
+    c.includes('dining') ||
+    c.includes('kitchen')
+  );
+}
+
 export function getDefaultCategoryProducts(category?: string): ProductServiceItem[] {
   const now = new Date().toISOString();
+  if (isRestaurantOrFoodCategory(category)) {
+    return getSampleRestaurantMenu();
+  }
   switch (category) {
-    case 'Restaurant & Hospitality':
-      return [
-        {
-          id: 'prod_1',
-          name: 'Signature Chef Special Platter',
-          category: 'Main Course',
-          description: 'Freshly prepared signature meal served with house special sides and garnish.',
-          price: '₹299',
-          price_type: 'fixed',
-          variants: 'Full, Half',
-          available: true,
-          last_updated: now,
-        },
-        {
-          id: 'prod_2',
-          name: 'Handcrafted Artisan Beverages',
-          category: 'Beverages',
-          description: 'Freshly brewed artisan coffees, teas, and specialty iced coolers.',
-          price: '₹120',
-          price_type: 'starting_from',
-          variants: 'Hot, Cold',
-          available: true,
-          last_updated: now,
-        },
-      ];
     case 'Salon & Spa':
       return [
         {
@@ -266,7 +432,21 @@ export function getDefaultBusinessProfileInfo(business: Business): BusinessProfi
   const name = business.business_name || existing.business_name || 'Our Business';
   const cat = business.category || existing.category || 'Local Business';
 
-  const defaultSchedule = createDefaultSchedule();
+  const savedProducts: ProductServiceItem[] | undefined = Array.isArray(existing.products_services)
+    ? existing.products_services
+    : undefined;
+  // If restaurant has only the old 2 generic placeholder items (prod_1, prod_2), upgrade to full sample restaurant menu
+  const isLegacyTwoPlaceholders =
+    savedProducts &&
+    savedProducts.length === 2 &&
+    savedProducts[0]?.id === 'prod_1' &&
+    savedProducts[1]?.id === 'prod_2' &&
+    isRestaurantOrFoodCategory(cat);
+
+  const resolvedProducts =
+    savedProducts && savedProducts.length > 0 && !isLegacyTwoPlaceholders
+      ? savedProducts
+      : getDefaultCategoryProducts(cat);
 
   return {
     business_name: name,
@@ -283,45 +463,61 @@ export function getDefaultBusinessProfileInfo(business: Business): BusinessProfi
     website_url: existing.website_url || existing.website || '',
     phone: existing.phone || business.phone || '',
     whatsapp: existing.whatsapp || business.whatsapp_number || business.phone || '',
-    public_email: '',
-    owner_name: '',
-    owner_name_public_approved: false,
-    languages: ['en', 'hi', 'gu'],
-    logo_url: business.logo_url || '',
+    public_email: existing.public_email || '',
+    owner_name: existing.owner_name || '',
+    owner_name_public_approved: Boolean(existing.owner_name_public_approved),
+    languages: existing.languages || ['en', 'hi', 'gu'],
+    logo_url: business.logo_url || existing.logo_url || '',
 
-    opening_hours: {
-      schedule: createDefaultSchedule(),
-      appointment_only: false,
-      holiday_notice: '',
-      last_updated: new Date().toISOString(),
-    },
+    opening_hours: existing.opening_hours?.schedule
+      ? existing.opening_hours
+      : {
+          schedule: createDefaultSchedule(),
+          appointment_only: false,
+          holiday_notice: '',
+          last_updated: new Date().toISOString(),
+        },
 
-    products_services: getDefaultCategoryProducts(cat),
+    products_services: resolvedProducts,
 
-    policies: {
-      payment_methods: ['Cash', 'UPI (Google Pay, PhonePe, Paytm)', 'Credit & Debit Cards'],
-      return_exchange: 'Items or services may be exchanged or addressed within 2 business days with bill proof.',
-      cancellation: 'Appointments or orders can be rescheduled or cancelled 2 hours prior without penalty.',
-      refund: 'Eligible refunds processed back to original payment mode or store credit within 2-3 business days.',
-      delivery: 'Fast local delivery available within 5 km radius.',
-      service_area: 'City Center and surrounding 7 km radius.',
-      booking_policy: 'Walk-ins always welcome. Prior appointment recommended during evening rush hours.',
-      warranty: 'Standard quality guarantee on all products and authorized services.',
-      terms: 'Standard terms of polite service and fair trade apply.',
-    },
+    policies: existing.policies
+      ? {
+          payment_methods: existing.policies.payment_methods || ['Cash', 'UPI (Google Pay, PhonePe, Paytm)', 'Credit & Debit Cards'],
+          return_exchange: existing.policies.return_exchange ?? 'Items or services may be exchanged or addressed within 2 business days with bill proof.',
+          cancellation: existing.policies.cancellation ?? 'Appointments or orders can be rescheduled or cancelled 2 hours prior without penalty.',
+          refund: existing.policies.refund ?? 'Eligible refunds processed back to original payment mode or store credit within 2-3 business days.',
+          delivery: existing.policies.delivery ?? 'Fast local delivery available within 5 km radius.',
+          service_area: existing.policies.service_area ?? 'City Center and surrounding 7 km radius.',
+          booking_policy: existing.policies.booking_policy ?? 'Walk-ins always welcome. Prior appointment recommended during evening rush hours.',
+          warranty: existing.policies.warranty ?? 'Standard quality guarantee on all products and authorized services.',
+          terms: existing.policies.terms ?? 'Standard terms of polite service and fair trade apply.',
+        }
+      : {
+          payment_methods: ['Cash', 'UPI (Google Pay, PhonePe, Paytm)', 'Credit & Debit Cards'],
+          return_exchange: 'Items or services may be exchanged or addressed within 2 business days with bill proof.',
+          cancellation: 'Appointments or orders can be rescheduled or cancelled 2 hours prior without penalty.',
+          refund: 'Eligible refunds processed back to original payment mode or store credit within 2-3 business days.',
+          delivery: 'Fast local delivery available within 5 km radius.',
+          service_area: 'City Center and surrounding 7 km radius.',
+          booking_policy: 'Walk-ins always welcome. Prior appointment recommended during evening rush hours.',
+          warranty: 'Standard quality guarantee on all products and authorized services.',
+          terms: 'Standard terms of polite service and fair trade apply.',
+        },
 
-    contact_actions: {
-      call_enabled: true,
-      whatsapp_enabled: true,
-      website_enabled: false,
-      directions_enabled: true,
-      custom_cta_label: 'Chat on WhatsApp',
-      custom_cta_url: '',
-    },
+    contact_actions: existing.contact_actions
+      ? existing.contact_actions
+      : {
+          call_enabled: true,
+          whatsapp_enabled: true,
+          website_enabled: false,
+          directions_enabled: true,
+          custom_cta_label: 'Chat on WhatsApp',
+          custom_cta_url: '',
+        },
 
-    faqs: getDefaultBusinessFaqs(name, cat),
+    faqs: Array.isArray(existing.faqs) && existing.faqs.length > 0 ? existing.faqs : getDefaultBusinessFaqs(name, cat),
 
-    field_status: {
+    field_status: existing.field_status || {
       business_name: 'complete',
       category: 'complete',
       short_description: 'complete',
@@ -334,7 +530,7 @@ export function getDefaultBusinessProfileInfo(business: Business): BusinessProfi
       payment_methods: 'complete',
       faqs: 'complete',
     },
-    last_verified_at: new Date().toISOString(),
+    last_verified_at: existing.last_verified_at || new Date().toISOString(),
   };
 }
 
